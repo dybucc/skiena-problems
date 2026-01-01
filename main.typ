@@ -471,4 +471,241 @@
                       & = (-n^2 + 5n - 2) / 2. &&                          &&
   $
 
-  That doesn't look like the result on Skiena's book. Still, it's technically correct.
+  That doesn't look like the result on Skiena's book. No matter, moving on.
+
+/ Problem 1--14: \
+  Now we're proving a very much similar formula to the above, which could benefit from the same
+  findings and that will hopefully help me sort out the actual procedure I followed with the prior
+  proof.
+
+  The formula in question is
+
+  $
+    sum_(i = 1)^n i^3 = (n^2 dot (n + 1)^2) / 4, "for" n >= 0.
+  $
+
+  As per the prior proof, we can express this in terms of @p112-basic-sum-c1, such that
+
+  $
+    sum_(i = 1)^n i dot i dot i = &(((n + 1) - n&)& &dot& ((n + 1) - n&)& &dot& ((n + 1) - n&)&&)& &&+ \
+    &(((n + 1) - (n - 1)&)& &dot& ((n + 1) - (n - 1)&)& &dot& ((n + 1) - (n - 1)&)&&)& &&+ dots.c + \
+    &(((n + 1) - 1&)& &dot& ((n + 1) - 1&)& &dot& ((n + 1) - 1&)&&).
+  $ <p114-start>
+
+  The pattern follows that each term is equivalent to an expansion of the binomial theorem. A
+  consequence of that is that the original sum may be rewritten in terms of another sum.
+
+  $
+    sum_(i = 1)^n i^3 = sum_(j = 0)^(n - 1) ((n + 1) - (n - j))^3.
+  $
+
+  The expansion of the binomial theorem thus follows, such that we are left with 4 different terms
+  participating in the new sum.
+
+  $
+    sum_(j = 0)^(n - 1) ((n + 1) - (n - j))^3 &= sum_(j = 0)^(n - 1) (&& sum_(k = 0)^(l = 3) binom(l, k) dot (n + 1)^(l - k) dot (-(n - j))^k) \
+    &= sum_(j = 0)^(n - 1) (&& 3! / (0!(3 - 0)!) dot (n + 1)^(3 - 0) dot (-(n - j))^0 + \
+      &&& 3! / (1!(3 - 1)!) dot (n + 1)^(3 - 1) dot (-(n - j))^1 + \
+      &&& 3! / (2!(3 - 2)!) dot (n + 1)^(3 - 2) dot (-(n - j))^2 + \
+      &&& 3! / (3!(3 - 3)!) dot (n + 1)^(3 - 3) dot (-(n - j))^3).
+  $
+
+  For the sake of clarity and space, I will treat each individual term of the sum separately.
+
+  $
+    sum_(j = 0)^(n - 1) 3! / (0!(3 - 0)!) dot (n + 1)^(3 - 0) dot (j - n)^0 &=
+    sum_(j = 0)^(n - 1) (n + 1)^3 \
+    &= (n + 1)^3 dot n.
+  $
+
+  $
+    sum_(j = 0)^(n - 1) 3! / (1!(3 - 1)!) dot (n + 1)^(3 - 1) dot (j - n)^1 &=
+    sum_(j = 0)^(n - 1) 3 dot (n + 1)^2 dot (j - n) \
+    &= 3 dot (n + 1)^2 dot sum_(j = 0)^(n - 1) j - n \
+    &= 3 dot (n + 1)^2 dot ((n dot (n + 1)) / 2 - n - n^2).
+  $
+
+  The following terms require another binomial expansion of which, much like the present one, I will
+  treat separately on a term--by--term basis.
+
+  $
+    sum_(j = 0)^(n - 1) 3! / (2!(3 - 2)!) dot (n + 1)^(3 - 2) dot (j - n)^2 &=
+    sum_(j = 0)^(n - 1) 3 dot (n + 1) dot &&(j - n)^2 \
+    &= 3 dot (n + 1) dot sum_(j = 0)^(n - 1) &&(j - n)^2 \
+    &= 3 dot (n + 1) dot sum_(j = 0)^(n - 1) (&&sum_(k = 0)^(l = 2) binom(l, k) dot j^(l - k) dot (-n)^k) \
+    &= 3 dot (n + 1) dot sum_(j = 0)^(n - 1) (&&2! / (0!(2 - 0)!) dot j^(2 - 0) dot (-n)^0 + \
+      &&&2! / (1!(2 - 1)!) dot j^(2 - 1) dot (-n)^1 + \
+      &&&2! / (2!(2 - 2)!) dot j^(2 - 2) dot (-n)^2).
+  $ <p114-binomfirst>
+
+  $
+    sum_(j = 0)^(n - 1) 3! / (3!(3 - 3)!) dot (n + 1)^(3 - 3) dot (j - n)^3 &=
+    sum_(j = 0)^(n - 1) &&(j - n)^3 \
+    &= sum_(j = 0)^(n - 1) (&&sum_(k = 0)^(l = 3) binom(l, k) dot j^(l - k) dot (-n)^k) \
+    &= sum_(j = 0)^(n - 1) (&&3! / (0!(3 - 0)!) dot j^(3 - 0) dot (-n)^0 + \
+      &&&3! / (1!(3 - 1)!) dot j^(3 - 1) dot (-n)^1 + \
+      &&&3! / (2!(3 - 2)!) dot j^(3 - 2) dot (-n)^2 + \
+      &&&3! / (3!(3 - 3)!) dot j^(3 - 3) dot (-n)^3).
+  $ <p114-binomsecond>
+
+  Following, we resolve each term of the final binomial on @p114-binomfirst, assumming true the
+  statement $sum_(i = 1)^n i^2 = (n dot (n + 1) dot (2n + 1)) / 6$.
+
+  $
+    sum_(j = 0)^(n - 1) 2! / (0!(2 - 0)!) dot j^(2 - 0) dot (-n)^0 &= sum_(j = 0)^(n - 1) j^2 \
+    &= sum_(j = 1)^n (j^2) - n^2 \
+    &= (n dot (n + 1) dot (2n + 1)) / 6 - n^2 \
+    &= ((n^2 + n) dot (2n + 1) - 6n^2) / 6 \
+    &= (2n^3 + n^2 + 2n^2 + n - 6n^2) / 6 \
+    &= (2n^3 - 3n^2 + n) / 6.
+  $
+
+  $
+    sum_(j = 0)^(n - 1) 2! / (1!(2 - 1)!) dot j^(2 - 1) dot (-n)^1 &= sum_(j = 0)^(n - 1) -2n j \
+    &= -2n dot ((n dot (n + 1)) / 2 - n) \
+    &= -2n dot (n^2 - n) / 2 \
+    &= -n^3 + n^2.
+  $
+
+  $
+    sum_(j = 0)^(n - 1) 2! / (2!(2 - 2)!) dot j^(2 - 2) dot (-n)^2 & = sum_(j = 0)^(n - 1) n^2 \
+                                                                   & = n^2 dot sum_(j = 0)^(n - 1) 1 \
+                                                                   & = n^3.
+  $
+
+  Next, we resolve each term of the final binomial of @p114-binomsecond.
+
+  $
+    sum_(j = 0)^(n - 1) 3! / (0!(3 - 0)!) dot j^(3 - 0) dot (-n)^0 = sum_(j = 0)^(n - 1) j^3.
+  $ <p114-falsestart>
+
+  Or not. @p114-falsestart can be expressed in terms of the formula we are performing this whole
+  proof for, which makes everything we've done until now for this problem useless.
+
+  $
+    sum_(j = 0)^(n - 1) j^3 = sum_(j = 1)^(n - 1) j^3 = sum_(j = 1)^n (j^3) - n^3.
+  $
+
+  Time to try a different approach. Let's rewind back to the point where we hadn't yet formulated
+  the conclusion on this being an instance of the binomial theorem; Namely, let's go back to
+  @p114-start.
+
+  No luck solving this. Moving on.
+
+/ Problem 1--15: \
+  Another proof, this time of the formula
+
+  $
+    sum_(i = 1)^n i(i + 1)(i + 2) = (n(n + 1)(n + 2)(n + 3)) / 4.
+  $
+
+  This time we are not told to solve by induction so there may be some alternative way out of this.
+  I think can get this somewhere. Let's consider the more simplified form of the initial sum.
+
+  $
+    sum_(i = 1)^n i(i + 1)(i + 2) = sum_(i = 1)^n (i^2 + i)(i + 2) = sum_(i = 1)^n i^3 + 3i^2 + 2i.
+  $
+
+  From the formulas that were shown to be true on the previous proofs (though not by my hand,) we
+  can solve this by separating each term of the sum such that
+
+  $
+    sum_(i = 1)^n i^3 + 3i^2 + 2i = sum_(i = 1)^n i^3 + 3 dot sum_(i = 1)^n i^2 + 2 dot sum_(i = 1)^n i.
+  $ <p115-initial>
+
+  Now, proceeding as follows with each term separately.
+
+  $
+    sum_(i = 1)^n i^3 = (n^2(n + 1)^2) / 4 = (n^2(n^2 + 2n + 1)) / 4 = (n^4 + 2n^3 + n^2) / 4.
+  $
+  $
+    3 dot sum_(i = 1)^n i^2 = 3 dot (n(n + 1)(2n + 1)) / 6 = 3 dot ((n^2 + n)(2n + 1)) / 6 = (2n^3 + 3n^2 + n) / 2.
+  $
+  $
+    2 dot sum_(i = 1)^n i = 2 dot (n(n + 1)) / 2 = n^2 + n.
+  $
+
+  Now, putting these all back together into @p115-initial, we get
+
+  $
+    sum_(i = 1)^n i^3 + 3i^2 + 2i & = (n^4 + 2n^3 + n^2) / 4 + (2n^3 + 3n^2 + n) / 2 + n^2 + n \
+                                  & = (n^4 + 2n^3 + n^2 + 4n^3 + 6n^2 + 2n + 4n^2 + 4n) / 4 \
+                                  & = (n^4 + 6n^3 + 11n^2 + 6n) / 4.
+  $
+
+  The form we have arrived to is likely the non--factorized version of the result initially provided
+  and expected to prove. This implies we can perform some form of factorization to get this sorted
+  out, and maybe get to the same result.
+
+  To factorize the polynomial on the numerator, I believe there was some procedure I don't quite
+  remember. Time to think. I believe the roots of the polynomial to be
+  $(n - 0)(n + 1)(n + 2)(n + 3)$, which aligns with the expected result's numerator.
+
+  Now, technically speaking, this is not completely correct because I used elements of proofs that
+  were only stated true for values of $n >= 0$, while this particular proof did not bound the range
+  of $n$. Still, moving on.
+
+/ Problem 1--16: \
+  We're going back to proofs by induction. This time constrained by some $a != 1$ and $n >= 1$.
+
+  $
+    sum_(i = 0)^n a^i = (a^(n + 1) - 1) / (a - 1).
+  $
+
+  This is fairly obvious when thinking in binary because one can simply state that
+  $mono(1111) = mono(10000) - mono(0001)$. And because $a = 2$ in the above formula for this
+  example, the denominator resolves pretty easily.
+
+  The thing here is that, for say 3, there's not much bandwith to work with. All bases above 2 are
+  not something I can personally easily compute something in, so there is not much I can say there
+  is going into it. Based on what the formula says, there must be a relationship between the
+  grouping of numbers making up single digits in some base $a$, and the number of digits that
+  correpond in that base to a full power of the base.
+
+  In base 2, such computation resolves to 1. This makes a fair amount of sense becuase there's one
+  digit per power and thus one goes from $2^0$ to $2^1$ by toggling the bits at position 0 or those
+  at position 1.
+
+  But what about base 3 and larger bases? We know that each power represents a position for bits in
+  binary, so technically we should be expecting a similar translation for other bases. The only
+  pattern I see here is that for any given base, there exist as many in--between numbers between
+  whole powers of such base that is equal to the number denoting the base times the targeted power
+  (thus accounting for the numbers that came before it until the immediate prior power) minus one.
+
+  This makes sense for both base 2 and base 3 because we can state that any power in base 2 will
+  compute to
+
+  $
+    2^0 & =      && 1, \
+    2^1 & =      && 2, "and thus there are" 2 dot 1 - 1 = 1 "numbers between this and the prior power", \
+    2^2 & =      && 4, "and thus there are" 2 dot 2 - 1 = 3 "numbers between this and the prior power", \
+        & dots.c && \
+    2^n & =      && k, "and thus there are" 2n - 1 "numbers between this and the prior power".
+  $
+
+  If we further generalize this for any base $a$ and try to compute the amount of numbers between
+  any power $n$ and the base power $n_0 = 0$, we can technically state that there will be $a^n$
+  numbers. If we account also for the number making up the power, there will be $a^n + 1$ numbers.
+  Then we also know that out of those $a^n$ numbers coming before it, if we divide them into groups
+  of... nothing.
+
+  Moving on.
+
+/ Problem 1--17: \
+  Another proof by induction. This time I think I can get through it just fine, though I'm not sure
+  if the resulting proof would count as being inductive in nature. Anyway, here goes the formula.
+
+  $
+    sum_(i = 1)^n 1 / (i(i + 1)) = n / (n + 1), "for" n >= 1.
+  $
+
+  So if we manipulate the statement, we can technically see that there is a binomial expansion with
+  negative exponential factor. Considering the binomial theorem applies to any such factor in $NN$,
+  we should be capable of reformulating the expression such that
+
+  $
+    sum_(i = 1)^n (i^2 + i)^(-1) = sum_(i = 1)^n sum_(k = 0)^(j = -1) binom(j, k) dot (i^2)^(j - k) dot i^k.
+  $
+
+  And that is completely wrong, because apparently $NN$ is made out of $ZZ^+$, which doesn't cover
+  the $-1$ factor.
