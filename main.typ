@@ -1,4 +1,4 @@
-#import "@local/typst-template:0.17.0": *
+#import "@local/typst-template:0.18.0": *
 
 #show: template.with(
   title: [DSA],
@@ -709,3 +709,388 @@
 
   And that is completely wrong, because apparently $NN$ is made out of $ZZ^+$, which doesn't cover
   the $-1$ factor.
+
+  If I think in terms of separating the factors in the denominator, technically we can state that
+
+  $
+    sum_(i = 1)^n 1 / i dot 1 / (i + 1).
+  $
+
+  Just as $sum_(i = 1)^n i$ is an increasingly larger number that sums the elements from the series
+  ${1, 2, dots.c, n}$, $1 / i$ defines the sum of increasingly smaller numbers as each larger value
+  of $i$ denotes a smaller subdivision of the unit value. Without offering much proof, we could say
+  that the sum of the first $1 / ({1, 2, dots.c, n})$ values would produce an approximation in $RR$
+  to $n$.
+
+  That much I can figure from the initial statement, as it shows how the $n$ factor is the
+  numerator. Now, if the initial sum were only $sum_(i = 1)^n 1 / i$, the result couldn't have that
+  $n / (n + 1)$, so it's quite likely the denominator is given by the second factor; Namely,
+  $1 / (i + 1)$.
+
+  Now, the second factor denotes an even smaller number, computing an approximation in $RR$ to
+  $n + 1$. This may or may not mean that if we compute the multiplication of each term of the sum,
+  as the statement expects, we will obtain a number that is always smaller than $1 / 2$, considering
+  the starting value is $i dot (i + 1), "for" i >= 1 "given" n >= 1$.
+
+  What I believe to be the natural conclusion of adding together $1 / i dot 1 / (i + 1)$ and
+  $1 / (i + 1) dot 1 / (i + 2)$ is that the number resulting after $n$ sums should be smaller than
+  $1 / n$ but still approximate to $n / (n + 1)$, considering the denominator is given by a factor
+  larger than any number smaller than $n$.
+
+  Thus, if it is an approximation to $n$ by some factor larger than $n$, then surely the resulting
+  sum should be equal to, at the very least, $n + 1$. But this is not an estimation problem; I'm
+  wrong.
+
+  No matter, moving on.
+
+/ Problem 1--18: \
+  Another proof by induction. This time we ought show that
+
+  $
+    n^3 + 2n "is divisible by" 3 "for all" n >= 0.
+  $
+
+  Alright, so maybe this can be solved by trying to unwrap the polynomial expression. $n^3$ is
+  technically the multiplication $n dot n dot n$, which lets us factor this as
+
+  $
+    n dot n dot n + 2n = n dot (n^2 + 2).
+  $ <p118-initial>
+
+  When I think of a number being divisible by 3, two things come to mind; solving for a number
+  modulo 3 with result 0, and having all digits of the number add up to a smaller, known multiple
+  of 3.
+
+  I'm not so sure about the mathematical certainty of the latter statement, so maybe the way to
+  solve this is by considering a reduction of $n(n^2 + 2)$ that yields another number we can compute
+  modulo 3.
+
+  The base hypothesis is that there ought be some expression $n_0$ whereby $n_0 (mod 3) = 0$.
+
+  Maybe the key here is in distinguishing that some number $n$ may or may not be factorized into
+  prime numbers including 3. Then, if $n$ includes the prime factor 3, we may reformulate
+  @p118-initial into the following statement.
+
+  $
+    n dot n dot (n / 3 dot 3) + 2n, "for any" n "with prime factor 3".
+  $
+
+  This could be one case of the recurrence relation, but it's technically not correct, because 3 is
+  supposed to be dividing the whole statement, so the above would actually be
+
+  $
+    (n dot n dot (n / 3 dot 3)) / 3 + (2n) / 3.
+  $
+
+  Or maybe it's correct, because the $n$ factor also participates in $2n$, so the next recursive
+  call would be
+
+  $
+    (n dot n dot (n / 3)) / 3 + (2 dot n / 3) / 3 = (n dot n dot n) / 9 + (2n) / 9.
+  $
+
+  So maybe the recurrence is defined by an ever smaller factor of $1 / {3^1, 3^2, dots.c, 3^k}$
+  dividing $n^3 + 2n$ on each recursive call of the $k$ total calls. This would sort of make sense,
+  considering one can compute those factors without having $n^3 + 2n$ be divisible by them, in terms
+  of $3$.
+
+  $
+    n^3 / 9 + (2n) / 9 = n^3 / 3 dot 1 / 3 + (2n) / 3 dot 1 / 3.
+  $
+
+  This would end up resolving to, in general terms, the following expression.
+
+  $
+    (n^3 / 3 dot 1 / 3 dot dots.c dot 1 / 3) + ((2n) / 3 dot 1 / 3 dot dots.c dot 1 / 3).
+  $ <p118-infrecursion>
+
+  Of course, the base case mentioned before for some expression $n_0 (mod 3) = 0$ is always being
+  hit, so @p118-infrecursion doesn't indicate the existence of a converging factor $1 / 3$.
+
+  Though maybe the expression to find isn't that for which the initial $n$ is already a multiple of
+  3, but rather that where $n$ is not a multiple of 3. In that case, we should state that
+
+  $
+    n (mod 3) != 0 "so" n^3 / 3 + (2n) / 3 (mod 3) = 0.
+  $
+
+  This doesn't hold at all, because I'm assumming the $n$ term is the central term for which the
+  search for an Euclidean division with 3 should produce residue 0. That could or could not be the
+  case, considering the problem statement only points towards the whole expression being divisible
+  by 3.
+
+  Maybe the fact that the whole expression is divisible by 3 is truly the base case of the
+  induction. That could make sense if what we were initially trying to check for was if
+  $n (mod 3) = 0$. But then again, this is not necessarily the thing we're trying to prove.
+
+  Or maybe the whole thing is wrong, and I'm actually supposed to compute for
+
+  $
+    ((1 dot 2 dot dots.c dot n_p) dot (1 dot 2 dot dots.c dot n_p) dot (1 dot 2 dot dots.c dot n_p)) / 3 + (2 dot (1 dot 2 dot dots.c dot n_p)) / 3.
+  $
+
+  This considers the equivalent expression to the initial statement, only decomposing $n$ into each
+  of its prime factors. But this doesn't get me anywhere, because I was expecting I could then
+  factor out one of those prime factors and hope for the denominator to cancel out. That's not
+  possible, because it would require that #l-enum[$n$ have more than a single prime factor, and][the
+    combination of some prime factors in $n$ produce a 3].
+
+  For the case where $n = 0$, the above conditions always hold true, because we can simply assume
+  that all prime numbers can divide 0, and the result such Euclidean division will always have
+  residue 0. Then for $n = 0$, can consider those inner multiplications as containing 3, and thus,
+  they can factor out of both main terms of the expression, namely $n^3$ and $2n$, to continue
+  producing $n^3 + 2n, "for" n = 0$.
+
+  No matter, moving on.
+
+/ Problem 1--19: \
+  Another proof by induction, whereby I'm expected to show that a tree with $n$ vertices and $m$
+  edges, has $m = n - 1$.
+
+  Considering the definition of a tree is that of a graph $G = (V, E)$ where $|E| = |V| - 1$, and
+  where the graph is both connected and acyclic, these two latter statements force an implication
+  over the number of edges in the total degree of each node. Given a vertex $i in V$, this node may
+  only have upwards of $n - 1$ edges, such that assumming no cycle is allowed (and trees are not
+  multigraphs,) such vertex may only connect to every other vertex, the total of which is denoted as
+  $|V - {i}| = |V| - 1$.
+
+  For some other vertex $j in V$, if the edge $(i, j) in E$ already exists, as per the prior
+  statements, one can only consider the existence of that single edge, namely $(i, j) in E$, because
+  otherwise the graph would have a cycle from edge
+  $(j, k) in E "for some" k in V "where" (i, k) in E$. Assumming as well that no self--loops are
+  allowed, the only edge is that which was already considered from node $i$.
+
+  And I think this is a good enough proof.
+
+/ Problem 1--20: \
+  The last proof by induction of this chapter. I must show that the following statement holds true.
+
+  $
+    sum_(i = 1)^n i^3 = (sum_(i = 1)^n i)^2.
+  $ <p120-initial>
+
+  Which goes to say that the sum of the cubes of the first $n in NN$ numbers is equal to squaring
+  the total sum of those first $n$ numbers.
+
+  Assumming true the formulas that each one of #l-enum[$sum_(i = 1)^n i^3$, and][$sum_(i = 1)^n i$]
+  expand to, I think this should be fairly simple to prove. But the resulting conclusion is likely
+  not going to be inductive in nature.
+
+  $
+    (sum_(i = 1)^n i)^2 = ((n(n + 1)) / 2)^2 = (n(n + 1))^2 / 2^2 = (n^2(n + 1)^2) / 4 = sum_(i = 1)^n i^3.
+  $
+
+  This is by no means a proof, so I must think further.
+
+  If we think about what the left--hand side of @p120-initial expands to, maybe we can find a
+  pattern.
+
+  $
+    sum_(i = 1)^n i^3 = (1 dot 1 dot 1) + (2 dot 2 dot 2) + dots.c + (n dot n dot n).
+  $
+
+  Upon factoring one term in each of those cubes, one can see that the resulting expression can be
+  further manipulated into the form $(1 + 2 + dots.c + n)(1^2 + 2^2 + dots.c + n^2)$.
+
+  $
+    (1 dot 1 dot 1) + (2 dot 2 dot 2) + dots.c + (n dot n dot n) = 1(1 dot 1) + 2(2 dot 2) + dots.c + n(n dot n).
+  $
+
+  Or not. But maybe it can expand to
+
+  $
+    1(1 dot 1) + 2(2 dot 2) + dots.c + n(n dot n) & = && 1(1 dot 1) + (1 + 1)(2 dot 2) + dots.c + \
+    & && (1 + 1 + dots.c + 1_n)(n dot n) \
+    & = && (sum_(j = 1)^1 1)(1 dot 1) + (sum_(j = 1)^2 1)(2 dot 2) + dots.c + \
+    & && (sum_(j = 1)^n 1)(n dot n).
+  $
+
+  This implies the left--hand side of @p120-initial may be rewritten as
+
+  $
+    sum_(i = 1)^n i^3 = sum_(i = 1)^n i^2 dot sum_(j = 1)^i 1.
+  $
+
+  Still, this doesn't provide much value, because it's obvious from the following statement.
+
+  $
+    sum_(i = 1)^n i^3 = sum_(i = 1)^n i dot i dot i = sum_(i = 1)^n sum_(j = 1)^i 1 dot sum_(j = 1)^i 1 dot sum_(j = 1)^i 1.
+  $
+
+  Still, this is meant to be proven by induction. So there must be a way of considering, on a
+  term--by--term basis, that the resulting relationship, namely the right--hand side of
+  @p120-initial, holds true.
+
+  So let's think smaller. Let's consider only the term for which $i = 1$, which is ever present,
+  considering the sum starts there, unless $n = 0$ and we assume that $0 in NN$.
+
+  $
+    1 dot 1 dot 1 = 1 dot 1.
+  $
+
+  What about $i = 1, 2, 3, 4$?
+
+  $
+    & (1 dot 1 dot 1) + (2 dot 2 dot 2) && = (1 + 2) & dot & (1 + 2). \
+    & (1 dot 1 dot 1) + (2 dot 2 dot 2) + (3 dot 3 dot 3) && = (1 + 2 + 3) & dot & (1 + 2 + 3) \
+    & (1 dot 1 dot 1) + (2 dot 2 dot 2) + (3 dot 3 dot 3) + (4 dot 4 dot 4) && = (1 + 2 + 3 + 4) & dot & (1 + 2 + 3 + 4).
+  $
+
+  Maybe we can start thinking from the right--hand side of @p120-initial instead. Let's take
+  $n = 2$.
+
+  $
+    (1 + 2) dot (1 + 2) = (1 dot 1) + (1 dot 2) + (2 dot 1) + (2 dot 2).
+  $
+
+  No matter, moving on.
+
+/ Problem 1--21: \
+  I'm asked about the total number of pages in the books I own and whether that number is around 1
+  million pages. Then I'm also asked to estimate whether the total number of pages in my school
+  library is also around that number.
+
+  I am completely confident that I don't own enough books to total 1 million pages, based on the
+  fact I own less than 100 books and assumming most of them are below 1000 pages, they don't even
+  get to $10^2 dot 10^3 = 10^5$ pages, which would be the bare minimum for this estimate.
+
+  In my school library, this would be hard to estimate, considering I've never been inside of it.
+  Still, I know there's three floors to it, each of about $150 space "m"^2$. I'll try to estimate
+  the number of bookshelves in each floor, prior to the number of books in each bookshelf and
+  finally the number of pages per book on average (aiming for an upper bound on all three
+  heuristics.)
+
+  The floors are about $150 space "m"^2$, based on the fact they're not exactly twice as big as my
+  house but definitely near that (my house is $91 space "m"^2$.) In each floor, let's assume there
+  are bookshelves all around its perimeter, and some throughout the inner area. Let's proceed first
+  with the bookshelves in the perimeter.
+
+  Based on observation, I'd wager the floors are pretty near the shape of a rectangle, which would
+  imply its sides are approximately $150 / 10 = 15 space "m" times 10 space "m"$. I would say a
+  bookshelf takes up about $5 space "m"$ in length, and I believe its width to be of about
+  $40 "cm"$. Based on these estimates, the shorter sides of each floor should have $10 / 5 = 2$
+  bookshelves, while the longer sides should have $15 / 5 = 3$ bookshelves. This would total
+  $3 + 2 = 5 dot 3 = 15$ bookshelves from the perimeter of all floors.
+
+  Let's compute now an approximate over the total number of bookshelves in the inner area of the
+  rectangle. In what I consider to be a standard middle bookshelf layout for a library, each shelf
+  is set up horizontally, such that each side of it (considering the longest stride as the _side_;
+  Its length) should face the shorter sides of the overarching rectangle. This means that if the
+  width of each bookshelf is about $40 "cm"$ and the corridor between bookshelves is of about
+  $3 space "m"$, there must be $(15 space "m") / (3 + 0.4 space "m") approx 4$ bookshelves in the
+  inner area of each floor. This totals $4 dot 3 = 12$ bookshelves in the inner area of the whole
+  library.
+
+  The total number of bookshelves in the library is now at $15 + 12 = 27$ bookshelves. Assumming
+  each bookshelf is about $4 space "m"$ tall considering each floor is about $7 space "m"$ tall, and
+  each shelf's divided into about $40 "cm"$ tall levels, there's space for
+  $(4 space "m") / (0.4 space "m") = 10$ book levels per shelf.
+
+  If each book is, on average, $5 "cm"$ wide and we considered the length of the shelves to be
+  standing at $5 space "m"$, then each level can hold an estimate of
+  $(5 space "m") / (0.05 space "m") = 100$ books.
+
+  Thus each shelf holds $10 "levels" dot 100 space "books"/"level" = 1000$ books. Accounting for
+  each of the 27 shelves we computed before, this makes up
+  $27 "shelves" dot 1000 space "books"/"shelf" = 27000$ books in the entire library.
+
+  Assumming each book is, on average, between 500 and 1000 pages, so about $(1000 + 500) / 2 = 750$
+  pages long, then the total number of pages ought be $27000 dot 750 approx 20$ million pages.
+  Accounting for books that are less than the lower end of the average (i.e. less than 500 pages,)
+  this would still make for a number well above 1 million pages.
+
+/ Problem 1--22: \
+  This one asks about the amount of words on Skiena's book.
+
+  From looking at one regular (non--problem--full page,) I'd wager the font is a Computer Modern at
+  $12 "pt"$ and the page size is a US Letter. Based on personal experience, I'd estimate there are
+  about 350 to 400 words per page. Considering the first part of the book stands at about 430 pages,
+  as that is the part of the book for which I'm considering this first approximation, there ought be
+  about $430 dot 375 approx 160 000$ words in the first part of the book.
+
+  The second part is actually more text heavy, even if we consider the use of illustrations on the
+  front page of each algorithm or data structure presented, but it should still put the estimate to
+  slightly above 375, likely totaling 400 full words per page. Not accounting for the bibliography
+  nor index, the second part spans $718 - 435 = #(718 - 435)$ pages long, which computes
+  $#(718 - 435) dot 400 approx 110 000$ words.
+
+  Thus my total estimate is of $160 000 + 110 000 = 270 000$ words in Skiena's book.
+
+/ Problem 1--23: \
+  I am to estimate the number of hours in 1 million seconds, as well as possibly the number of days.
+  Because the problem explicitly states that the arithmetic should be performed on one's own head,
+  I'll just list the result I considered.
+
+  In terms of hours, about 250 hours. In terms of days, about 10 days.
+
+/ Problem 1--24: \
+  I'm expected to compute the number of cities and towns in the whole of the USoA.
+
+  I barely know the population distribution in the US, so I'm going to throw some wild guesses based
+  on the trends I've observed from other first--world, western countries.
+
+  The population centers are centered about the coasts, and I recall there being a bunch of names
+  especially in the sides of the country that went across a large area of those regions. Dare I say,
+  it quite possibly totals 100 cities and towns per coast, assumming the "coast" extends to the
+  border with Mexico. This gets us to 200 cities and towns.
+
+  Then, I'd say there's likely a progressive decrease (i.e. not immediate) of the number of towns as
+  you move towards the middle area of the country. I'm going to model this after the theoretical
+  area of a circle, where I consider 5 circumcentric rings, the first of which I already covered
+  from the coast. The distance between each conceptual ring should map to the decrease in population
+  from the area covered by one ring, itself measured as the area between this ring and the next one.
+
+  I'm going to assume the decrease is of 10 cities and towns per ring, which should make for the
+  following series.
+
+  $
+    {100, 90, 80, 70, 60}.
+  $
+
+  Considering then that we are to double each to account for each side of the country, I'd wager
+  there are about
+
+  $
+    100 dot 2 + 90 dot 2 + 80 dot 2 + 70 dot 2 + 60 dot 2 = 800 "cities and towns in the US".
+  $
+
+/ Problem 1--25: \
+  I am to estimate the number of cubic miles of water that flow out of the Mississipi River on a
+  daily basis.
+
+  I don't have the first idea of how wide that river is, but I've heard of it and there must be a
+  reason why the author is using a sort--of well--known river in his book, so I'm going to assume
+  it's fairly thick; Let's go for $2 "km"$ wide.
+
+  Based on the same fact, I'd guess that river is likely fairly long, which in US terms possibly
+  means it crosses 3 to 4 different, and big, states. If I define "big state" as a state of about
+  $1000 "km"$ cross--section, then if the river were to cross 3 of these, it should be about
+  $3 dot 1000 = 3000 "km"$ long.
+
+  With a width of $2 "km"$ and a length of $3000 "km"$, and considering $1 "mi" approx 1.25 "km"$,
+  then there ought be at least $2 "km" dot 0.5 "km" dot 3000 "km" = 3000 space "km"^3$ of water
+  flowing out of it at any given time (the $0.5 "km"$ accounts for an estimate on depth.) In miles,
+  these would be about $3000 space "km"^3 dot (1 "mi")^3 / (1.25 "km")^3 approx 1500 space "mi"^3$
+  of water flowing out of the river at any given time.
+
+  In a single day, I'd say it's fair to say this happens almost on a second basis, so there should
+  be about
+  $(1500 space "mi"^3) / (1.5 space "s") times 24 space "h" dot 3.6 times 10^2 space "s" approx 8 times 10^6 space "mi"^3$
+  flowing out of the Mississipi River each day.
+
+/ Problem 1--26: \
+  Now I'm expected to estimate the amount of Starbucks and McDonald's in my country.
+
+  Based on the fact my country only happens to have those in the "main cities" of each locality,
+  there ought be about 20 between both franchises on each of the about 15 main cities around my
+  country, so this goes for $20 dot 15 = 300$ Starbucks and McDonald's in my country.
+
+/ Problem 1--27: \
+  Now I need to compute the amount of time it would take to empty a bathhub with a drinking straw.
+
+  Assumming the bathhub is full, and it can hold about $30 space "l"^3$, and assumming as well that
+  the straw can suck in in $(0.005 space "l"^3) / (1 space "s")$, then it take about
+
+  $
+    30 space "l"^3 times (1 space "s") / (0.005 space "l"^3) = 6000 "s to empty the whole bathhub".
+  $
