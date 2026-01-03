@@ -1,4 +1,4 @@
-#import "@local/typst-template:0.18.0": *
+#import "@local/typst-template:0.23.0": *
 
 #show: template.with(
   title: [DSA],
@@ -1089,8 +1089,84 @@
   Now I need to compute the amount of time it would take to empty a bathhub with a drinking straw.
 
   Assumming the bathhub is full, and it can hold about $30 space "l"^3$, and assumming as well that
-  the straw can suck in in $(0.005 space "l"^3) / (1 space "s")$, then it take about
+  the straw can suck in in $(0.005 space "l"^3) / (1 "s")$, then it will take about
 
   $
-    30 space "l"^3 times (1 space "s") / (0.005 space "l"^3) = 6000 "s to empty the whole bathhub".
+    30 space "l"^3 times (1 "s") / (5 times 10^(-3) space "l"^3) = 6000 "s to empty the whole bathhub".
   $
+
+  So a bit less than 2 hours.
+
+/ Problem 1--30: \
+  I ought implement the #smallcaps[TSP] heuristics mentioned in the chapter and determine which of
+  them is more performant. I should also try to think of a better solution if I can find one off the
+  top of my head.
+
+  The problem treated in the section pointed to by the problem is a symmetric instance of the
+  #smallcaps[TSP], where a robot arm ought go through a set of points, starting from some point $a$
+  and ending at the same point $a$ while taking as little time as possible in taking the tour across
+  the rest of the locations.
+
+  This can be modeled after a complete, weighted graph $G = (V, E)$, where each edge $(i, j) in E$
+  considers the distance between its connecting vertices.
+
+  The first heuristic mentioned in the book is that of the _nearest--neighbor_. This should prove to
+  be the simplest to implement, even though it is far from finding the optimal path as it considers
+  the nearest vertex to the one currently considered in a loop. This implies the path is not taken
+  into consideration, because only the distance of every other vertex to the "current" vertex is
+  regarded when taking the decision to move to the next edge. Adding up each of these distances, the
+  total path ends up being much larger than it needs to be.
+
+  Using an adjacency matrix for the graph DS, the nearest--neighbor heuristic would require keeping
+  a list of all the vertices that have not yet been visited, while selecting some vertex from the
+  matrix. Because the heuristic doesn't specify that the selected vertex be random, we can simply
+  pick the first vertex.
+
+  Then for each vertex in the matrix that is not yet marked visited in the tracking list, we ought
+  select the closest, unvisited vertex to the initially selected one. Following, we repeat the same
+  process, only this time using the latest visited vertex as the one to consider in search of its
+  closest vertex. We determine distance as a function of the weight of the graph edges.
+
+  Once we hit the point where no vertex remains unvisited, the cycle has been completed. To denote
+  this, we may add back to the tracking list the first edge that we visited, that is to say, the
+  very first vertex in our adjacency matrix, as per the selection criteria mentioned before.
+
+  In Rust, we can keep track of an adjacency matrix DS with a custom type holding a vector of
+  vectors of another custom type for edges. The edge type must consider one of two possible states;
+  Weighted edges and nonexistent edges. The nature of the problem follows that no self--loops are
+  allowed, and the graph is complete because there's implicit edges between any nodes. By the
+  problem description, it also follows that all edges are attributed a weight reflecting the
+  distance between the connecting vertices.
+
+  This may be modeled in the constructor of the matrix DS through linear--cost operations that check
+  for the matrix to #l-enum[be square (i.e. it's a graph proper)][have a main diagonal made out of
+    nonexistent edge variants (i.e. it's got no self--loops,) and][have the values below and above
+    the main diagonal be equal (i.e. the graph is undirected.)]
+
+  The pattern to check for when considering whether the elements of each row are nonexistent or
+  weighted edges should follow that only those edges denoted by indices that happen to be the same
+  as the current row's index in the overarching matrix are nonexistent, while all others are
+  weighted.
+
+  Let me get some form of pseudocode out for what I understand the nearest--neighbor heuristic to
+  be.
+
+  #pseudocode(title: smallcaps(all: false)[Nearest--Neighbor($G$)])[
+    + $"visited" <- emptyset$
+    + *for* $v$ *in* $V, "where" G = (V, E)$ *do*
+      + $"visited" <- "visited" union {0}$
+    + $v <- V_0, "where" G = (V, E) "and" V = {V_0, V_1, dots.c, V_(abs(V) - 1)}$
+    + $"output" <- emptyset$
+    + *while* $a in "visited" : exists a [a != 1]$ *do*
+      + $"visited"[v] <- 1$
+      + $"output" <- "output" union {v}$
+      + $d_"min" <- oo$
+      + $v_"next" <- v$
+      + *for* $b$ *in* $V_v, "where" G = (V, E) "and" V_v = V inter {e in "visited" : e != 1}$ *do*
+        + *if* $(v, b) in E, "where" G = (V, E) : (v, b) < d_"min"$ *do*
+          + $d_"min" <- (v, b)$
+          + $v_"next" <- b$
+      + $v <- v_"next"$
+    + $"output" <- "output" union {V_0}, "where" G = (V, E) "and" V = {V_0, V_1, dots.c, V_(abs(V) - 1)}$
+    + *return* $"output"$
+  ]

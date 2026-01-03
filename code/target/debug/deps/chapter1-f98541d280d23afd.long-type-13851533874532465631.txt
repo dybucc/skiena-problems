@@ -1,0 +1,1 @@
+std::iter::SkipWhile<std::slice::Iter<'_, (usize, &Edge)>, {closure@chapter1/src/lib.rs:72:29: 72:40}>
