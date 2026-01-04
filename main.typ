@@ -1,4 +1,4 @@
-#import "@local/typst-template:0.23.0": *
+#import "@local/typst-template:0.26.0": *
 
 #show: template.with(
   title: [DSA],
@@ -1108,7 +1108,7 @@
   the rest of the locations.
 
   This can be modeled after a complete, weighted graph $G = (V, E)$, where each edge $(i, j) in E$
-  considers the distance between its connecting vertices.
+  considers the distance between its connecting vertices, namely $i, j$.
 
   The first heuristic mentioned in the book is that of the _nearest--neighbor_. This should prove to
   be the simplest to implement, even though it is far from finding the optimal path as it considers
@@ -1162,11 +1162,19 @@
       + $"output" <- "output" union {v}$
       + $d_"min" <- oo$
       + $v_"next" <- v$
-      + *for* $b$ *in* $V_v, "where" G = (V, E) "and" V_v = V inter {e in "visited" : e != 1}$ *do*
-        + *if* $(v, b) in E, "where" G = (V, E) : (v, b) < d_"min"$ *do*
-          + $d_"min" <- (v, b)$
+      + *for* $b$ *in*
+        $V_v, "where" G = (V, E) "and" V_v = V inter {c in "visited", c in V : c != 1}$ *do*
+        + *if* $(v, b) in E, "where" G = (V, E) : d_((v, b)) < d_"min"$ *do*
+          + $d_"min" <- d_((v, b))$
           + $v_"next" <- b$
       + $v <- v_"next"$
     + $"output" <- "output" union {V_0}, "where" G = (V, E) "and" V = {V_0, V_1, dots.c, V_(abs(V) - 1)}$
     + *return* $"output"$
   ]
+
+  In Rust, modeling the inner `for` loop requires performing a check over the tracking list, which
+  implies this tracking list contains as many elements as there are vertices in the graph. In Rust,
+  I can think of only selecting from the iterator of elements of the current graph the one we
+  currently are processing, followed by filtering from its list of edges in the adjacency matrix
+  those elements whose indices coincide with the indices of the elements that are marked visited in
+  the tracking list.
