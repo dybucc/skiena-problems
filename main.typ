@@ -1163,12 +1163,13 @@
       + $d_"min" <- oo$
       + $v_"next" <- v$
       + *for* $b$ *in*
-        $V_v, "where" G = (V, E) "and" V_v = V inter {c in "visited", c in V : c != 1}$ *do*
+        $V_v, "where" G = (V, E) "and" V_v = V inter {c_i in "visited", c in V : c_i != 1}$ *do*
         + *if* $(v, b) in E, "where" G = (V, E) : d_((v, b)) < d_"min"$ *do*
           + $d_"min" <- d_((v, b))$
           + $v_"next" <- b$
       + $v <- v_"next"$
-    + $"output" <- "output" union {V_0}, "where" G = (V, E) "and" V = {V_0, V_1, dots.c, V_(abs(V) - 1)}$
+    + $"output" <- "output" union {V_0},
+      "where" G = (V, E) "and" V = {V_0, V_1, dots.c, V_(abs(V) - 1)}$
     + *return* $"output"$
   ]
 
@@ -1178,3 +1179,51 @@
   currently are processing, followed by filtering from its list of edges in the adjacency matrix
   those elements whose indices coincide with the indices of the elements that are marked visited in
   the tracking list.
+
+  Maybe the nearest neighbor heuristic can be optimized in the Rust code, such that instead of
+  performing a full check of all elements of the adjacency matrix on every loop iteration, the
+  iterator over the tracking list skips the first $n$ elements that are known to have already been
+  checked. Or not, because it could very well be that the next node in the path is not the one
+  immediately "following" (in terms of 0--indexed vertex identifiers) the one we just processed.
+
+  The next heuristic is based on the same concept as the union--find DS, as it uses a closest pair
+  approach whereby we initially consider a forest of single--vertex trees, each representing one of
+  the vertices/locations in the graph. For each one of those initial trees minus 1, the algorithm
+  goes through all of separate trees and considers the edge between vertices of differing trees that
+  has the smallest separating distance (i.e. the edge with the lightest weight.)
+
+  Implementing this is likely going to require building an auxiliary DS for the union--find data
+  structure that is customized to the needs of this problem. This context has the particularity that
+  each of the trees needs to additionally support an operation for traversal of the nodes in each
+  tree of the forest/disjoint set, but doesn't require keeping track of the tree height because path
+  compression would ruin the whole algorithm. For this, I belive the best approach is going to be
+  implementing an iterator with special properties.
+
+  The iterator should consider each of the trees, and for each node in the tree, it should produce a
+  2--tuple `Some((i, j))` where $mono(i) := T_0, mono(j) := T_1$. This means the iterator needs to
+  keep track of the current tree being explored, the node of the current tree being considered and
+  additionally, will require knowing about how many and which trees are left, as well as their
+  component nodes.
+
+  To support this, the design of the DS will need to know about #l-enum[an identifier assigned to
+    each of the vertices][an array modeled after a backward--edge parent--tree, and][basic UFDS
+    operations (`unite`, `find`, `same`.)]
+
+  The first requirement is simple enough; We follow the same reasoning as with the nearest neighbor
+  heuristic and use the indices of the vertices in the adjacency matrix as the numerical
+  identifiers. The second requirement should be enough to leave the heavy--lifting traversal logic
+  to the iterator, which itself is going to use in abundance the basic operations.
+
+  To allow for less computations to be performed on each call to `next()`, the iterator should also
+  keep internal state to be initialized with the call to `iter()`. This should contain a record of
+  the total number of trees in the forest, a collection of indices for the representative vertices
+  of each tree (thus the length of this should provide for the fomer,) and the index of the
+  currently considered node.
+
+  Additionally, because all elements to be iterated over are known the moment the `iter()` call is
+  made, the iterator can additionally precompute, on a per--node basis, the Cartesian product of
+
+  $
+    {a} times {b, c, dots.c, n},
+    "where" a in T_0, {b, c, dots.c, n} in T_1 union T_2 union dots.c T_n.
+  $
