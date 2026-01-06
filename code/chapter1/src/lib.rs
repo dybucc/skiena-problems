@@ -1,7 +1,45 @@
+use std::{iter::repeat_n, sync::LazyLock};
+
 #[allow(unused)]
 #[derive(Debug)]
 struct AdjacencyMatrix {
     inner: Vec<Vec<Edge>>,
+}
+
+#[allow(unused)]
+#[derive(Debug)]
+struct Pairs {
+    /// Holds the parent of each node (where the node itself is the index).
+    vertices: Vec<usize>,
+    /// Holds the node in the lhs of the current Cartesian product.
+    current_node: Option<usize>,
+    /// Holds the nodes in the same tree as [`current_node`].
+    ///
+    /// [`current_node`]: Pairs::current_node
+    current_tree: Option<Vec<usize>>,
+    /// Holds the Cartesian product of [`current_node`] with all nodes that are
+    /// **not** part of [`current_tree`].
+    ///
+    /// [`current_node`]: Pairs::current_node
+    /// [`current_tree`]: Pairs::current_tree
+    current_product: Vec<(usize, usize)>,
+    /// Holds the index of the pair currently being iterated over in the
+    /// [`current_product`] field.
+    ///
+    /// [`current_product`]: Pairs::current_product
+    current_iter: Option<usize>,
+}
+
+#[allow(unused)]
+#[derive(Debug)]
+struct PairsError {
+    inner: PairsErrorType,
+}
+
+#[allow(unused)]
+#[derive(Debug)]
+enum PairsErrorType {
+    IndexOutOfBounds(String),
 }
 
 #[allow(unused)]
@@ -28,20 +66,12 @@ enum AdjacencyMatrixErrorType {
 
 #[allow(unused)]
 macro_rules! matrix {
-    ($($($row:literal),+);+ $(;)?) => {{
-        AdjacencyMatrix::new(&[
-            $(
-                vec![
-                    $(
-                        {
-                            let row: isize = $row;
-                            if row == -1 { Edge::NonExistent } else { Edge::Weighted(row as usize) }
-                        }
-                    ),+
-                ]
-            ),+
-        ])
-    }};
+    ($($($row:literal),+);+ $(;)?) => {
+        AdjacencyMatrix::new(&[$(vec![$({
+            let row: isize = $row;
+            if row == -1 { Edge::NonExistent } else { Edge::Weighted(row as usize) }
+        }),+]),+])
+    };
 }
 
 macro_rules! build_error {
@@ -66,6 +96,9 @@ macro_rules! build_error {
             "matrix contains self-loops; this is not a simple graph",
         ))
     };
+    (IndexOutOfBounds) => {
+        PairsErrorType::IndexOutOfBounds(String::from("ufds doesn't contain such index element"))
+    };
 }
 
 macro_rules! assure_or {
@@ -76,6 +109,12 @@ macro_rules! assure_or {
 
 impl From<AdjacencyMatrixErrorType> for AdjacencyMatrixError {
     fn from(value: AdjacencyMatrixErrorType) -> Self {
+        Self { inner: value }
+    }
+}
+
+impl From<PairsErrorType> for PairsError {
+    fn from(value: PairsErrorType) -> Self {
         Self { inner: value }
     }
 }
@@ -122,12 +161,117 @@ impl AdjacencyMatrix {
 }
 
 #[allow(unused)]
+impl Pairs {
+    fn new(matrix: &AdjacencyMatrix) -> Self {
+        Self {
+            vertices: (0..matrix.inner.len()).collect(),
+            current_node: None,
+            current_tree: None,
+            current_product: vec![],
+            current_iter: None,
+        }
+    }
+
+    fn unite(&mut self, this: usize, other: usize) -> Result<(), PairsError> {
+        if !self.same(this, other)? {
+            self.vertices[other] = this;
+        }
+
+        Ok(())
+    }
+
+    fn find(&self, this: usize) -> Result<usize, PairsError> {
+        assure_or!(this < self.vertices.len() - 1, IndexOutOfBounds)?;
+        match self.vertices[this] {
+            val if val == this => Ok(this),
+            other => self.find(other),
+        }
+    }
+
+    fn same(&self, this: usize, other: usize) -> Result<bool, PairsError> {
+        let (this, other) = (self.find(this)?, self.find(other)?);
+
+        Ok(this == other)
+    }
+
+    fn ancestors(&mut self, this: usize) -> Result<(), PairsError> {
+        let this_root = Self::find(self, this)?;
+        let mut parent = this;
+        let mut ancestors = vec![parent];
+
+        while parent != this_root {
+            parent = self.vertices[parent];
+            ancestors.push(parent);
+        }
+
+        ancestors.reverse();
+        self.current_tree = Some(ancestors);
+
+        Ok(())
+    }
+
+    fn cartesian_product(&mut self, this: usize) -> Result<(), PairsError> {
+        static ERROR_MSG: LazyLock<&str> =
+            LazyLock::new(|| "this method may not be called unless iteration has already started");
+
+        let current_tree = self.current_tree.as_ref().expect(&ERROR_MSG);
+        let others: Vec<_> = self
+            .vertices
+            .iter()
+            .filter(|&&node| current_tree.iter().all(|&tree_node| tree_node != node))
+            .collect();
+
+        self.current_product =
+            repeat_n(self.current_node.as_ref().expect(&ERROR_MSG), others.len())
+                .zip(others)
+                .map(|(&node1, &node2)| (node1, node2))
+                .collect();
+
+        Ok(())
+    }
+}
+
+impl Iterator for Pairs {
+    type Item = (usize, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.current_node {
+            None => {
+                self.current_node = Some(0);
+                self.current_tree = Some(vec![0]);
+                self.cartesian_product(0).ok()?;
+                self.current_iter = Some(0);
+            }
+            Some(node) => match self.current_iter {
+                Some(val) => {
+                    todo!()
+                }
+                _ => unreachable!(
+                    "iteration should have already started if current_node is non-None"
+                ),
+            },
+        }
+
+        Some(self.current_product[self.current_iter?])
+    }
+
+    fn min(self) -> Option<Self::Item>
+    where
+        Self: Sized,
+        Self::Item: Ord,
+    {
+        todo!()
+    }
+}
+
+#[allow(unused)]
 trait TSPNearestNeighbor {
     fn tsp(&self) -> Vec<usize>;
 }
 
 #[allow(unused)]
 trait TSPClosestPair {
+    fn pairs(&self) -> Pairs;
     fn tsp(&self) -> Vec<usize>;
 }
 
@@ -169,6 +313,10 @@ impl TSPNearestNeighbor for AdjacencyMatrix {
 }
 
 impl TSPClosestPair for AdjacencyMatrix {
+    fn pairs(&self) -> Pairs {
+        Pairs::new(self)
+    }
+
     fn tsp(&self) -> Vec<usize> {
         todo!()
     }

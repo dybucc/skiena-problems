@@ -1,4 +1,4 @@
-#import "@local/typst-template:0.26.0": *
+#import "@local/typst-template:0.28.0": *
 
 #show: template.with(
   title: [DSA],
@@ -1189,8 +1189,8 @@
   The next heuristic is based on the same concept as the union--find DS, as it uses a closest pair
   approach whereby we initially consider a forest of single--vertex trees, each representing one of
   the vertices/locations in the graph. For each one of those initial trees minus 1, the algorithm
-  goes through all of separate trees and considers the edge between vertices of differing trees that
-  has the smallest separating distance (i.e. the edge with the lightest weight.)
+  goes through all separate trees and considers the edge between vertices of differing trees that
+  has the smallest separating distance (i.e. the lightest edge.)
 
   Implementing this is likely going to require building an auxiliary DS for the union--find data
   structure that is customized to the needs of this problem. This context has the particularity that
@@ -1202,17 +1202,17 @@
   The iterator should consider each of the trees, and for each node in the tree, it should produce a
   2--tuple `Some((i, j))` where $mono(i) := T_0, mono(j) := T_1$. This means the iterator needs to
   keep track of the current tree being explored, the node of the current tree being considered and
-  additionally, will require knowing about how many and which trees are left, as well as their
+  additionally, it will require knowing how many and which trees are left, as well as their
   component nodes.
 
-  To support this, the design of the DS will need to know about #l-enum[an identifier assigned to
+  To support this, the design of the DS will need to keep track of #l-enum[an identifier assigned to
     each of the vertices][an array modeled after a backward--edge parent--tree, and][basic UFDS
     operations (`unite`, `find`, `same`.)]
 
   The first requirement is simple enough; We follow the same reasoning as with the nearest neighbor
   heuristic and use the indices of the vertices in the adjacency matrix as the numerical
   identifiers. The second requirement should be enough to leave the heavy--lifting traversal logic
-  to the iterator, which itself is going to use in abundance the basic operations.
+  to the iterator, which itself is going to use the basic operations in abundance.
 
   To allow for less computations to be performed on each call to `next()`, the iterator should also
   keep internal state to be initialized with the call to `iter()`. This should contain a record of
@@ -1220,10 +1220,19 @@
   of each tree (thus the length of this should provide for the fomer,) and the index of the
   currently considered node.
 
-  Additionally, because all elements to be iterated over are known the moment the `iter()` call is
-  made, the iterator can additionally precompute, on a per--node basis, the Cartesian product of
+  Because all elements to be iterated over are known the moment the `iter()` call is made, the
+  iterator can precompute, on a per--node basis, the Cartesian product of
 
   $
     {a} times {b, c, dots.c, n},
-    "where" a in T_0, {b, c, dots.c, n} in T_1 union T_2 union dots.c T_n.
+    "where" a in T_0, {b, c, dots.c, n} in T_1 union T_2 union dots.c union T_n.
   $
+
+  To compute the Cartesian product, I have not found in my bibliographic sources an efficient
+  method, so I will proceed with a manual implementation. The `BTreeSet` in the Rust `std` library
+  does not implement such an operation, but perhaps I can use the `intersection()` method on that
+  type to produce the rhs of the above Cartesian product.
+
+  Nay. The best way is going to be taking into consideration the current node being iterated over,
+  and then manually computing the Cartesian product with each of the nodes (not just the
+  representative nodes) the iterator is keeping tabs on.
