@@ -1,4 +1,4 @@
-use std::{iter::repeat_n, sync::LazyLock};
+use std::{cmp::Ordering, iter::repeat_n, sync::LazyLock};
 
 #[allow(unused)]
 #[derive(Debug)]
@@ -8,7 +8,7 @@ struct AdjacencyMatrix {
 
 #[allow(unused)]
 #[derive(Debug)]
-struct Pairs {
+struct Pairs<'a> {
     /// Holds the parent of each node (where the node itself is the index).
     vertices: Vec<usize>,
     /// Holds the node in the lhs of the current Cartesian product.
@@ -28,6 +28,11 @@ struct Pairs {
     ///
     /// [`current_product`]: Pairs::current_product
     current_iter: Option<usize>,
+    /// Source graph to refer to when performing graph-level logic on the edges
+    /// denoted by [`current_product`].
+    ///
+    /// [`current_product`]: Pairs::current_product
+    src: &'a AdjacencyMatrix,
 }
 
 #[allow(unused)]
@@ -45,8 +50,8 @@ enum PairsErrorType {
 #[allow(unused)]
 #[derive(Clone, PartialEq, Debug)]
 enum Edge {
-    Weighted(usize),
     NonExistent,
+    Weighted(usize),
 }
 
 #[allow(unused)]
@@ -161,14 +166,15 @@ impl AdjacencyMatrix {
 }
 
 #[allow(unused)]
-impl Pairs {
-    fn new(matrix: &AdjacencyMatrix) -> Self {
+impl<'a> Pairs<'a> {
+    fn new(matrix: &'a AdjacencyMatrix) -> Self {
         Self {
             vertices: (0..matrix.inner.len()).collect(),
             current_node: None,
             current_tree: None,
             current_product: vec![],
             current_iter: None,
+            src: matrix,
         }
     }
 
@@ -212,7 +218,7 @@ impl Pairs {
 
     fn cartesian_product(&mut self, this: usize) -> Result<(), PairsError> {
         static ERROR_MSG: LazyLock<&str> =
-            LazyLock::new(|| "this method may not be called unless iteration has already started");
+            LazyLock::new(|| "this method may not be called outside iterator chains");
 
         let current_tree = self.current_tree.as_ref().expect(&ERROR_MSG);
         let others: Vec<_> = self
@@ -231,9 +237,10 @@ impl Pairs {
     }
 }
 
-impl Iterator for Pairs {
+impl Iterator for Pairs<'_> {
     type Item = (usize, usize);
 
+    // TODO: get rid of the expects once testing proves design soundness.
     fn next(&mut self) -> Option<Self::Item> {
         match self.current_node {
             None => {
@@ -242,17 +249,46 @@ impl Iterator for Pairs {
                 self.cartesian_product(0).ok()?;
                 self.current_iter = Some(0);
             }
-            Some(node) => match self.current_iter {
-                Some(val) => {
-                    todo!()
+            Some(mut current_node) => {
+                if let Some(ref mut val) = self.current_iter {
+                    match val.cmp(&&mut (self.current_product.len() - 1)) {
+                        Ordering::Less => *val += 1,
+                        Ordering::Equal => {
+                            current_node = (current_node < self.vertices.len() - 1)
+                                .then_some(current_node)?
+                                + 1;
+
+                            self.current_node = Some(current_node);
+                            self.ancestors(current_node).expect(
+                                "this operation should be \
+                                infallible if the iteration indices (`self.current_node` and \
+                                `self.current_iter`) have been correctly handled",
+                            );
+                            self.cartesian_product(current_node).expect(
+                                "this operation should be \
+                                infallible if the iteration indices (`self.current_node` and \
+                                `self.current_iter`) have been correctly handled",
+                            );
+                            self.current_iter = Some(0);
+                        }
+                        _ => unreachable!(
+                            "the collection index should have been reset in the `Ordering::Equal` \
+                            branch"
+                        ),
+                    }
+                } else {
+                    unreachable!(
+                        "iteration should have already started if `self.current_node` != `None`"
+                    )
                 }
-                _ => unreachable!(
-                    "iteration should have already started if current_node is non-None"
-                ),
-            },
+            }
         }
 
-        Some(self.current_product[self.current_iter?])
+        Some(
+            self.current_product[self
+                .current_iter
+                .expect("`self.current_iter` should be infallible at this point")],
+        )
     }
 
     fn min(self) -> Option<Self::Item>
@@ -260,7 +296,17 @@ impl Iterator for Pairs {
         Self: Sized,
         Self::Item: Ord,
     {
-        todo!()
+        let matrix = &self.src.inner;
+        self.min_by_key(move |(node1, node2)| {
+            if let Edge::Weighted(weight) = matrix[*node1][*node2] {
+                weight
+            } else {
+                unreachable!(
+                    "no edge in the iterator should be `Edge::NonExistent` after \
+                    `self.cartesian_product()` has run"
+                )
+            }
+        })
     }
 }
 
@@ -271,7 +317,7 @@ trait TSPNearestNeighbor {
 
 #[allow(unused)]
 trait TSPClosestPair {
-    fn pairs(&self) -> Pairs;
+    fn pairs(&'_ self) -> Pairs<'_>;
     fn tsp(&self) -> Vec<usize>;
 }
 
@@ -313,12 +359,12 @@ impl TSPNearestNeighbor for AdjacencyMatrix {
 }
 
 impl TSPClosestPair for AdjacencyMatrix {
-    fn pairs(&self) -> Pairs {
+    fn pairs(&'_ self) -> Pairs<'_> {
         Pairs::new(self)
     }
 
     fn tsp(&self) -> Vec<usize> {
-        todo!()
+        todo!("this will be implemented once the `Pairs` implementation of `Iterator` is done")
     }
 }
 

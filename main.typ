@@ -1236,3 +1236,30 @@
   Nay. The best way is going to be taking into consideration the current node being iterated over,
   and then manually computing the Cartesian product with each of the nodes (not just the
   representative nodes) the iterator is keeping tabs on.
+
+  The iterator implementation is done. It's not tested, though. The next step is going to be
+  deciding whether I should override the implementation of `min()` in `Iterator` to provide perfect
+  semantics with the context in question (i.e. the ordered pair denotes an edge and thus the
+  ordering is denoted by the weight of such edge, not by the node indices themselves.) The
+  alternative to this would be to, once I'm actually solving the problem, call `min_by_key()` and
+  pass a closure that transforms each element into the weight denoted by the edge (which could also
+  be done in a similar fashion with `min_by()`.)
+
+  The thing here is that the semantics of the `Pairs` iterator would be wrong if the `min()` method
+  weren't overridden. Sure `min()` just calls `min_by()` with the standard `Ord` implementation of
+  the iterated--over `Item`, but this is no excuse for not overriding the implementation. We have an
+  answer.
+
+  To override `min()`, I believe the implementation should transform the iterated sequence in the
+  same vein as `min_by_key()`'s parameterized closure, after which a regular `min()` may be called.
+  The only issue here is that `min()` would force a reduction, which itself forces a fold, which
+  itself forces complete consumption of the iterator. In and of itself, this is no issue,
+  considering this is a `self`--owning method in `Iterator`, but the way the iterator is built, this
+  would make it so that `Pairs` would have to compute the complete set of... nothing.
+
+  It's actually pretty simple. I need only call `min_by_key()` with a closure transforming the pairs
+  into the equivalent edge weight in the adjacency matrix, after which I can either #l-enum[derive
+    an implementation of `Ord` for `Edge`, or][further destructure the `Edge` enum into the
+    underlying weight].
+
+  We're going with the second option.
