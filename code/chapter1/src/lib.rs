@@ -7,10 +7,10 @@ struct AdjacencyMatrix {
 }
 
 #[allow(unused)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Pairs<'a> {
     /// Holds the parent of each node (where the node itself is the index).
-    vertices: Vec<usize>,
+    chains: Vec<usize>,
     /// Holds the node in the lhs of the current Cartesian product.
     current_node: Option<usize>,
     /// Holds the nodes in the same tree as [`current_node`].
@@ -74,7 +74,10 @@ macro_rules! matrix {
     ($($($row:literal),+);+ $(;)?) => {
         AdjacencyMatrix::new(&[$(vec![$({
             let row: isize = $row;
-            if row == -1 { Edge::NonExistent } else { Edge::Weighted(row as usize) }
+            match row.cmp(&0) {
+                Ordering::Less => Edge::NonExistent,
+                _ => Edge::Weighted(row as usize),
+            }
         }),+]),+])
     };
 }
@@ -169,7 +172,7 @@ impl AdjacencyMatrix {
 impl<'a> Pairs<'a> {
     fn new(matrix: &'a AdjacencyMatrix) -> Self {
         Self {
-            vertices: (0..matrix.inner.len()).collect(),
+            chains: (0..matrix.inner.len()).collect(),
             current_node: None,
             current_tree: None,
             current_product: vec![],
@@ -180,15 +183,15 @@ impl<'a> Pairs<'a> {
 
     fn unite(&mut self, this: usize, other: usize) -> Result<(), PairsError> {
         if !self.same(this, other)? {
-            self.vertices[other] = this;
+            self.chains[other] = this;
         }
 
         Ok(())
     }
 
     fn find(&self, this: usize) -> Result<usize, PairsError> {
-        assure_or!(this < self.vertices.len() - 1, IndexOutOfBounds)?;
-        match self.vertices[this] {
+        assure_or!(this < self.chains.len(), IndexOutOfBounds)?;
+        match self.chains[this] {
             val if val == this => Ok(this),
             other => self.find(other),
         }
@@ -206,7 +209,7 @@ impl<'a> Pairs<'a> {
         let mut ancestors = vec![parent];
 
         while parent != this_root {
-            parent = self.vertices[parent];
+            parent = self.chains[parent];
             ancestors.push(parent);
         }
 
@@ -222,7 +225,7 @@ impl<'a> Pairs<'a> {
 
         let current_tree = self.current_tree.as_ref().expect(&ERROR_MSG);
         let others: Vec<_> = self
-            .vertices
+            .chains
             .iter()
             .filter(|&&node| current_tree.iter().all(|&tree_node| tree_node != node))
             .collect();
@@ -240,13 +243,18 @@ impl<'a> Pairs<'a> {
 impl Iterator for Pairs<'_> {
     type Item = (usize, usize);
 
-    // TODO: get rid of the expects once testing proves design soundness.
     fn next(&mut self) -> Option<Self::Item> {
         match self.current_node {
             None => {
                 self.current_node = Some(0);
-                self.current_tree = Some(vec![0]);
-                self.cartesian_product(0).ok()?;
+                self.ancestors(0).expect(
+                    "the operation should infallible because the index is a constant that's \
+                    always within bounds",
+                );
+                self.cartesian_product(0).expect(
+                    "the product should be an infallible operation if the source graph is \
+                    valid",
+                );
                 self.current_iter = Some(0);
             }
             Some(mut current_node) => {
@@ -254,20 +262,19 @@ impl Iterator for Pairs<'_> {
                     match val.cmp(&&mut (self.current_product.len() - 1)) {
                         Ordering::Less => *val += 1,
                         Ordering::Equal => {
-                            current_node = (current_node < self.vertices.len() - 1)
-                                .then_some(current_node)?
-                                + 1;
+                            current_node =
+                                (current_node < self.chains.len() - 1).then_some(current_node)? + 1;
 
                             self.current_node = Some(current_node);
                             self.ancestors(current_node).expect(
-                                "this operation should be \
-                                infallible if the iteration indices (`self.current_node` and \
-                                `self.current_iter`) have been correctly handled",
+                                "this operation should be infallible if the iteration indices \
+                                (`self.current_node` and `self.current_iter`) have been correctly \
+                                handled",
                             );
                             self.cartesian_product(current_node).expect(
-                                "this operation should be \
-                                infallible if the iteration indices (`self.current_node` and \
-                                `self.current_iter`) have been correctly handled",
+                                "this operation should be infallible if the iteration indices \
+                                (`self.current_node` and `self.current_iter`) have been correctly \
+                                handled",
                             );
                             self.current_iter = Some(0);
                         }
@@ -297,15 +304,17 @@ impl Iterator for Pairs<'_> {
         Self::Item: Ord,
     {
         let matrix = &self.src.inner;
-        self.min_by_key(move |(node1, node2)| {
-            if let Edge::Weighted(weight) = matrix[*node1][*node2] {
-                weight
-            } else {
+
+        dbg!("hit custom impl");
+
+        self.min_by_key(|&(node1, node2)| {
+            let Edge::Weighted(weight) = matrix[node1][node2] else {
                 unreachable!(
-                    "no edge in the iterator should be `Edge::NonExistent` after \
-                    `self.cartesian_product()` has run"
+                    "no node considered within the `Pairs` iterator should be `Edge::NonExistent`"
                 )
-            }
+            };
+
+            weight
         })
     }
 }
@@ -317,7 +326,7 @@ trait TSPNearestNeighbor {
 
 #[allow(unused)]
 trait TSPClosestPair {
-    fn pairs(&'_ self) -> Pairs<'_>;
+    fn pairs(&self) -> Pairs<'_>;
     fn tsp(&self) -> Vec<usize>;
 }
 
@@ -359,12 +368,35 @@ impl TSPNearestNeighbor for AdjacencyMatrix {
 }
 
 impl TSPClosestPair for AdjacencyMatrix {
-    fn pairs(&'_ self) -> Pairs<'_> {
+    fn pairs(&self) -> Pairs<'_> {
         Pairs::new(self)
     }
 
     fn tsp(&self) -> Vec<usize> {
-        todo!("this will be implemented once the `Pairs` implementation of `Iterator` is done")
+        let mut output = vec![];
+        let mut pairs_iter = self.pairs();
+
+        output.reserve_exact(self.inner.len() + 1);
+
+        for _ in 1..self.inner.len() {
+            let (node1, node2) = pairs_iter
+                .by_ref()
+                .min()
+                .expect("the iterator override implementation should be infallible");
+
+            output.push(node1);
+            output.push(node2);
+            pairs_iter.unite(node1, node2).expect(
+                "the node indices are sourced directly from the iterator itself so the \
+                operation should be infallible",
+            );
+
+            pairs_iter.current_node = None;
+        }
+
+        output.push(output[0]);
+
+        output
     }
 }
 
@@ -467,6 +499,37 @@ mod tests {
                 4, 4, -1, 3, 2;
                 4, 2, 3, -1, 2;
                 2, 2, 2, 2, -1;
+            }?),
+            vec![0, 4, 1, 3, 2, 0]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn tsp_closest_pair1() -> Result<(), AdjacencyMatrixError> {
+        assert_eq!(
+            TSPClosestPair::tsp(&matrix! {
+                -1,  1,  3;
+                 1, -1,  4;
+                 3,  4, -1;
+            }?),
+            vec![0, 1, 2, 0]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
+    fn tsp_closest_pair2() -> Result<(), AdjacencyMatrixError> {
+        assert_eq!(
+            TSPClosestPair::tsp(&matrix! {
+                -1,  3,  4,  4,  2;
+                 3, -1,  4,  2,  2;
+                 4,  4, -1,  3,  2;
+                 4,  2,  3, -1,  2;
+                 2,  2,  2,  2, -1;
             }?),
             vec![0, 4, 1, 3, 2, 0]
         );

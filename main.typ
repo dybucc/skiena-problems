@@ -1263,3 +1263,77 @@
     underlying weight].
 
   We're going with the second option.
+
+  None of the `min_*` operations yield the right semantics, as they all consume the iterator, and
+  thus compute in the process all cartesian products, selecting always the lightest edge of the
+  graph after already having formed the smallest forest of disjoint chains (i.e. a forest of two
+  trees.) There's two alternatives: #l-enum[Continue overriding the `min` implementation of
+    `Iterator` with the right collection of values, or][Implement a method on the `Pairs` type with
+    the same logic but fully correct semantics (such that no cloning is involved in the process of
+    computing the minimum weight edge in the #smallcaps[TSP] algorithm in which it is used.)]
+
+  Embedding the right semantics for unordered pairs of edges in the graph within the `min()` method
+  of `Iterator`, such that it doesn't consume the whole iterator, is hard. The trait method
+  signature cannot be overridden, so even if the iterator performed the correct set of operations,
+  the mere call to the consumer method would force a move on the `Pairs` instance we intended on
+  keeping valid throughout the whole #smallcaps[TSP] algorithm implementation. The only real option
+  is using a method on the type, such that it makes use of a mutable receiver and allows for
+  consistent mutation through select calls to the `Iterator` trait methods to advance the Cartesian
+  product pair so long as the next call to the iterator does not yield a Cartesian product where the
+  first element is different from the `self.current_node` taking up the lhs of said operation.
+
+  An alternative to the method implementation would be to implement `min()` as `Iterator` under the
+  assumption that the method will be called after `by_ref()`, which should yield a mutable reference
+  that would advance the iterator without completely consuming it. Basically, the `min()`
+  implementation would be one where it is assumed that the minimum value is only to be considered
+  within the range of the `self.current_product`. Then, on the call site within the `tsp()` method,
+  the `Pairs` instance would call first, on each iteration, the `by_ref()` method from `Iterator`,
+  after which `min()` would both safely provide the minimum value in the currently considered
+  Cartesian product, and allow for the original iterator to be reused in the next iteration of the
+  overarching loop over $n - 1$ nodes of the graph.
+
+  The implementation for `min()` should now be modified from the original use of `min_by_key()`, as
+  all logic pre--implemented on the iterator is not going to stop at the end of the current
+  Cartesian product. The implementation should follow that the `min()` method would call `next()`
+  for as long as the internal state on `Pairs` yields the same value on the `current_node` field.
+  For that, an infinite loop over `next()` calls, checking everytime that `self.currrent_node`
+  hasn't changed, while collecting all yielded values in a vector, should do just fine. Then we can
+  call `min_by_key()` on an interator over the vector such that we first transform each pair into
+  the corresponding weighted edge in the graph (including an `unreachable!()` macro call for the
+  case of an `Edge::None` variant,) and let this method do its thing with the `Ord` trait
+  implementation on the underlying weight (the `usize` field within the `Edge` tuple variant.)
+
+  Maybe the whole implementation is wrong. Revisiting Skiena's book, it does mention that the
+  algorithm checks for the smallest weight among all pairs made out of vertices of differing chains.
+  This implies the `min()` operation ought act on all computed Cartesian products, which itself
+  means that the iterator should be completely iterated over but not consumed. This is so that after
+  finding the minimum weight edge at the end of a full iteration, we may use the `unite()` operation
+  on the UFDS--like DS inside `Pairs` to update the forest of disjoint vertex chains. So this still
+  means the approach with `by_ref()` is correct, but the more complex implementation of `min()` is
+  not. Though this does imply a fully consuming operation with `min_by_key()` is possible, and very
+  much simpler than the current implemenation with `min()`. If anything, the same operation may be
+  reimplemented as it was before.
+
+  The thing to consider here is that the `Pairs` iterator ought be reset to a pre--iteration state
+  on all fields but `chains`, which keeps track of the vertex chain across #smallcaps[TSP] algorithm
+  iterations. More specifically, the iterator must call `min()` inside the hot loop of `tsp()`, then
+  `unite()` with the returned 2--tuple, and then it must reset all fields but `chains` prior to
+  continuing with the next iteration of said loop. The `output` auxiliary vector on the `tsp()`
+  implementation should not be required once the forest in `pairs_iter` is made out of only a single
+  vertex chain. Still, at the end of `tsp()` there's no indication of which node in field `chains`
+  is the "leaf" of the chain, and for that matter, there's no invariant that holds between non--leaf
+  nodes and branch nodes. The only invariant is that of the root node, which will refer to itself.
+  So the auxiliary variable is necessary.
+
+  So the implementation is done, but it may be faulty in some respects. Considering the simple
+  adjacency matrix $M_1$ as follows,
+
+  $
+    M_1 = mat(
+      -1, 1, 3;
+      1, -1, 4;
+      3, 4, -1;
+    ), "where negative weights denote nonexistent edges".
+  $
+
+  This should yield the 0--indexed--based #smallcaps[TSP] ${0, 1, 2, 0}$.
