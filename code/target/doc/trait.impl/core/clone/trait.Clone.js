@@ -1,9 +1,9 @@
 (function() {
-    var implementors = Object.fromEntries([["chapter1",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.92.0/core/clone/trait.Clone.html\" title=\"trait core::clone::Clone\">Clone</a> for <a class=\"enum\" href=\"chapter1/enum.Edge.html\" title=\"enum chapter1::Edge\">Edge</a>"]]]]);
+    var implementors = Object.fromEntries([["chapter1",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.92.0/core/clone/trait.Clone.html\" title=\"trait core::clone::Clone\">Clone</a> for <a class=\"enum\" href=\"chapter1/enum.Edge.html\" title=\"enum chapter1::Edge\">Edge</a>"],["impl&lt;'a&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.92.0/core/clone/trait.Clone.html\" title=\"trait core::clone::Clone\">Clone</a> for <a class=\"struct\" href=\"chapter1/struct.Pairs.html\" title=\"struct chapter1::Pairs\">Pairs</a>&lt;'a&gt;"]]],["chapter1",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.92.0/core/clone/trait.Clone.html\" title=\"trait core::clone::Clone\">Clone</a> for <a class=\"enum\" href=\"chapter1/enum.Edge.html\" title=\"enum chapter1::Edge\">Edge</a>"]]]]);
     if (window.register_implementors) {
         window.register_implementors(implementors);
     } else {
         window.pending_implementors = implementors;
     }
 })()
-//{"start":57,"fragment_lengths":[251]}
+//{"start":57,"fragment_lengths":[517,252]}

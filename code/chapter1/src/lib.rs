@@ -76,7 +76,9 @@ macro_rules! matrix {
             let row: isize = $row;
             match row.cmp(&0) {
                 Ordering::Less => Edge::NonExistent,
-                _ => Edge::Weighted(row as usize),
+                Ordering::Greater => Edge::Weighted(row as usize),
+                _ => unimplemented!("edges should either be weighted or non-existent; for the \
+                    latter, use any negative integer"),
             }
         }),+]),+])
     };
@@ -170,6 +172,7 @@ impl AdjacencyMatrix {
 
 #[allow(unused)]
 impl<'a> Pairs<'a> {
+    #[inline(always)]
     fn new(matrix: &'a AdjacencyMatrix) -> Self {
         Self {
             chains: (0..matrix.inner.len()).collect(),
@@ -181,6 +184,7 @@ impl<'a> Pairs<'a> {
         }
     }
 
+    #[inline(always)]
     fn unite(&mut self, this: usize, other: usize) -> Result<(), PairsError> {
         if !self.same(this, other)? {
             self.chains[other] = this;
@@ -189,6 +193,7 @@ impl<'a> Pairs<'a> {
         Ok(())
     }
 
+    #[inline(always)]
     fn find(&self, this: usize) -> Result<usize, PairsError> {
         assure_or!(this < self.chains.len(), IndexOutOfBounds)?;
         match self.chains[this] {
@@ -197,6 +202,7 @@ impl<'a> Pairs<'a> {
         }
     }
 
+    #[inline(always)]
     fn same(&self, this: usize, other: usize) -> Result<bool, PairsError> {
         let (this, other) = (self.find(this)?, self.find(other)?);
 
@@ -237,6 +243,19 @@ impl<'a> Pairs<'a> {
                 .collect();
 
         Ok(())
+    }
+
+    fn min_fix(&mut self) -> Option<<Self as Iterator>::Item> {
+        let matrix = &self.src.inner;
+        self.min_by_key(|&(node1, node2)| {
+            let Edge::Weighted(weight) = matrix[node1][node2] else {
+                unreachable!(
+                    "no node considered in the `Pairs` iterator should be `Edge::NonExistent`"
+                )
+            };
+
+            weight
+        })
     }
 }
 
@@ -303,14 +322,13 @@ impl Iterator for Pairs<'_> {
         Self: Sized,
         Self::Item: Ord,
     {
-        let matrix = &self.src.inner;
-
         dbg!("hit custom impl");
 
+        let matrix = &self.src.inner;
         self.min_by_key(|&(node1, node2)| {
             let Edge::Weighted(weight) = matrix[node1][node2] else {
                 unreachable!(
-                    "no node considered within the `Pairs` iterator should be `Edge::NonExistent`"
+                    "no node considered in the `Pairs` iterator should be `Edge::NonExistent`"
                 )
             };
 
@@ -380,15 +398,14 @@ impl TSPClosestPair for AdjacencyMatrix {
 
         for _ in 1..self.inner.len() {
             let (node1, node2) = pairs_iter
-                .by_ref()
-                .min()
+                .min_fix()
                 .expect("the iterator override implementation should be infallible");
 
             output.push(node1);
             output.push(node2);
             pairs_iter.unite(node1, node2).expect(
                 "the node indices are sourced directly from the iterator itself so the \
-                operation should be infallible",
+                operation should be, at this point, infallible",
             );
 
             pairs_iter.current_node = None;
@@ -480,9 +497,9 @@ mod tests {
     fn tsp_nearest_neighbor1() -> Result<(), AdjacencyMatrixError> {
         assert_eq!(
             TSPNearestNeighbor::tsp(&matrix! {
-                -1, 1, 3;
-                1, -1, 4;
-                3, 4, -1;
+                -1,  1,  3;
+                 1, -1,  4;
+                 3,  4, -1;
             }?),
             vec![0, 1, 2, 0]
         );
@@ -494,11 +511,11 @@ mod tests {
     fn tsp_nearest_neighbor2() -> Result<(), AdjacencyMatrixError> {
         assert_eq!(
             TSPNearestNeighbor::tsp(&matrix! {
-                -1, 3, 4, 4, 2;
-                3, -1, 4, 2, 2;
-                4, 4, -1, 3, 2;
-                4, 2, 3, -1, 2;
-                2, 2, 2, 2, -1;
+                -1,  3,  4,  4,  2;
+                 3, -1,  4,  2,  2;
+                 4,  4, -1,  3,  2;
+                 4,  2,  3, -1,  2;
+                 2,  2,  2,  2, -1;
             }?),
             vec![0, 4, 1, 3, 2, 0]
         );
@@ -514,14 +531,13 @@ mod tests {
                  1, -1,  4;
                  3,  4, -1;
             }?),
-            vec![0, 1, 2, 0]
+            vec![0, 1, 2, 1]
         );
 
         Ok(())
     }
 
     #[test]
-    #[ignore]
     fn tsp_closest_pair2() -> Result<(), AdjacencyMatrixError> {
         assert_eq!(
             TSPClosestPair::tsp(&matrix! {

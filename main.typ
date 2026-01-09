@@ -1337,3 +1337,133 @@
   $
 
   This should yield the 0--indexed--based #smallcaps[TSP] ${0, 1, 2, 0}$.
+
+  I've stumbled upon what seems like an issue in the way Rust is considering overridden
+  implementations of trait methods after calling a non--overridden implementation of some other
+  (same) trait method, both outfit with a default implementation in the `trait` block. The call
+  chain in question follows that for some trait `E` implemented on a type `T`, where a method `a`
+  with a by--value, consuming receiver `self`, is overridden, such overridden method is _not_
+  correctly handled when called after another non--overidden method returning a `&mut self` to the
+  type `T`.
+
+  The most natural way for the issue to arise is by a (non--overridden) call to `by_ref()` on a type
+  `T` implementing the `Iterator` trait, followed by an overridden call to some method `a()` taking
+  in as a receiver a non--mutable, consuming, `self`. Instead of having the overriden method `a()`
+  act on the mutable reference returned by `by_ref()`, thus still changing the iterator's state but
+  not consuming it, the call is performed to the default implementation in `Iterator` of method
+  `a()` (the compiler does not complain and the reference doesn't seem to speak of any issues with
+  this.)
+
+  Strangely enough, upon using fully qualified syntax, the compiler _does_ complain about the fact
+  that the call to the overridden method `a()` on the trait expects a consuming `self`, and not a
+  `&mut self`. For reference, following I include a "generic" MWE using fully qualified syntax, and
+  comments on the experimental results obtained while running latest stable Rust (1.92.0 as of this
+  writing) under AArch64, Apple Silicon.
+
+  ```
+  // This complains about method `a()` expecting a `self` receiver.
+  let _ = <T as Iterator>::a(<T as Iterator>::by_ref());
+
+  // For some instance of type `T: Iterator`,
+  let t = T::new();
+  // this does not complain at all, but the call to `a()` does not resolve to
+  // the overridden implementation.
+  let _ = t.by_ref().a();
+  ```
+
+  For a real MWE, consider the `min()` method on the `Iterator` trait, as well as the `by_ref()`
+  method on the same trait. Assumming that `by_ref()` has not been overridden, but `min()` _has_
+  been overridden, the following iterator call chain does not resolve to the overridden
+  implementation of `min()`, but rather to the default implementation under module `std::iter`.
+
+  ```
+  // For some instance of type `T: Iterator`,
+  let t = T::new();
+  // the following call does not resolve to the overridden implementation of
+  // `min()`, but to the default implementation in crate `std`.
+  let _ = t.by_ref().min();
+  ```
+
+  A temporary solution on the Rust user's end would be to create a new method on the type `T`'s own
+  `impl` block with slightly modified semantics from those of the overridden `a()` method of trait
+  `Iterator` (this trait specifically as I further comment on `by_ref()`.) Instead of taking in a
+  `self` receiver, it should take in a `&mut self` receiver, as otherwise the compiler seems to
+  assume that even after a call to `by_ref()`, the source pointee of the mutable reference yield
+  will still be consumed. As a consequence, `by_ref()` may as well be removed from the iterator call
+  chain.
+
+  *Note: _the following comments use the word _permutation_
+  quite loosely to describe the result of a combinatorial process whereby a set of numbers is mapped
+  to an equivalent--length set of Cartesian products where each one of those numbers is the lhs of
+  such operation, and an improper subset comprising the complement of the intersection of the prior
+  singleton set with the original set makes up the rhs._*
+
+  After having finished the implementation of the the two (feasible) #smallcaps[TSP] heuristics in
+  Section 1.1 of the book, I can not say which is more efficient based on benchmarks, as I happen to
+  have found what seems like a compiler error in my langauge of choice when implementing the second
+  heuristic.
+
+  But purely out of manual, theoretical (and personally primitive) algorithm time complexity
+  analysis, my implementation of the nearest neighbor heuristic seems to run in
+  $upright(Omega)(n^3), "where" n "is the number of points to tour through"$. This is due to the
+  fact the procedure needs to visit all nodes prior to considering that they have all been visited,
+  which already incurs a fixed cost of $n$. Upon checking that some node is, indeed, yet to be
+  visited, two more linear operations on the number of nodes $n$ (assumming the problem is modeled
+  after a complete, simple, weighted, embedded graph) would be required to #l-enum[check which edges
+    of the vertex considered in the current iteration are weighted _and_ haven't yet been visited,
+    as well as][check which of those edges yields the lightest weight (distance.)]
+
+  Note that the performance could have been improved to $upright(Omega)(n^2)$ had the condition of
+  unvisited vertices not been imposed on each subsequent iteration, as that way the traversal
+  required to find the smallest weigth would have only forced a single factor of the linear cost
+  incurred on the number of nodes. Unfortunately, without making use of some other auxiliary data
+  structure (like a binary heap) to compute the minimum element in less than linear time, each
+  iteartion must repeatedly consider which nodes have not yet been visited, and must subsequently
+  traverse the edges of such a list of nodes to find the one arc of lightest weight.
+
+  The closest pair heuristic yields a performance that is, yet again, initially linear over the
+  number of nodes $n$ as only $n - 1$ fixed iterations are performed. For each of these iterations,
+  the algorithm runs multiple UFDS sublinear cost operations to try to amortize the costly
+  computation of having a disjoint set of vertices constantly permuted. More specifically, each
+  iteration considers a persistent forest of trees but does not optimize through path compression as
+  that would go against the nature of the problem. Because each iteration requires finding the
+  smallest edge out of all edges (thus considering the permutation of all Cartesian products where
+  the lhs is the permuted vertex in question, and the rhs is each of the vertices resulting from the
+  union of all trees (in the overarching disjoint set) other than the one in which the current node
+  is found at,) the resulting cost in a single iteration of the linear loop is dependent of the
+  number of current trees in the forest.
+
+  This behavior is completely deterministic in nature, as each iteration is assured to decrease the
+  number of disjoint trees in the forest by exactly 1. Thus the total cost upon exitting the loop
+  can be modeled as follows on any run of the algorithm so long as the precondition on the type of
+  graph used is upkept (which always holds true if the problem is a symmetric instance of the
+  #smallcaps[TSP].)
+
+  $
+    underbrace(sum_(i = 1)^(n - 1), "linear cost of the loop")
+    (overbrace(n, "linear cost of the min"#repr[--]"finding operation") dot
+      underbrace((n dot k), "cost of the permutation of Cartesian products")).
+  $ <p130-initialformula>
+
+  The actual cost $k$ of a single Cartesian product in the above formula should be $n - 1$ on the
+  first iteration, but on subsequent iterations it should become $n - i$ only for those nodes now
+  contained within the same tree (i.e. whichever two nodes were UFDS--`unite`d at the end of the
+  prior iteration upon computing the minimum value of all Cartesian products.) This, though, is
+  still deterministic in nature; At any given iteration one should expect a cost of $i dot (n - i)$
+  for the trees that are not in the same node, and $(n - i) dot n$ for whichever trees are still
+  only made out of single--vertex roots.
+
+  This would model the $k$--term of @p130-initialformula as follows.
+
+  $
+    &k = i dot (n - i) + (n - i) dot n, "such that" \
+    &sum_(i = 1)^(n - 1) n dot (n dot k) =
+    sum_(i = 1)^(n - 1) n dot (n dot (i dot (n - i) + (n - i) dot n)) && = \
+    &&& = sum_(i = 1)^(n - 1) n dot (n dot ((n - i) dot (n + i))) \
+    &&& = sum_(i = 1)^(n - 1) n dot (n dot (n^2 - i^2)).
+  $ <p130-secondformula>
+
+  This is incorrect. The behavior is flawed in the first iteration, as
+  $n^2 - i^2 != (n - i) dot n, "for some" n, "and" i = 1$. Still, because this is still not an
+  unknown, we can factor out of the sum the first term, and continue using @p130-secondformula with
+  terms of $i > 1$.
