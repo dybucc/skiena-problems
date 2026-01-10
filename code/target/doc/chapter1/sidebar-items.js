@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["AdjacencyMatrixErrorType","Edge","PairsErrorType"],"macro":["assure_or","build_error","matrix"],"struct":["AdjacencyMatrix","AdjacencyMatrixError","Pairs","PairsError"],"trait":["TSPClosestPair","TSPNearestNeighbor"]};
+window.SIDEBAR_ITEMS = {"enum":["AdjacencyMatrixErrorType","Edge","PairsErrorType"],"macro":["build_error","ensure_or","matrix"],"struct":["AdjacencyMatrix","AdjacencyMatrixError","Pairs","PairsError"],"trait":["TSPClosestPair","TSPNearestNeighbor"]};

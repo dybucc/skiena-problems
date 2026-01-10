@@ -7,10 +7,10 @@ struct AdjacencyMatrix {
 }
 
 #[allow(unused)]
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Pairs<'a> {
     /// Holds the parent of each node (where the node itself is the index).
-    chains: Vec<usize>,
+    forest: Vec<usize>,
     /// Holds the node in the lhs of the current Cartesian product.
     current_node: Option<usize>,
     /// Holds the nodes in the same tree as [`current_node`].
@@ -73,12 +73,11 @@ enum AdjacencyMatrixErrorType {
 macro_rules! matrix {
     ($($($row:literal),+);+ $(;)?) => {
         AdjacencyMatrix::new(&[$(vec![$({
-            let row: isize = $row;
-            match row.cmp(&0) {
-                Ordering::Less => Edge::NonExistent,
-                Ordering::Greater => Edge::Weighted(row as usize),
-                _ => unimplemented!("edges should either be weighted or non-existent; for the \
-                    latter, use any negative integer"),
+            match $row.cmp(&0) {
+                Ordering::Equal => Edge::NonExistent,
+                Ordering::Greater => Edge::Weighted($row as usize),
+                _ => unimplemented!("edges are forced to be `usize` in the `Ordering::Greater` \
+                    branch so this cannot happen"),
             }
         }),+]),+])
     };
@@ -97,8 +96,8 @@ macro_rules! build_error {
     };
     (DirectedGraph) => {
         AdjacencyMatrixErrorType::DirectedGraph(String::from(
-            "matrix contains different values on the values above and below the main diagonal; \
-            this is not an undirected graph",
+            "matrix contains different values above and below the main diagonal; this is not an \
+            undirected graph",
         ))
     };
     (SelfLoops) => {
@@ -111,7 +110,7 @@ macro_rules! build_error {
     };
 }
 
-macro_rules! assure_or {
+macro_rules! ensure_or {
     ($check:expr, $error:tt) => {
         $check.then_some(()).ok_or_else(|| build_error!($error))
     };
@@ -132,10 +131,10 @@ impl From<PairsErrorType> for PairsError {
 impl AdjacencyMatrix {
     #[allow(unused)]
     fn new(input: &[Vec<Edge>]) -> Result<Self, AdjacencyMatrixError> {
-        assure_or!(input.len() > 1, NonSquareMatrix)?;
+        ensure_or!(input.len() > 1, NonSquareMatrix)?;
 
         for (idx, vertex) in input.iter().enumerate() {
-            assure_or!(vertex.len() == input.len(), NonSquareMatrix)?;
+            ensure_or!(vertex.len() == input.len(), NonSquareMatrix)?;
 
             let row_vec: Vec<_> = vertex
                 .iter()
@@ -143,22 +142,22 @@ impl AdjacencyMatrix {
                 .filter(|(_, edge)| matches!(edge, Edge::Weighted(_)))
                 .collect();
 
-            assure_or!(
+            ensure_or!(
                 row_vec.iter().all(|&(inner_idx, _)| inner_idx != idx),
                 SelfLoops
             )?;
-            assure_or!(row_vec.len() == vertex.len() - 1, IncompleteGraph)?;
+            ensure_or!(row_vec.len() == vertex.len() - 1, IncompleteGraph)?;
 
-            assure_or!(
+            ensure_or!(
                 row_vec.iter().all(|&(inner_idx, edge)| {
-                    let Edge::Weighted(weight) = edge else {
+                    let Edge::Weighted(weight) = *edge else {
                         unreachable!("there should at least be one weighted edge")
                     };
                     let Edge::Weighted(symmetric_weight) = input[inner_idx][idx] else {
                         unreachable!("there should at least be one symmetric weighted edge")
                     };
 
-                    *weight == symmetric_weight
+                    weight == symmetric_weight
                 }),
                 DirectedGraph
             )?;
@@ -172,10 +171,9 @@ impl AdjacencyMatrix {
 
 #[allow(unused)]
 impl<'a> Pairs<'a> {
-    #[inline(always)]
     fn new(matrix: &'a AdjacencyMatrix) -> Self {
         Self {
-            chains: (0..matrix.inner.len()).collect(),
+            forest: (0..matrix.inner.len()).collect(),
             current_node: None,
             current_tree: None,
             current_product: vec![],
@@ -183,71 +181,91 @@ impl<'a> Pairs<'a> {
             src: matrix,
         }
     }
+}
 
-    #[inline(always)]
+#[allow(unused)]
+impl Pairs<'_> {
     fn unite(&mut self, this: usize, other: usize) -> Result<(), PairsError> {
         if !self.same(this, other)? {
-            self.chains[other] = this;
+            self.forest[other] = this;
         }
 
         Ok(())
     }
 
-    #[inline(always)]
     fn find(&self, this: usize) -> Result<usize, PairsError> {
-        assure_or!(this < self.chains.len(), IndexOutOfBounds)?;
-        match self.chains[this] {
+        ensure_or!(this < self.forest.len(), IndexOutOfBounds)?;
+        match self.forest[this] {
             val if val == this => Ok(this),
             other => self.find(other),
         }
     }
 
-    #[inline(always)]
     fn same(&self, this: usize, other: usize) -> Result<bool, PairsError> {
         let (this, other) = (self.find(this)?, self.find(other)?);
 
         Ok(this == other)
     }
 
-    fn ancestors(&mut self, this: usize) -> Result<(), PairsError> {
-        let this_root = Self::find(self, this)?;
-        let mut parent = this;
-        let mut ancestors = vec![parent];
+    fn build_tree_from(&mut self, this: usize) -> Result<(), PairsError> {
+        ensure_or!(this < self.forest.len(), IndexOutOfBounds)?;
+        self.current_tree = Some(
+            repeat_n(this, self.forest.len())
+                .zip(0..self.forest.len())
+                .filter_map(|(this, other)| {
+                    self.same(this, other)
+                        .expect(
+                            "both `this` and `other` should be within-bounds, as `this` was \
+                        checked at the start of the function and `other` is sourced from a range \
+                        over `self.chains`",
+                        )
+                        .then_some(other)
+                })
+                .collect(),
+        );
 
-        while parent != this_root {
-            parent = self.chains[parent];
-            ancestors.push(parent);
-        }
-
-        ancestors.reverse();
-        self.current_tree = Some(ancestors);
+        dbg!(&self.current_tree);
 
         Ok(())
     }
 
     fn cartesian_product(&mut self, this: usize) -> Result<(), PairsError> {
         static ERROR_MSG: LazyLock<&str> =
-            LazyLock::new(|| "this method may not be called outside iterator chains");
+            LazyLock::new(|| "this method should not be called outside iterator chains");
 
         let current_tree = self.current_tree.as_ref().expect(&ERROR_MSG);
         let others: Vec<_> = self
-            .chains
+            .forest
             .iter()
-            .filter(|&&node| current_tree.iter().all(|&tree_node| tree_node != node))
+            .enumerate()
+            .filter_map(|(node, _)| {
+                current_tree
+                    .iter()
+                    .all(|&tree_node| tree_node != node)
+                    .then_some(node)
+            })
             .collect();
 
-        self.current_product =
-            repeat_n(self.current_node.as_ref().expect(&ERROR_MSG), others.len())
-                .zip(others)
-                .map(|(&node1, &node2)| (node1, node2))
-                .collect();
+        self.current_product = repeat_n(self.current_node.expect(&ERROR_MSG), others.len())
+            .zip(others)
+            .collect();
 
         Ok(())
     }
 
+    // NOTE: this exists as a replacement for the `min()` override of
+    //       `Iterator`, as that doesn't seem to resolve to the overridden
+    //       implementation when used in `tsp()` of `TSPClosestPair`.
+    //       A consequence is that the function body is a copy-paste of the
+    //       implementation of `min()` with a `self` receiver. This is
+    //       intentional.
     fn min_fix(&mut self) -> Option<<Self as Iterator>::Item> {
+        dbg!(&self.forest);
+
         let matrix = &self.src.inner;
-        self.min_by_key(|&(node1, node2)| {
+        let tmp = self.min_by_key(|&(node1, node2)| {
+            dbg!(node1, node2, "---");
+
             let Edge::Weighted(weight) = matrix[node1][node2] else {
                 unreachable!(
                     "no node considered in the `Pairs` iterator should be `Edge::NonExistent`"
@@ -255,7 +273,11 @@ impl<'a> Pairs<'a> {
             };
 
             weight
-        })
+        });
+
+        dbg!(&tmp);
+
+        tmp
     }
 }
 
@@ -266,9 +288,9 @@ impl Iterator for Pairs<'_> {
         match self.current_node {
             None => {
                 self.current_node = Some(0);
-                self.ancestors(0).expect(
-                    "the operation should infallible because the index is a constant that's \
-                    always within bounds",
+                self.build_tree_from(0).expect(
+                    "the operation should be infallible because the index is a constant \
+                    that's always within bounds",
                 );
                 self.cartesian_product(0).expect(
                     "the product should be an infallible operation if the source graph is \
@@ -281,20 +303,18 @@ impl Iterator for Pairs<'_> {
                     match val.cmp(&&mut (self.current_product.len() - 1)) {
                         Ordering::Less => *val += 1,
                         Ordering::Equal => {
+                            static ERROR_MSG: LazyLock<&str> = LazyLock::new(|| {
+                                "this operation should be infallible if the iteration indices \
+                                (`self.current_node` and `self.current_iter`) have been correctly \
+                                handled"
+                            });
+
                             current_node =
-                                (current_node < self.chains.len() - 1).then_some(current_node)? + 1;
+                                (current_node < self.forest.len() - 1).then_some(current_node)? + 1;
 
                             self.current_node = Some(current_node);
-                            self.ancestors(current_node).expect(
-                                "this operation should be infallible if the iteration indices \
-                                (`self.current_node` and `self.current_iter`) have been correctly \
-                                handled",
-                            );
-                            self.cartesian_product(current_node).expect(
-                                "this operation should be infallible if the iteration indices \
-                                (`self.current_node` and `self.current_iter`) have been correctly \
-                                handled",
-                            );
+                            self.build_tree_from(current_node).expect(&ERROR_MSG);
+                            self.cartesian_product(current_node).expect(&ERROR_MSG);
                             self.current_iter = Some(0);
                         }
                         _ => unreachable!(
@@ -317,6 +337,12 @@ impl Iterator for Pairs<'_> {
         )
     }
 
+    // NOTE: this doesn't seem to resolve to the overridden implementation when
+    //       used in `tsp()` from `TSPClosestPair`, so the `min_fix()` method on
+    //       `Pairs` is being used instead as a drop-in replacement.
+    // TODO: ask in Rust community forums about this behavior, and if it a bug
+    //       then report it with the write up you have in the notes under
+    //       ~/algorist.
     fn min(self) -> Option<Self::Item>
     where
         Self: Sized,
@@ -397,17 +423,33 @@ impl TSPClosestPair for AdjacencyMatrix {
         output.reserve_exact(self.inner.len() + 1);
 
         for _ in 1..self.inner.len() {
-            let (node1, node2) = pairs_iter
-                .min_fix()
-                .expect("the iterator override implementation should be infallible");
+            dbg!("start min iter");
+
+            let (node1, node2) = pairs_iter.min_fix().expect(
+                "there should always be a minimum value given the loop runs for n - 1 \
+                    iterations, where n is the number of nodes in the graph, and the underlying \
+                    ufds decreases its number of disjoint trees by a factor of 1 on each iteration \
+                    (i.e. on each call to `unite()` with the nodes yielded by `min_fix()`)",
+            );
+
+            dbg!("end min iter");
 
             output.push(node1);
             output.push(node2);
-            pairs_iter.unite(node1, node2).expect(
-                "the node indices are sourced directly from the iterator itself so the \
-                operation should be, at this point, infallible",
-            );
 
+            if pairs_iter
+                .find(node2)
+                .expect("`node2` was just sourced from `min_fix` so it should be a valid idx")
+                == node2
+            {
+                pairs_iter.unite(node1, node2).expect(
+                    "the node indices are sourced directly from the iterator itself so the \
+                operation should be, at this point, infallible",
+                );
+            }
+
+            // Resets part of the state of the iterator to force it to cycle on
+            // the next iteration.
             pairs_iter.current_node = None;
         }
 
@@ -434,8 +476,8 @@ mod tests {
     fn basic_graph() {
         assert!(
             matrix! {
-                -1, 2;
-                2, -1;
+                0, 2;
+                2, 0;
             }
             .is_ok(),
             "should've been an ok graph with two vertices and one weight 2 edge between them"
@@ -446,8 +488,8 @@ mod tests {
     fn basic_directed_graph() {
         assert!(
             matrix! {
-                -1, 2;
-                3, -1;
+                0, 2;
+                3, 0;
             }
             .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::DirectedGraph(_))),
             "should've thrown an error about the graph not being undirected"
@@ -458,8 +500,8 @@ mod tests {
     fn malformed_matrix_graph() {
         assert!(
             matrix! {
-                -1, 2, 3;
-                -1, 2;
+                0, 2, 3;
+                0, 2;
             }
             .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::NonSquareMatrix(_))),
             "should've thrown an error about the matrix not being square, or a matrix for that \
@@ -484,8 +526,8 @@ mod tests {
     fn basic_incomplete_graph() {
         assert!(
             matrix! {
-                -1, -1;
-                2, -1;
+                0, 0;
+                2, 0;
             }
             .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::IncompleteGraph(_))),
             "should've thrown an error about the graph not having as many edges as a complete, \
@@ -497,9 +539,9 @@ mod tests {
     fn tsp_nearest_neighbor1() -> Result<(), AdjacencyMatrixError> {
         assert_eq!(
             TSPNearestNeighbor::tsp(&matrix! {
-                -1,  1,  3;
-                 1, -1,  4;
-                 3,  4, -1;
+                0, 1, 3;
+                1, 0, 4;
+                3, 4, 0;
             }?),
             vec![0, 1, 2, 0]
         );
@@ -511,11 +553,11 @@ mod tests {
     fn tsp_nearest_neighbor2() -> Result<(), AdjacencyMatrixError> {
         assert_eq!(
             TSPNearestNeighbor::tsp(&matrix! {
-                -1,  3,  4,  4,  2;
-                 3, -1,  4,  2,  2;
-                 4,  4, -1,  3,  2;
-                 4,  2,  3, -1,  2;
-                 2,  2,  2,  2, -1;
+                0, 3, 4, 4, 2;
+                3, 0, 4, 2, 2;
+                4, 4, 0, 3, 2;
+                4, 2, 3, 0, 2;
+                2, 2, 2, 2, 0;
             }?),
             vec![0, 4, 1, 3, 2, 0]
         );
@@ -527,9 +569,9 @@ mod tests {
     fn tsp_closest_pair1() -> Result<(), AdjacencyMatrixError> {
         assert_eq!(
             TSPClosestPair::tsp(&matrix! {
-                -1,  1,  3;
-                 1, -1,  4;
-                 3,  4, -1;
+                0, 1, 3;
+                1, 0, 4;
+                3, 4, 0;
             }?),
             vec![0, 1, 2, 1]
         );
@@ -541,13 +583,13 @@ mod tests {
     fn tsp_closest_pair2() -> Result<(), AdjacencyMatrixError> {
         assert_eq!(
             TSPClosestPair::tsp(&matrix! {
-                -1,  3,  4,  4,  2;
-                 3, -1,  4,  2,  2;
-                 4,  4, -1,  3,  2;
-                 4,  2,  3, -1,  2;
-                 2,  2,  2,  2, -1;
+                0, 3, 4, 4, 2;
+                3, 0, 4, 2, 2;
+                4, 4, 0, 3, 2;
+                4, 2, 3, 0, 2;
+                2, 2, 2, 2, 0;
             }?),
-            vec![0, 4, 1, 3, 2, 0]
+            vec![]
         );
 
         Ok(())

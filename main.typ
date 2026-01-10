@@ -1392,11 +1392,11 @@
   will still be consumed. As a consequence, `by_ref()` may as well be removed from the iterator call
   chain.
 
-  *Note: _the following comments use the word _permutation_
-  quite loosely to describe the result of a combinatorial process whereby a set of numbers is mapped
-  to an equivalent--length set of Cartesian products where each one of those numbers is the lhs of
-  such operation, and an improper subset comprising the complement of the intersection of the prior
-  singleton set with the original set makes up the rhs._*
+  *Note: _the following comments use the word_ permutation _quite loosely to describe the result of
+  a combinatorial process whereby a set of integer numbers is mapped to an equivalent--length set of
+  Cartesian products where each one of those numbers is the lhs of such operation, and an improper
+  subset comprising the complement of the intersection of the prior singleton set with the original
+  set makes up the rhs._*
 
   After having finished the implementation of the the two (feasible) #smallcaps[TSP] heuristics in
   Section 1.1 of the book, I can not say which is more efficient based on benchmarks, as I happen to
@@ -1415,10 +1415,10 @@
 
   Note that the performance could have been improved to $upright(Omega)(n^2)$ had the condition of
   unvisited vertices not been imposed on each subsequent iteration, as that way the traversal
-  required to find the smallest weigth would have only forced a single factor of the linear cost
+  required to find the smallest weight would have only forced a single factor of the linear cost
   incurred on the number of nodes. Unfortunately, without making use of some other auxiliary data
   structure (like a binary heap) to compute the minimum element in less than linear time, each
-  iteartion must repeatedly consider which nodes have not yet been visited, and must subsequently
+  iteration must repeatedly consider which nodes have not yet been visited, and must subsequently
   traverse the edges of such a list of nodes to find the one arc of lightest weight.
 
   The closest pair heuristic yields a performance that is, yet again, initially linear over the
@@ -1446,7 +1446,7 @@
   $ <p130-initialformula>
 
   The actual cost $k$ of a single Cartesian product in the above formula should be $n - 1$ on the
-  first iteration, but on subsequent iterations it should become $n - i$ only for those nodes now
+  first iteration, but on subsequent iterations should become $n - i$ only for those nodes now
   contained within the same tree (i.e. whichever two nodes were UFDS--`unite`d at the end of the
   prior iteration upon computing the minimum value of all Cartesian products.) This, though, is
   still deterministic in nature; At any given iteration one should expect a cost of $i dot (n - i)$
@@ -1463,7 +1463,106 @@
     &&& = sum_(i = 1)^(n - 1) n dot (n dot (n^2 - i^2)).
   $ <p130-secondformula>
 
-  This is incorrect. The behavior is flawed in the first iteration, as
-  $n^2 - i^2 != (n - i) dot n, "for some" n, "and" i = 1$. Still, because this is still not an
-  unknown, we can factor out of the sum the first term, and continue using @p130-secondformula with
-  terms of $i > 1$.
+  This is incorrect. The behavior in the first iteration is flawed, as
+  $n^2 - i^2 != (n - i) dot n, "for some" n, "and" i = 1$. Still, because this is not an unknown, we
+  can factor out of the sum the first term, and continue using @p130-secondformula in terms of
+  $i > 1$. Or not, because the whole term in @p130-initialformula considering the cost of the
+  permutation may very well be wrong, as it considers the existence of $n$--equivalent permutations,
+  independent of the developed formula for $k$ in @p130-secondformula. This latter term already
+  covers the behavior of each individual instance of either #l-enum[nodes in the same tree,
+    or][single--vertex nodes in a disjoint tree], so adding a factor of $n$ to the resulting
+  computation does not seem logical. I could be wrong, though, as these notes are being taken while
+  I solve another, more practical software engineering problem.
+
+  Temporarily leaving aside the proof, I have found a way of testing my implementation of the
+  closest pair heuristic, and, of course, there's bugs so I need to solve them. The `ancestors()`
+  method on the `Pairs` iterator is wrong. It's supposed to determine which nodes are part of the
+  tree the passed node is at, but the way it's implemented, it only works with leaf nodes. A more
+  apt implementation, off the top of my head, is to determine the root of the passed node's tree,
+  and then determine the roots of all other nodes in the forest, matching afterwards the former with
+  the latter to check which nodes are in the same tree as the parameterized node. This is already
+  part of the UFDS `same()` function, so maybe a good implementation would use `repeat_n()` and
+  `zip()` to fetch an iterator of ordered pairs where the first element is the passed node and the
+  second is each of the other nodes in the forest. Then destructuring the tuple and computing
+  `same()` with the destructured node indices should yield boolean results that can be used to
+  `filter_map()` the iterator into containing only the nodes (indices) in the same tree as the
+  function parameter node.
+
+=== Leetcode problems
+
+/ Problem 1--1: \
+  *Daily temperatures*
+
+  Given an array of integers `temperatures` representing daily temperatures, return an array
+  `answer` such that `answer[i]` is the number of days you have to wait after the `i`th day to get a
+  warmer temperature. If there is no future day for which this is possible, keep `answer[i] == 0`
+  instead.
+
+  _Example 1_:
+
+  - Input: `temperatures = [73,74,75,71,69,72,76,73]`
+  - Output: `answer = [1,1,4,2,1,1,0,0]`
+
+  _Example 2_:
+
+  - Input: `temperatures = [30,40,50,60]`
+  - Output: `answer = [1,1,1,0]`
+
+  _Example 3_:
+
+  - Input: `temperatures = [30,60,90]`
+  - Output: `answer = [1,1,0]`
+
+  _Constraints_:
+
+  - $1 <= mono("temperatures.length") <= 10^5$
+  - $30 <= mono("temperatures[i]") <= 100$
+
+/ Problem 1--2: \
+  *Rotate list*
+
+  Given the `head` of a linked list, rotate the list to the right by `k` places.
+
+  _Example 1_:
+
+  - Input: `head = [1,2,3,4,5], k = 2`
+  - Output: `[4,5,1,2,3]`
+
+  _Example 2_:
+
+  - Input: `head = [0,1,2], k = 4`
+  - Output: `[2,0,1]`
+
+  _Constraints_:
+
+  - The number of nodes in the list is in the range $[0, 500]$.
+  - $-100 <= mono("Node.val") <= 100$
+  - $0 <= mono("k") <= 2 dot 109$
+
+/ Problem 1--3: \
+  *Wiggle Sort II*
+
+  Given an integer array `nums`, reorder it such that
+  $mono("nums[0]") < mono("nums[1]") > mono("nums[2]") < mono("nums[3]") dots.c$
+  You may assume the input array always has a valid answer.
+
+  _Example 1_:
+
+  - Input: `nums = [1,5,1,1,6,4]`
+  - Output: `[1,6,1,5,1,4]`
+
+  Explanation: `[1,4,1,5,1,6]` is also accepted.
+
+  _Example 2_:
+
+  - Input: `nums = [1,3,2,2,3,1]`
+  - Output: `[2,3,1,3,1,2]`
+
+  _Constraints_:
+
+  - $1 <= mono("nums.length") <= 5 times 10^4$
+  - $0 <= mono("nums[i]") <= 5000$
+  - It is guaranteed that there will be an answer for the given input `nums`.
+
+  _Follow Up_: Can you do it in $upright(O)(n)$ time and/or in-place with $upright(O)(1)$ extra
+  space?
