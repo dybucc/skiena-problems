@@ -1488,7 +1488,73 @@
   `filter_map()` the iterator into containing only the nodes (indices) in the same tree as the
   function parameter node.
 
-=== Leetcode problems
+  So the algorithm has been implemented successfully. Now the thing that remains is to add a new
+  iterator type that can perform #smallcaps[DFS] on the resulting tree, such that it yields each of
+  the nodes in the path, while the caller of the iterator adds those nodes to the vector that is to
+  be returned in the `tsp()` trait method of `TSPClosestPair`.
+
+  The implementation should follow that `Pairs` should have a method of its own, such that provided
+  the index of a node within the bounds the of its underlying `forest` field, it returns a `DFS`
+  iterator that traverses the tree in which the passed node is found at.
+
+  To more easily compute the `DFS` of the provided tree, it's best if the method on `Pairs` also
+  includes logic to compute a graph structure (not `AdjacencyMatrix` because that's only valid for
+  the symmetric instance of the #smallcaps[TSP],) such that `DFS` keeps ownership over that
+  structure, but the structure itself is made out of references to the `Pairs` iterator, thus tying
+  the lifetime of the whole `DFS` to that of the `Pairs` iterator, which makes sense.
+
+  The actual traversal is likely going to follow the same idea as the original `DFS`, but will not
+  be recursive in nature. Instead, it will approach the problem as what it really is; a traversal
+  with a stack--based data structure holding the _discovered_ nodes.
+
+  The underlying structure to be used as a representation of the graph (the tree of `Pairs`) should
+  be an adjacency list, considering it's a simple #smallcaps[DAG]. The structure could then be
+  modeled after the `std::collections::LinkedList` container, such that it would act as a wrapper
+  around the type, where an `inner` field would hold a `Vec` of `LinkedList`s to refer to the edges
+  of each of the vertices in the graph. This is going to require some preprocessing on the side of
+  the `Pairs` builder method.
+
+  Because the structure that will hold the graph that will then be part of `DFS` is a graph DS, the
+  notion of _root node_ is devoid of meaning, and this logic follows that same idea. Thus the node
+  passed to the method on `Pairs` should try to find the root of the tree it belongs to not for
+  purposes of prioritizing it in the graph, but rather to allow finding the rest of the nodes in the
+  UFDS of `Pairs` that are in the same tree. Upon finding the root, the method should contain logic
+  to perform a forest--wide search to find the nodes that also evaluate to the same tree root. Even
+  though I don't plan to call this until the disjoint set is reduced to a single tree, it's best if
+  I provide a more generic implementation because the method can't be restricted to be called once a
+  single tree is left, and neither is the implementation of such a check any better than performing
+  the graph building logic directly on the provided node, trusting the user knows best if the logic
+  is right.
+
+  In terms of the logic to actually build the edge relationships between nodes, I belive it's best
+  if this is also performed in--place along with vertex creation in the graph builder. And maybe
+  this whole logic can be transferred to the graph type's `new()` function, passing it a shared
+  reference to the method--calling `Pairs` instance. In here, as each node in the `Pairs` tree is
+  found to be related to each other by means of belonging to the same tree (as determined by the
+  UFDS `same()` operation,) the overarching graph type being built should consider either
+  #l-enum[pushing the node if its vector doesn't yet contain the corresponding node, or][adding to
+    the corresponding node's linked list an edge relating to the other node being pushed].
+
+  To implement this dual--node addition, where one node is always a node that's present (except the
+  first time we push onto the adjacency list) and another node is always a new node, such that there
+  exists an edge between these, the `ancestors()` method on the passed `Pairs` instance can be used.
+
+  In fact, to implement this part of the routine, the `ancestors()` method should replace the whole
+  `same()` operation. This should prove to be more efficient, because the first element of the
+  `ancestors()` method is always going to be the root node of the overarching tree. Because the
+  vector returned describes the path between the first (root) and last (caller of `ancestors()`)
+  nodes, we can conclude that the edges of the graph will be determined by the linear progression of
+  each of the elements in that vector. This way, so long as the vector is longer than a single
+  element (i.e. the requested node in the call to `ancestors()` is not a root node, which can be
+  avoided with a simple `idx == elem` check,) then a call to the `windows()` method on that vector
+  should yield a sliding view into each of the edges in the tree.
+
+  The only thing left is then to take each of the yielded edges and consider whether they're already
+  part of the graph we're building in the `AdjacencyList::new()` method (I've already settled on the
+  name of the graph DS type.) This is not going to be ideal because each of those checks is going to
+  be $Omega(n + m), "where" G = (V, E) "and" abs(V) = n, abs(E) = m$.
+
+=== LeetCode problems
 
 / Problem 1--1: \
   *Daily temperatures*

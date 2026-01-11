@@ -1,4 +1,10 @@
-use std::{cmp::Ordering, iter::repeat_n, sync::LazyLock};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet, LinkedList},
+    hash::Hash,
+    iter::repeat_n,
+    sync::LazyLock,
+};
 
 #[allow(unused)]
 #[derive(Debug)]
@@ -33,6 +39,62 @@ struct Pairs<'a> {
     ///
     /// [`current_product`]: Pairs::current_product
     src: &'a AdjacencyMatrix,
+}
+
+#[derive(Debug)]
+struct AdjacencyList {
+    inner: HashMap<usize, HashSet<usize>>,
+}
+
+impl AdjacencyList {
+    fn new(pairs: &Pairs) -> Result<Self, PairsError> {
+        let mut output = Self {
+            inner: HashMap::with_capacity(pairs.forest.len()),
+        };
+
+        for node in pairs.forest.iter().copied() {
+            let ancestors = pairs
+                .ancestors(node)
+                .expect("`node` is sourced directly from the `Pairs` tree");
+            if ancestors.len() > 1 {
+                for (node1, node2) in ancestors.windows(2).map(|inner| (inner[0], inner[1])) {
+                    output
+                        .inner
+                        .entry(node1)
+                        .and_modify(|adjacent_nodes| {
+                            adjacent_nodes.insert(node2);
+                        })
+                        .or_insert_with(|| {
+                            let mut output = HashSet::with_capacity(pairs.forest.len());
+                            output.insert(node2);
+
+                            output
+                        });
+                    output
+                        .inner
+                        .entry(node2)
+                        .and_modify(|adjacent_nodes| {
+                            adjacent_nodes.insert(node1);
+                        })
+                        .or_insert_with(|| {
+                            let mut output = HashSet::with_capacity(pairs.forest.len());
+                            output.insert(node1);
+
+                            output
+                        });
+                }
+            }
+        }
+
+        Ok(output)
+    }
+}
+
+#[derive(Debug)]
+struct Dfs {
+    inner: AdjacencyList,
+    stack: Vec<usize>,
+    current_iter: usize,
 }
 
 #[allow(unused)]
@@ -193,6 +255,11 @@ impl Pairs<'_> {
         Ok(())
     }
 
+    /// Finds the root of the given `this` node in `self.forest`.
+    ///
+    /// Returns the same node if the node makes up a single-vertex tree.
+    /// Otherwise, returns the root node by following the parent relationship
+    /// within all nodes in the same tree.
     fn find(&self, this: usize) -> Result<usize, PairsError> {
         ensure_or!(this < self.forest.len(), IndexOutOfBounds)?;
         match self.forest[this] {
@@ -205,6 +272,20 @@ impl Pairs<'_> {
         let (this, other) = (self.find(this)?, self.find(other)?);
 
         Ok(this == other)
+    }
+
+    fn ancestors(&self, this: usize) -> Result<Vec<usize>, PairsError> {
+        let (mut parent, this_root) = (this, self.find(this)?);
+        let mut ancestors = vec![parent];
+
+        while parent != this_root {
+            parent = self.forest[parent];
+            ancestors.push(parent);
+        }
+
+        ancestors.reverse();
+
+        Ok(ancestors)
     }
 
     fn build_tree_from(&mut self, this: usize) -> Result<(), PairsError> {
@@ -223,8 +304,6 @@ impl Pairs<'_> {
                 })
                 .collect(),
         );
-
-        dbg!(&self.current_tree);
 
         Ok(())
     }
@@ -256,28 +335,23 @@ impl Pairs<'_> {
     // NOTE: this exists as a replacement for the `min()` override of
     //       `Iterator`, as that doesn't seem to resolve to the overridden
     //       implementation when used in `tsp()` of `TSPClosestPair`.
-    //       A consequence is that the function body is a copy-paste of the
-    //       implementation of `min()` with a `self` receiver. This is
-    //       intentional.
     fn min_fix(&mut self) -> Option<<Self as Iterator>::Item> {
-        dbg!(&self.forest);
-
-        let matrix = &self.src.inner;
-        let tmp = self.min_by_key(|&(node1, node2)| {
-            dbg!(node1, node2, "---");
-
-            let Edge::Weighted(weight) = matrix[node1][node2] else {
+        self.min_by_key(|&(node1, node2)| {
+            let Edge::Weighted(weight) = self.src.inner[node1][node2] else {
                 unreachable!(
                     "no node considered in the `Pairs` iterator should be `Edge::NonExistent`"
                 )
             };
 
             weight
+        })
+    }
+
+    fn dfs(&self) -> Dfs {
+        assert!({
+            self.forest.
         });
-
-        dbg!(&tmp);
-
-        tmp
+        todo!()
     }
 }
 
@@ -348,8 +422,6 @@ impl Iterator for Pairs<'_> {
         Self: Sized,
         Self::Item: Ord,
     {
-        dbg!("hit custom impl");
-
         let matrix = &self.src.inner;
         self.min_by_key(|&(node1, node2)| {
             let Edge::Weighted(weight) = matrix[node1][node2] else {
@@ -423,8 +495,6 @@ impl TSPClosestPair for AdjacencyMatrix {
         output.reserve_exact(self.inner.len() + 1);
 
         for _ in 1..self.inner.len() {
-            dbg!("start min iter");
-
             let (node1, node2) = pairs_iter.min_fix().expect(
                 "there should always be a minimum value given the loop runs for n - 1 \
                     iterations, where n is the number of nodes in the graph, and the underlying \
@@ -432,21 +502,32 @@ impl TSPClosestPair for AdjacencyMatrix {
                     (i.e. on each call to `unite()` with the nodes yielded by `min_fix()`)",
             );
 
-            dbg!("end min iter");
-
             output.push(node1);
             output.push(node2);
 
-            if pairs_iter
-                .find(node2)
-                .expect("`node2` was just sourced from `min_fix` so it should be a valid idx")
-                == node2
-            {
-                pairs_iter.unite(node1, node2).expect(
-                    "the node indices are sourced directly from the iterator itself so the \
-                operation should be, at this point, infallible",
-                );
+            static ERROR_MSG: LazyLock<&str> = LazyLock::new(|| {
+                "`node2` was just sourced from `min_fix()` so the operation should be \
+                infallible"
+            });
+
+            // If the node to be `unite`d is not a root node, then make it a
+            // root node by reversing the parent of the nodes above it (its
+            // ancestors.)
+            if pairs_iter.find(node2).expect(&ERROR_MSG) != node2 {
+                let ancestors = pairs_iter.ancestors(node2).expect(&ERROR_MSG);
+                let mut current = 0;
+
+                while current != ancestors.len() - 1 {
+                    pairs_iter.forest[ancestors[current]] = ancestors[current + 1];
+                    current += 1;
+                }
+
+                pairs_iter.forest[node2] = node2;
             }
+            pairs_iter.unite(node1, node2).expect(
+                "the node indices are sourced directly from the iterator itself so the \
+            operation should be infallible",
+            );
 
             // Resets part of the state of the iterator to force it to cycle on
             // the next iteration.
@@ -589,7 +670,7 @@ mod tests {
                 4, 2, 3, 0, 2;
                 2, 2, 2, 2, 0;
             }?),
-            vec![]
+            vec![2, 4, 0, 1, 3, 2]
         );
 
         Ok(())
