@@ -1,7 +1,6 @@
 use std::{
     cmp::Ordering,
-    collections::{HashMap, HashSet, LinkedList},
-    hash::Hash,
+    collections::{HashMap, HashSet},
     iter::repeat_n,
     sync::LazyLock,
 };
@@ -41,60 +40,55 @@ struct Pairs<'a> {
     src: &'a AdjacencyMatrix,
 }
 
+#[allow(unused)]
 #[derive(Debug)]
-struct AdjacencyList {
-    inner: HashMap<usize, HashSet<usize>>,
-}
+struct AdjacencyList(HashMap<usize, HashSet<usize>>);
 
+#[allow(unused)]
 impl AdjacencyList {
-    fn new(pairs: &Pairs) -> Result<Self, PairsError> {
-        let mut output = Self {
-            inner: HashMap::with_capacity(pairs.forest.len()),
-        };
+    fn new(pairs: &Pairs) -> Self {
+        let mut output = Self(HashMap::with_capacity(pairs.forest.len()));
+        for (src, dst) in pairs
+            .forest
+            .iter()
+            .copied()
+            .filter_map(|node| {
+                let ancestors = pairs
+                    .ancestors(node)
+                    .expect("`node` is sourced directly from the tree in `pairs`");
 
-        for node in pairs.forest.iter().copied() {
-            let ancestors = pairs
-                .ancestors(node)
-                .expect("`node` is sourced directly from the `Pairs` tree");
-            if ancestors.len() > 1 {
-                for (node1, node2) in ancestors.windows(2).map(|inner| (inner[0], inner[1])) {
-                    output
-                        .inner
-                        .entry(node1)
-                        .and_modify(|adjacent_nodes| {
-                            adjacent_nodes.insert(node2);
-                        })
-                        .or_insert_with(|| {
-                            let mut output = HashSet::with_capacity(pairs.forest.len());
-                            output.insert(node2);
+                // TODO: either get this solved or chain with it somehow,
+                //       somewhere.
+                (ancestors.len() > 1)
+                    .then_some(ancestors.windows(2).map(|inner| (inner[0], inner[1])))
+            })
+            .flatten()
+        {
+            output
+                .0
+                .entry(src)
+                .and_modify(|adjacent_nodes| {
+                    adjacent_nodes.insert(dst);
+                })
+                .or_insert_with(|| {
+                    let mut adjacent_nodes = HashSet::with_capacity(pairs.forest.len());
+                    adjacent_nodes.insert(dst);
 
-                            output
-                        });
-                    output
-                        .inner
-                        .entry(node2)
-                        .and_modify(|adjacent_nodes| {
-                            adjacent_nodes.insert(node1);
-                        })
-                        .or_insert_with(|| {
-                            let mut output = HashSet::with_capacity(pairs.forest.len());
-                            output.insert(node1);
-
-                            output
-                        });
-                }
-            }
+                    adjacent_nodes
+                });
         }
 
-        Ok(output)
+        output
     }
 }
 
+#[allow(unused)]
 #[derive(Debug)]
 struct Dfs {
-    inner: AdjacencyList,
+    graph: AdjacencyList,
     stack: Vec<usize>,
-    current_iter: usize,
+    discovered: Vec<bool>,
+    current_iter: Option<usize>,
 }
 
 #[allow(unused)]
@@ -276,7 +270,7 @@ impl Pairs<'_> {
 
     fn ancestors(&self, this: usize) -> Result<Vec<usize>, PairsError> {
         let (mut parent, this_root) = (this, self.find(this)?);
-        let mut ancestors = vec![parent];
+        let mut ancestors = vec![this];
 
         while parent != this_root {
             parent = self.forest[parent];
@@ -348,10 +342,37 @@ impl Pairs<'_> {
     }
 
     fn dfs(&self) -> Dfs {
-        assert!({
-            self.forest.
-        });
-        todo!()
+        let mut root = self
+            .forest
+            .iter()
+            .enumerate()
+            .filter_map(|(node, &parent)| (node == parent).then_some(node));
+        assert!(
+            root.clone().count() == 1,
+            "this method should be called only once there's a single tree left in the forest"
+        );
+
+        Dfs {
+            graph: AdjacencyList::new(self),
+            stack: {
+                let mut output = Vec::with_capacity(self.forest.len());
+                output.push(
+                    self.forest[root.next().expect(
+                        "this should yield the root element sourced directly from the overarching \
+                    collection",
+                    )],
+                );
+
+                output
+            },
+            discovered: {
+                let mut output = Vec::with_capacity(self.forest.len());
+                output.resize(self.forest.len(), false);
+
+                output
+            },
+            current_iter: None,
+        }
     }
 }
 
@@ -435,6 +456,31 @@ impl Iterator for Pairs<'_> {
     }
 }
 
+impl Iterator for Dfs {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.current_iter {
+            None => {
+                self.current_iter = Some(self.stack[0]);
+                self.discovered[self.stack[0]] = true;
+            }
+            Some(ref mut current_vertex) => {
+                for adjacent_vertex in &self.graph.0[current_vertex] {
+                    if !self.discovered[*adjacent_vertex] {
+                        self.stack.push(*adjacent_vertex);
+                    }
+                }
+
+                *current_vertex = self.stack.pop()?;
+                self.discovered[*current_vertex] = true;
+            }
+        }
+
+        self.current_iter
+    }
+}
+
 #[allow(unused)]
 trait TSPNearestNeighbor {
     fn tsp(&self) -> Vec<usize>;
@@ -489,30 +535,24 @@ impl TSPClosestPair for AdjacencyMatrix {
     }
 
     fn tsp(&self) -> Vec<usize> {
-        let mut output = vec![];
         let mut pairs_iter = self.pairs();
-
-        output.reserve_exact(self.inner.len() + 1);
 
         for _ in 1..self.inner.len() {
             let (node1, node2) = pairs_iter.min_fix().expect(
-                "there should always be a minimum value given the loop runs for n - 1 \
-                    iterations, where n is the number of nodes in the graph, and the underlying \
-                    ufds decreases its number of disjoint trees by a factor of 1 on each iteration \
-                    (i.e. on each call to `unite()` with the nodes yielded by `min_fix()`)",
+                "there should always be a minimum value given the loop runs for n - 1 iterations, \
+            where n is the number of nodes in the graph, and the underlying ufds decreases its \
+            number of disjoint trees by a factor of 1 on each iteration (i.e. on each call to \
+            `unite()` with the nodes yielded by `min_fix()`)",
             );
-
-            output.push(node1);
-            output.push(node2);
 
             static ERROR_MSG: LazyLock<&str> = LazyLock::new(|| {
                 "`node2` was just sourced from `min_fix()` so the operation should be \
-                infallible"
+            infallible"
             });
 
             // If the node to be `unite`d is not a root node, then make it a
             // root node by reversing the parent of the nodes above it (its
-            // ancestors.)
+            // ancestors) and making it a root node itself.
             if pairs_iter.find(node2).expect(&ERROR_MSG) != node2 {
                 let ancestors = pairs_iter.ancestors(node2).expect(&ERROR_MSG);
                 let mut current = 0;
@@ -525,15 +565,16 @@ impl TSPClosestPair for AdjacencyMatrix {
                 pairs_iter.forest[node2] = node2;
             }
             pairs_iter.unite(node1, node2).expect(
-                "the node indices are sourced directly from the iterator itself so the \
-            operation should be infallible",
+                "the node indices are sourced directly from the iterator itself so the operation \
+            should be infallible",
             );
 
-            // Resets part of the state of the iterator to force it to cycle on
-            // the next iteration.
+            // Resets the state of the iterator to force cycling on the next
+            // iteration of the overarching loop with its newly set state.
             pairs_iter.current_node = None;
         }
 
+        let mut output: Vec<_> = pairs_iter.dfs().collect();
         output.push(output[0]);
 
         output
@@ -654,7 +695,7 @@ mod tests {
                 1, 0, 4;
                 3, 4, 0;
             }?),
-            vec![0, 1, 2, 1]
+            vec![0, 1, 2, 0]
         );
 
         Ok(())

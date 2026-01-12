@@ -1545,14 +1545,191 @@
   vector returned describes the path between the first (root) and last (caller of `ancestors()`)
   nodes, we can conclude that the edges of the graph will be determined by the linear progression of
   each of the elements in that vector. This way, so long as the vector is longer than a single
-  element (i.e. the requested node in the call to `ancestors()` is not a root node, which can be
-  avoided with a simple `idx == elem` check,) then a call to the `windows()` method on that vector
-  should yield a sliding view into each of the edges in the tree.
+  element (i.e. the requested node in the call to `ancestors()` is not a root node) then a call to
+  the `windows()` method on that vector should yield a sliding view into each of the edges in the
+  tree.
 
   The only thing left is then to take each of the yielded edges and consider whether they're already
   part of the graph we're building in the `AdjacencyList::new()` method (I've already settled on the
   name of the graph DS type.) This is not going to be ideal because each of those checks is going to
-  be $Omega(n + m), "where" G = (V, E) "and" abs(V) = n, abs(E) = m$.
+  be $Omega(n + m), "where" G = (V, E), abs(V) = n, abs(E) = m$. This has been solved by means of
+  replacing the underlying DS to be a hashmap instead of a contiguous chunk of memory, each hashmap
+  contaning itself another hashset to perform as well $upright(O)(1)$ queries into the existence of
+  some key. This should still prove to be correct, as the container an adjacency list is modelled
+  after doesn't require there being an order between nodes, nor does it expect to keep an order
+  between the edges each of those nodes has.
+
+  The `dfs()` method to return the `Dfs` iterator may end up having to perform the check I mentioned
+  on all nodes being part of a single tree, because I implemented `AdjacencyList::new()` in terms of
+  a constructor that doesn't require another node to be provided alongside the forest of `Pairs` to
+  actually get a full traversal. Either way, the invariant holds that the method should only be
+  called once the underlying disjoint set of trees has been unified into a single tree, which should
+  be fairly simple to either #l-enum[avoid by only calling after the hot loop in `tsp()` of
+    `TSPClosestPair`, or][ensure it holds by performing some boolean check and passing the resultant
+    expression to `assert!()`]. We're going to go with both, and see how testing goes once it's all
+  readily implemented.
+
+  For the latter case, the implementation should follow that the forest only contains a single tree
+  whenever, in the underlying contiguous DS, there exists only a single index containing as its
+  element the index itself (i.e. there's only a single root, and thus there's only a single tree.) I
+  am lead to believe this could be implemented in terms of an `all()` or `any()` method on an
+  iterator over the array, but both of these happen to check for the exact same condition
+  irrespective of the element in question, and they're short--circuiting. Maybe there's something
+  else in either the `Vec` docs or the `Iterator` docs that better fits the need of this particular
+  context. Maybe a `filter()` on a shared reference iterator over the array and a subsequent
+  iterator consumer method like `count()` to assure that there's only a single element whose index
+  is equal to the element it contains? Seems good enough, considering it performs an $upright(O)(n)$
+  operation and linear cost for what will likely be a single call to the assertion should prove to
+  be good enough. This, though, will require also performing a call to `enumerate()` for the
+  subsequent iterator call chain to be capable of using the elements _and_ their indices for
+  equality comparison between them.
+
+  That part of the implementation is done, and now the only thing that remains is implementing
+  `Iterator` for `Dfs`. As commented in previous notes, the implementation of the algorithm follows
+  a stack--based DS traversal, which is often implemented in terms of a recursive routine with
+  backtracking once there are no more edges to be traversed. This being an iterator that must
+  resolve to a `Some` variant for each element of such traversal, it will require implementing the
+  stack behavior manually. The implementation should then be similar in nature to the implementation
+  of `Iterator::next()` on `Pairs`, where an initial `match` should check whether iteration has
+  already started by probing the variant of an `Option` field of the structure (this being the
+  `current_iter` field of `Dfs`.) Upon determining that iteration has not yet begun, the stateful
+  part of the traversal must be initialized; Only to what must it be initialized is, indeed, the
+  question I have not yet found an answer for.
+
+  The only other field that, at this point, isn't yet provided with a value is the `stack` field,
+  which is expected to hold each of the processed vertices, such that upon hitting a "dead end,"
+  where no adjacent vertex remains to be explored, it starts popping off elements. Because, unlike
+  the `Pairs` iterator where all elements to be yield were known the moment the `next()` call was
+  made, `Dfs` cannot know which of the nodes in the graph (tree) have already been visited without
+  precomputing the whole traversal instead of advancing the state on each call to `next()` as the
+  user of the iterator sees fit; It's quite likely that the logic to update `stack` will be very
+  similar between the starting state (the one time when `current_iter` is `None`,) and all other
+  states (whenever `current_iter` yields a `Some` variant.) There's going to be need for another
+  field holding the array of discovered elements, because otherwise there's no condition to be
+  checked for returning a `None` and finishing iteration. This can be either implemented in terms of
+  a `Vec<bool>` or in terms of a `usize` where each bit of the bit mask determines the state of one
+  of the vertices in the graph. Of course, on most platforms (_most_ here meaning platforms
+  following either one of the #smallcaps[LP] or #smallcaps[LLP] memory model abstraction) this would
+  allow up to 256 bits to be used, assumming an 8--byte pointer size on the target the program would
+  run on. This would also pair well with the current unit tests, which consider graphs with a very
+  small amount of vertices (well within bounds of a graph with $abs(V) = 256$.) Still, a
+  conservative approach would use an estimate based on the comments of Skiena's book, where
+  apparently, one of the robots for which such a symmetric instance of the #smallcaps[TSP] is
+  required may expect to visit up to 1000 different points. For this reason, the implementation will
+  use a `Vec<bool>`.
+
+  Upon entering the `None` arm of the `match`, the state of the `current_iter` should be set to
+  `Some(0)`. Then the `stack` field will use such index as the initial vertex with which to start
+  the traversal in the underlying `AdjacencyList`. Because this graph DS is using a hashmap that
+  considers as its keys the `usize` indices of the vertices in the graph, and yields as its values
+  the hashsets with the `usize` indices of the adjacent vertices (i.e. those the vertex key has
+  edges with,) the first thing that should be done is to mark index 0 (whichever element that turned
+  out to be) as having been discovered by setting the flag inside the `discovered` field (itself
+  already provided with as many elements as there were nodes in the `Pairs` tree.) Then the same
+  loop as the one performed with a recursive #smallcaps[DFS] should consider each of the adjacent
+  nodes by traversing the hashset returned from accessing the value of key 0, after which each of
+  those elements should be pushed to the `stack` field. Then it holds that the element to be
+  returned from the first call to `next()` should be the element at index 0.
+
+  Indeed, if the element to be returned is the one at index 0, then the `None` branch should not do
+  anything beyond setting `current_iter` to `Some(0)`, and returning that same `Some(0)`. Then the
+  `discovered` field should still set the flag for the elemetn (index here) for that node, namely
+  index 0, and actually proceed to return the `Option`--wrapped index.
+
+  Even though this could yield an valid traversal out of context, this doesn't assure that traversal
+  starts at the root of the original tree. This implies that, contrary to what was mentioned before
+  about the root node of the `Pairs` tree not having any special meaning in the graph DS used to
+  perform #smallcaps[DFS], the root node _does_ need to be recorded in some way, such that traversal
+  of the graph starts at that node, and not at other nodes. This also implies that the resulting
+  graph stored in the `AdjacencyList` of `Dfs` will have to be a directed graph, and thus not add to
+  both nodes considered in its `new()` asssociated function the same arc. Instead, during the hot
+  loop in that routine, only `node1` should have added `node2` to its list of adjacent nodes. I
+  believe the simplest way to keep track of the root node in the `Pairs` tree is going to be using
+  the `stack` field to get stored in it (initally as its single element) that vertex (its index,
+  really.) Then, because it only get used once, and future calls to `next()` will yield other
+  vertices of the graph, that first element can be scraped after the first iteration.
+
+  The revised implementation of `next()` upon entering the `None` branch should follow that
+  `current_iter` should be set to `Some(idx)` where `idx` denotes the index of that first element
+  within `stack` used for the root of the tree. Then once the value is copied (and prior to
+  returning `current_iter` from the routine,) `stack` should have its one value popped off.
+
+  The implementation of the `Some` branch starting on the second call to `next()` should then
+  actually consider traversing the hashset of the vertex given by `current_iter`, and push onto the
+  stack whichever element is yield first in that hashset. The only issue is that because this is an
+  unordered container, each run of #smallcaps[DFS] is going to yield a different traversal, as
+  iterating through the hashset multiple times, even with the same graph layout, provides no
+  guarentees on the order of the yielded elements across runs. This routine, though, relies heavily
+  on performing a pre--order traversal akin to that of binary trees to have the tree in `Pairs` link
+  its leaves together. The solution could quite possibly go through replacing the hashset in the
+  adjacency list used for the `Dfs` graph to a collection storing its elements in contiguous memory.
+  The downside is going to be refactoring `new()` from `AdjacencyList` such that it still performs
+  the required checks when creating a new arc in the graph.
+
+  The hashset was replaced with a binary tree set, though the issue on the order in which edges are
+  added to this container still holds because the `Pairs` tree is traversed in terms of the
+  contiguous elements of the array, and not in terms of the actual tree node layout (this being the
+  whole purpose of performing #smallcaps[DFS] and thus creating a graph proper.) We'll ignore it for
+  now, and see how things turn out. Because of this, the container will be restored to a hashset as
+  we've concluded that order is not even maintained by the iterated elements of the `Pairs` tree.
+
+  Back to the implementation of `next()`, the element yield initially on the `None` branch should
+  quite possible not be popped off the stack, as only values that have had all descendant nodes
+  processed should have this happen to them. This implies that the actual invariant to be upheld by
+  the iterator to yield `Some` values should be that of the presence of elements in its `stack`
+  field, and not that of the presence of any values with their `discovered` flag not set. Thus,
+  `discovered` would be relegated to the role of performing a check on which elements should be
+  added to the stack.
+
+  The value of the element that is first yield in the `next()` call should now remain the same as
+  the one determined prior to this discussion, but instead the stack should _not_ have it popped. On
+  the next iteration's traversal across `current_iter` (the root node,) it should decide which
+  vertices adjacent to it are added to the stack. The implementation for that should first consider
+  the state of the `discovered` field, with an `any()` call on a shared reference iterator that
+  would consider whether there are still elements to be yield as not all of the tree as been
+  discovered, or whether iteration should end. The Rust way of doing this would be to call on the
+  resulting boolean value of that iterator consumer method another `then_some()` call providing as
+  the inner value the unit value. Then a call to `?` to propagate a `None` up the call stack would
+  allow iteration to finish, while allowing the next (possibly costly) computations to be avoided.
+
+  The next part of the `Some` branch should include the logic concerning adding elements to the
+  stack and properly updating the value of `current_iter`, which holds the vertex (index) to be
+  returned next from the iterator. For that, one must consider both the current state of the stack,
+  as well as the vertex (index) yielded from destructuring the `Some` variant. The stack should add
+  all vertices adjacent to the destructured vertex, and proceed to update `current_iter` to some
+  element of that list. The intricate part of the problem here is determinig which one of the
+  elements of the stack should be _the chosen one_. Technically speaking, if the underlying vector
+  is used as a stack adaptor in the spirit of C++, then there's only one possible element to be
+  returned, and that's the top of the stack; For any other random access operation would prove to be
+  too costly (even for the vector.) Let us model how should the iterator behave in a less abstract
+  setting.
+
+  Given a tree of which three child nodes stem from the root, the second call to `next()` would add
+  all child nodes to the stack, and then select one of those (this being "non--deterministic" in
+  nature because the source of those child nodes is the hashset holding the vertices adjacent to, in
+  this instance, the root node of the tree.) Assume then that 2 of those child nodes are leaf nodes,
+  and the other roots itself a subtree with a single descendant. Assume as well that the top of the
+  stack turned out to be one of the two former leaves. The behavior in `next()` should backtrack and
+  advance to the next element in the stack by performing the mandatory check for adjacent nodes to
+  be added to the vector, to then fetch the value at the top the stack and return it as the next
+  item in the iterator sequence. Because the elements added to the stack are not concerned with the
+  order of nodes in the orignal `Pairs` tree, the node that the iterator would move on to next could
+  be any one of #l-enum[the sibling leaf, or][the subtree with one more child]. At the
+  #smallcaps[TSP] level, which one it moves to next is of great importance, but at the tree level,
+  this is not so much the case. Thus, because the abstraction seems to be leaning further towards
+  the latter (and because I've spent too much time on this problem,) we will ignore the improvements
+  that could be made from, off the top of my head, #l-enum(
+    numbering: "(a)",
+  )[performing the inherent conversion into a binary tree that is possible with any simple
+    #smallcaps[DAG] and then more easily implementing a pre--order traversal iterator such that the
+    child nodes are actually modelled after an equivalent, embedded graph, or][keep track of the
+    original nodes from the `Pairs` tree such that the stack can decide which of the equivalently
+    possible nodes to move on to `current_iter` should actually move on to].
+
+  To recap the high--level sequence of steps that this execution branch should go through: Update
+  the stack by pushing to it the vertices adjacent to `current_iter`, then fetch the top of the
+  stack and update `current_iter` with that value, prior to popping the top of the stack off, and
+  finally setting the flag in `discovered` for the new value of `current_iter`.
 
 === LeetCode problems
 
