@@ -5,13 +5,11 @@ use std::{
     sync::LazyLock,
 };
 
-#[allow(unused)]
 #[derive(Debug)]
 struct AdjacencyMatrix {
     inner: Vec<Vec<Edge>>,
 }
 
-#[allow(unused)]
 #[derive(Debug)]
 struct Pairs<'a> {
     /// Holds the parent of each node (where the node itself is the index).
@@ -40,49 +38,43 @@ struct Pairs<'a> {
     src: &'a AdjacencyMatrix,
 }
 
-#[allow(unused)]
 #[derive(Debug)]
 struct AdjacencyList(HashMap<usize, HashSet<usize>>);
 
-#[allow(unused)]
 impl AdjacencyList {
     fn new(pairs: &Pairs) -> Self {
         let mut output = Self(HashMap::with_capacity(pairs.forest.len()));
-        for (src, dst) in pairs
-            .forest
-            .iter()
-            .copied()
-            .filter_map(|node| {
-                let ancestors = pairs
-                    .ancestors(node)
-                    .expect("`node` is sourced directly from the tree in `pairs`");
+        for ancestors in (0..pairs.forest.len()).filter_map(|node| {
+            let ancestors = pairs
+                .ancestors(node)
+                .expect("`node` is sourced directly from the `Pairs` tree");
 
-                // TODO: either get this solved or chain with it somehow,
-                //       somewhere.
-                (ancestors.len() > 1)
-                    .then_some(ancestors.windows(2).map(|inner| (inner[0], inner[1])))
-            })
-            .flatten()
-        {
-            output
-                .0
-                .entry(src)
-                .and_modify(|adjacent_nodes| {
-                    adjacent_nodes.insert(dst);
-                })
-                .or_insert_with(|| {
-                    let mut adjacent_nodes = HashSet::with_capacity(pairs.forest.len());
-                    adjacent_nodes.insert(dst);
+            (ancestors.len() > 1).then_some(ancestors)
+        }) {
+            for (src, dst) in ancestors.windows(2).map(|inner| (inner[0], inner[1])) {
+                output
+                    .0
+                    .entry(src)
+                    .and_modify(|adjacent_nodes| {
+                        adjacent_nodes.insert(dst);
+                    })
+                    .or_insert_with(|| {
+                        let mut adjacent_nodes = HashSet::with_capacity(pairs.forest.len());
+                        adjacent_nodes.insert(dst);
 
-                    adjacent_nodes
-                });
+                        adjacent_nodes
+                    });
+                output
+                    .0
+                    .entry(dst)
+                    .or_insert_with(|| HashSet::with_capacity(pairs.forest.len()));
+            }
         }
 
         output
     }
 }
 
-#[allow(unused)]
 #[derive(Debug)]
 struct Dfs {
     graph: AdjacencyList,
@@ -91,32 +83,27 @@ struct Dfs {
     current_iter: Option<usize>,
 }
 
-#[allow(unused)]
 #[derive(Debug)]
 struct PairsError {
     inner: PairsErrorType,
 }
 
-#[allow(unused)]
 #[derive(Debug)]
 enum PairsErrorType {
     IndexOutOfBounds(String),
 }
 
-#[allow(unused)]
 #[derive(Clone, PartialEq, Debug)]
 enum Edge {
     NonExistent,
     Weighted(usize),
 }
 
-#[allow(unused)]
 #[derive(Debug)]
 struct AdjacencyMatrixError {
     inner: AdjacencyMatrixErrorType,
 }
 
-#[allow(unused)]
 #[derive(Debug)]
 enum AdjacencyMatrixErrorType {
     NonSquareMatrix(String),
@@ -125,15 +112,16 @@ enum AdjacencyMatrixErrorType {
     SelfLoops(String),
 }
 
-#[allow(unused)]
 macro_rules! matrix {
     ($($($row:literal),+);+ $(;)?) => {
         AdjacencyMatrix::new(&[$(vec![$({
             match $row.cmp(&0) {
                 Ordering::Equal => Edge::NonExistent,
                 Ordering::Greater => Edge::Weighted($row as usize),
-                _ => unimplemented!("edges are forced to be `usize` in the `Ordering::Greater` \
-                    branch so this cannot happen"),
+                _ => unimplemented!(
+                    "edges are forced to be `usize` in the `Ordering::Greater` branch so this \
+                    cannot happen"
+                ),
             }
         }),+]),+])
     };
@@ -185,7 +173,6 @@ impl From<PairsErrorType> for PairsError {
 }
 
 impl AdjacencyMatrix {
-    #[allow(unused)]
     fn new(input: &[Vec<Edge>]) -> Result<Self, AdjacencyMatrixError> {
         ensure_or!(input.len() > 1, NonSquareMatrix)?;
 
@@ -225,21 +212,19 @@ impl AdjacencyMatrix {
     }
 }
 
-#[allow(unused)]
 impl<'a> Pairs<'a> {
-    fn new(matrix: &'a AdjacencyMatrix) -> Self {
+    fn new(src: &'a AdjacencyMatrix) -> Self {
         Self {
-            forest: (0..matrix.inner.len()).collect(),
+            forest: (0..src.inner.len()).collect(),
             current_node: None,
             current_tree: None,
             current_product: vec![],
             current_iter: None,
-            src: matrix,
+            src,
         }
     }
 }
 
-#[allow(unused)]
 impl Pairs<'_> {
     fn unite(&mut self, this: usize, other: usize) -> Result<(), PairsError> {
         if !self.same(this, other)? {
@@ -252,8 +237,8 @@ impl Pairs<'_> {
     /// Finds the root of the given `this` node in `self.forest`.
     ///
     /// Returns the same node if the node makes up a single-vertex tree.
-    /// Otherwise, returns the root node by following the parent relationship
-    /// within all nodes in the same tree.
+    /// Otherwise, returns the root node by following the parent relationship in
+    /// the same tree.
     fn find(&self, this: usize) -> Result<usize, PairsError> {
         ensure_or!(this < self.forest.len(), IndexOutOfBounds)?;
         match self.forest[this] {
@@ -269,8 +254,7 @@ impl Pairs<'_> {
     }
 
     fn ancestors(&self, this: usize) -> Result<Vec<usize>, PairsError> {
-        let (mut parent, this_root) = (this, self.find(this)?);
-        let mut ancestors = vec![this];
+        let (this_root, mut parent, mut ancestors) = (self.find(this)?, this, vec![this]);
 
         while parent != this_root {
             parent = self.forest[parent];
@@ -291,8 +275,8 @@ impl Pairs<'_> {
                     self.same(this, other)
                         .expect(
                             "both `this` and `other` should be within-bounds, as `this` was \
-                        checked at the start of the function and `other` is sourced from a range \
-                        over `self.chains`",
+                            checked at the start of the function and `other` is sourced from a \
+                            range over `self.chains`",
                         )
                         .then_some(other)
                 })
@@ -302,7 +286,7 @@ impl Pairs<'_> {
         Ok(())
     }
 
-    fn cartesian_product(&mut self, this: usize) -> Result<(), PairsError> {
+    fn cartesian_product(&mut self) -> Result<(), PairsError> {
         static ERROR_MSG: LazyLock<&str> =
             LazyLock::new(|| "this method should not be called outside iterator chains");
 
@@ -328,7 +312,7 @@ impl Pairs<'_> {
 
     // NOTE: this exists as a replacement for the `min()` override of
     //       `Iterator`, as that doesn't seem to resolve to the overridden
-    //       implementation when used in `tsp()` of `TSPClosestPair`.
+    //       implementation when used in `tsp()` of `TspClosestPair`.
     fn min_fix(&mut self) -> Option<<Self as Iterator>::Item> {
         self.min_by_key(|&(node1, node2)| {
             let Edge::Weighted(weight) = self.src.inner[node1][node2] else {
@@ -347,8 +331,9 @@ impl Pairs<'_> {
             .iter()
             .enumerate()
             .filter_map(|(node, &parent)| (node == parent).then_some(node));
-        assert!(
-            root.clone().count() == 1,
+        assert_eq!(
+            root.clone().count(),
+            1,
             "this method should be called only once there's a single tree left in the forest"
         );
 
@@ -357,10 +342,9 @@ impl Pairs<'_> {
             stack: {
                 let mut output = Vec::with_capacity(self.forest.len());
                 output.push(
-                    self.forest[root.next().expect(
-                        "this should yield the root element sourced directly from the overarching \
-                    collection",
-                    )],
+                    self.forest[root
+                        .next()
+                        .expect("this should yield the tree root sourced directly from `self`")],
                 );
 
                 output
@@ -387,7 +371,7 @@ impl Iterator for Pairs<'_> {
                     "the operation should be infallible because the index is a constant \
                     that's always within bounds",
                 );
-                self.cartesian_product(0).expect(
+                self.cartesian_product().expect(
                     "the product should be an infallible operation if the source graph is \
                     valid",
                 );
@@ -409,7 +393,7 @@ impl Iterator for Pairs<'_> {
 
                             self.current_node = Some(current_node);
                             self.build_tree_from(current_node).expect(&ERROR_MSG);
-                            self.cartesian_product(current_node).expect(&ERROR_MSG);
+                            self.cartesian_product().expect(&ERROR_MSG);
                             self.current_iter = Some(0);
                         }
                         _ => unreachable!(
@@ -481,18 +465,16 @@ impl Iterator for Dfs {
     }
 }
 
-#[allow(unused)]
-trait TSPNearestNeighbor {
+trait TspNearestNeighbor {
     fn tsp(&self) -> Vec<usize>;
 }
 
-#[allow(unused)]
-trait TSPClosestPair {
+trait TspClosestPair {
     fn pairs(&self) -> Pairs<'_>;
     fn tsp(&self) -> Vec<usize>;
 }
 
-impl TSPNearestNeighbor for AdjacencyMatrix {
+impl TspNearestNeighbor for AdjacencyMatrix {
     fn tsp(&self) -> Vec<usize> {
         let mut visited = vec![false; self.inner.len()];
         let mut output = vec![];
@@ -529,55 +511,47 @@ impl TSPNearestNeighbor for AdjacencyMatrix {
     }
 }
 
-impl TSPClosestPair for AdjacencyMatrix {
+impl TspClosestPair for AdjacencyMatrix {
     fn pairs(&self) -> Pairs<'_> {
         Pairs::new(self)
     }
 
     fn tsp(&self) -> Vec<usize> {
         let mut pairs_iter = self.pairs();
-
         for _ in 1..self.inner.len() {
             let (node1, node2) = pairs_iter.min_fix().expect(
-                "there should always be a minimum value given the loop runs for n - 1 iterations, \
-            where n is the number of nodes in the graph, and the underlying ufds decreases its \
-            number of disjoint trees by a factor of 1 on each iteration (i.e. on each call to \
-            `unite()` with the nodes yielded by `min_fix()`)",
+                "there should always be a minimum value given the loop runs for n - 1 \
+                iterations, where n is the number of nodes in the graph, and the underlying ufds \
+                decreases its number of disjoint trees by a factor of 1 on each iteration (i.e. on \
+                each call to `unite()` with the nodes yielded by `min_fix()`)",
             );
 
             static ERROR_MSG: LazyLock<&str> = LazyLock::new(|| {
-                "`node2` was just sourced from `min_fix()` so the operation should be \
-            infallible"
+                "`node2` was just sourced through `min_fix()` so the operation should be \
+                infallible"
             });
 
             // If the node to be `unite`d is not a root node, then make it a
-            // root node by reversing the parent of the nodes above it (its
-            // ancestors) and making it a root node itself.
+            // root node by reversing the parent node of its ancestors.
             if pairs_iter.find(node2).expect(&ERROR_MSG) != node2 {
                 let ancestors = pairs_iter.ancestors(node2).expect(&ERROR_MSG);
-                let mut current = 0;
-
-                while current != ancestors.len() - 1 {
+                (0..ancestors.len() - 1).for_each(|current| {
                     pairs_iter.forest[ancestors[current]] = ancestors[current + 1];
-                    current += 1;
-                }
+                });
 
                 pairs_iter.forest[node2] = node2;
             }
             pairs_iter.unite(node1, node2).expect(
-                "the node indices are sourced directly from the iterator itself so the operation \
-            should be infallible",
+                "the node indices are sourced directly from the iterator itself so the \
+                operation should be infallible",
             );
 
             // Resets the state of the iterator to force cycling on the next
-            // iteration of the overarching loop with its newly set state.
+            // iteration of the overarching loop with updated state.
             pairs_iter.current_node = None;
         }
 
-        let mut output: Vec<_> = pairs_iter.dfs().collect();
-        output.push(output[0]);
-
-        output
+        pairs_iter.dfs().collect()
     }
 }
 
@@ -660,7 +634,7 @@ mod tests {
     #[test]
     fn tsp_nearest_neighbor1() -> Result<(), AdjacencyMatrixError> {
         assert_eq!(
-            TSPNearestNeighbor::tsp(&matrix! {
+            TspNearestNeighbor::tsp(&matrix! {
                 0, 1, 3;
                 1, 0, 4;
                 3, 4, 0;
@@ -674,7 +648,7 @@ mod tests {
     #[test]
     fn tsp_nearest_neighbor2() -> Result<(), AdjacencyMatrixError> {
         assert_eq!(
-            TSPNearestNeighbor::tsp(&matrix! {
+            TspNearestNeighbor::tsp(&matrix! {
                 0, 3, 4, 4, 2;
                 3, 0, 4, 2, 2;
                 4, 4, 0, 3, 2;
@@ -689,30 +663,26 @@ mod tests {
 
     #[test]
     fn tsp_closest_pair1() -> Result<(), AdjacencyMatrixError> {
-        assert_eq!(
-            TSPClosestPair::tsp(&matrix! {
-                0, 1, 3;
-                1, 0, 4;
-                3, 4, 0;
-            }?),
-            vec![0, 1, 2, 0]
-        );
+        let input = TspClosestPair::tsp(&matrix! {
+            0, 1, 3;
+            1, 0, 4;
+            3, 4, 0;
+        }?);
+        assert!(input == vec![0, 1, 2, 0] || input == vec![0, 2, 1, 0]);
 
         Ok(())
     }
 
     #[test]
     fn tsp_closest_pair2() -> Result<(), AdjacencyMatrixError> {
-        assert_eq!(
-            TSPClosestPair::tsp(&matrix! {
-                0, 3, 4, 4, 2;
-                3, 0, 4, 2, 2;
-                4, 4, 0, 3, 2;
-                4, 2, 3, 0, 2;
-                2, 2, 2, 2, 0;
-            }?),
-            vec![2, 4, 0, 1, 3, 2]
-        );
+        let input = TspClosestPair::tsp(&matrix! {
+            0, 3, 4, 4, 2;
+            3, 0, 4, 2, 2;
+            4, 4, 0, 3, 2;
+            4, 2, 3, 0, 2;
+            2, 2, 2, 2, 0;
+        }?);
+        assert!(input == vec![2, 4, 1, 3, 0, 2] || input == vec![2, 4, 0, 1, 3, 2]);
 
         Ok(())
     }

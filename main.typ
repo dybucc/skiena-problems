@@ -1440,9 +1440,9 @@
   #smallcaps[TSP].)
 
   $
-    underbrace(sum_(i = 1)^(n - 1), "linear cost of the loop")
-    (overbrace(n, "linear cost of the min"#repr[--]"finding operation") dot
-      underbrace((n dot k), "cost of the permutation of Cartesian products")).
+    underbrace(sum_(i = 1)^(n - 1), "loop")
+    (overbrace(n, "min"#repr([--])"finding operation") dot
+      underbrace((n dot k), "permutation of Cartesian products")).
   $ <p130-initialformula>
 
   The actual cost $k$ of a single Cartesian product in the above formula should be $n - 1$ on the
@@ -1474,7 +1474,7 @@
   computation does not seem logical. I could be wrong, though, as these notes are being taken while
   I solve another, more practical software engineering problem.
 
-  Temporarily leaving aside the proof, I have found a way of testing my implementation of the
+  Temporarily leaving aside the analysis, I have found a way of testing my implementation of the
   closest pair heuristic, and, of course, there's bugs so I need to solve them. The `ancestors()`
   method on the `Pairs` iterator is wrong. It's supposed to determine which nodes are part of the
   tree the passed node is at, but the way it's implemented, it only works with leaf nodes. A more
@@ -1704,7 +1704,7 @@
   too costly (even for the vector.) Let us model how should the iterator behave in a less abstract
   setting.
 
-  Given a tree of which three child nodes stem from the root, the second call to `next()` would add
+  Given a tree with three child nodes stemming from the root, the second call to `next()` would add
   all child nodes to the stack, and then select one of those (this being "non--deterministic" in
   nature because the source of those child nodes is the hashset holding the vertices adjacent to, in
   this instance, the root node of the tree.) Assume then that 2 of those child nodes are leaf nodes,
@@ -1714,7 +1714,7 @@
   be added to the vector, to then fetch the value at the top the stack and return it as the next
   item in the iterator sequence. Because the elements added to the stack are not concerned with the
   order of nodes in the orignal `Pairs` tree, the node that the iterator would move on to next could
-  be any one of #l-enum[the sibling leaf, or][the subtree with one more child]. At the
+  be any one of #l-enum[the sibling leaf, or][the subtree with a single child]. At the
   #smallcaps[TSP] level, which one it moves to next is of great importance, but at the tree level,
   this is not so much the case. Thus, because the abstraction seems to be leaning further towards
   the latter (and because I've spent too much time on this problem,) we will ignore the improvements
@@ -1730,6 +1730,61 @@
   the stack by pushing to it the vertices adjacent to `current_iter`, then fetch the top of the
   stack and update `current_iter` with that value, prior to popping the top of the stack off, and
   finally setting the flag in `discovered` for the new value of `current_iter`.
+
+  Testing has already started with the supposedly completed `tsp()` method for `TSPClosestPair`. The
+  thing is done, but the tests fail with a panic in the `Iterator` implementation for the `Dfs`
+  adaptor I designed to perform traversal. It seems that the iterator is at some point attempting to
+  perform an indexed access operation over the hashmap being used in the adjacency list abstraction,
+  and that hashmap doesn't seem to contain the look up key. This shouldn't even be possible,
+  considering the thing that indexes the hashmap is `current_iter`, and this only ever gets values
+  from the original `Pairs` tree. If there really is no way the logic in the non--graph--exclusive
+  fields of the `Dfs` iterator is wrong, then maybe what's wrong is the logic building the
+  `AdjacencyList` in its `new()` associated function.
+
+  I've identified the issue. It turns out the `new()` function on `AdjacencyList` was not correctly
+  considering each of the edges as I had planned on, but I've yet to solve this.
+
+  The closest pair heuristic now finally solves the tests correctly. It only took #(6 * 5) hours. We
+  can now go back to the time complexity analysis we were having on the algorithm used.
+
+  The last comments I made on the analysis were debating the possibility for it to be completely
+  wrong, so instead of trying to accomodate some new conclusion to the existing material, I believe
+  it best to simply analyze the implementation from the scratch. This was going to be necessary
+  anyway, considernig the latest, working implementation adds more non--constant time operations.
+
+  Prior to jumping onto the analysis, it's important to note the three main components with linear
+  or sublinear cost in the operations performed within the hot loop of the algorithm. First, the
+  `min_fix()` operation computes all possible Cartesian products of every node in the forest, given
+  the constraint that for any tree made out of nodes $T = {a, b, dots.c, k}$, any one node $c$ may
+  not consider as part of the rhs of their Cartesian products any other node in $T dif {c}$. Second,
+  the `unite()` operation performs some sublinear cost operation to determine the root node in the
+  trees of both nodes passed to it. And finally, depending on whether the node passed to `unite()`
+  to be made a child of the other node is a root of another disjoint tree in the forest, a call to
+  `ancestors()` to determine all nodes preceding it will be required to keep the underlying array
+  holding the forest in a consistent state.
+
+  Adding up the values of each of these for every single one of the $n - 1$ iterations in the main
+  loop should yield the total cost for the algorithm, where $n$ is the number of nodes in the tree,
+  and on a higher--level, the number of points that the robot arm must go through.
+
+  We'll start the analysis with the `min_fix()` operation. The core of this routine considers all
+  trees in the forest, and given some node $a$, determines the lightest edge in the graph, given by
+  the ordered pair $(a, b)$, sourced from the union of all sets yielded by each of the Cartesian
+  products. The behavior of this follows that for each of the $n - 1$ iterations of the main loop,
+  the program undergoes two different costs: #l-enum[on the first iteration, the Cartesian product
+    computed is the same for all nodes in the tree, as they are single--vertex disjoint trees in the
+    forest (initial state of the #smallcaps[UFDS])][on subsequent iterations, the nodes belonging to
+    the same tree will compute a Cartesian product equivalent to $n - i$, where $i$ denotes the
+    0--indexed, running iteration count]. The operation should thus have a cost of $n dot n$ when
+  iterating through the the first value of `current_node` in `Pairs`, and for all future iterations
+  compute $(n - 2) dot (i dot (n - i) + (n - i) dot n)$.
+
+  In a sum formula, this would be
+
+  $
+    n dot n + sum_(i = 2)^(n - 1) i dot (n - i) + (n - i) dot n =
+    n^2 + sum_(i = 2)^(n - 1) n i + i^2 + n^2 - n i.
+  $
 
 === LeetCode problems
 
