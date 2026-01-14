@@ -1405,21 +1405,21 @@
 
   But purely out of manual, theoretical (and personally primitive) algorithm time complexity
   analysis, my implementation of the nearest neighbor heuristic seems to run in
-  $upright(Omega)(n^3), "where" n "is the number of points to tour through"$. This is due to the
-  fact the procedure needs to visit all nodes prior to considering that they have all been visited,
-  which already incurs a fixed cost of $n$. Upon checking that some node is, indeed, yet to be
-  visited, two more linear operations on the number of nodes $n$ (assumming the problem is modeled
-  after a complete, simple, weighted, embedded graph) would be required to #l-enum[check which edges
-    of the vertex considered in the current iteration are weighted _and_ haven't yet been visited,
-    as well as][check which of those edges yields the lightest weight (distance.)]
+  $Theta(n^3), "where" n "is the number of points to tour through"$. This is due to the fact the
+  procedure needs to visit all nodes prior to considering that they have all been visited, which
+  already incurs a fixed cost of $n$. Upon checking that some node is, indeed, yet to be visited,
+  two more linear operations on the number of nodes $n$ (assumming the problem is modeled after a
+  complete, simple, weighted, embedded graph) would be required to #l-enum[check which edges of the
+    vertex considered in the current iteration are weighted _and_ haven't yet been visited, as well
+    as][check which of those edges yields the lightest weight (distance.)]
 
-  Note that the performance could have been improved to $upright(Omega)(n^2)$ had the condition of
-  unvisited vertices not been imposed on each subsequent iteration, as that way the traversal
-  required to find the smallest weight would have only forced a single factor of the linear cost
-  incurred on the number of nodes. Unfortunately, without making use of some other auxiliary data
-  structure (like a binary heap) to compute the minimum element in less than linear time, each
-  iteration must repeatedly consider which nodes have not yet been visited, and must subsequently
-  traverse the edges of such a list of nodes to find the one arc of lightest weight.
+  Note that the performance could have been improved to $Theta(n^2)$ had the condition of unvisited
+  vertices not been imposed on each subsequent iteration, as that way the traversal required to find
+  the smallest weight would have only forced a single factor of the linear cost incurred on the
+  number of nodes. Unfortunately, without making use of some other auxiliary data structure (like a
+  binary heap) to compute the minimum element in less than linear time, each iteration must
+  repeatedly consider which nodes have not yet been visited, and must subsequently traverse the
+  edges of such a list of nodes to find the one arc of lightest weight.
 
   The closest pair heuristic yields a performance that is, yet again, initially linear over the
   number of nodes $n$ as only $n - 1$ fixed iterations are performed. For each of these iterations,
@@ -1759,32 +1759,187 @@
   not consider as part of the rhs of their Cartesian products any other node in $T dif {c}$. Second,
   the `unite()` operation performs some sublinear cost operation to determine the root node in the
   trees of both nodes passed to it. And finally, depending on whether the node passed to `unite()`
-  to be made a child of the other node is a root of another disjoint tree in the forest, a call to
-  `ancestors()` to determine all nodes preceding it will be required to keep the underlying array
-  holding the forest in a consistent state.
+  to be made a child of the other node (also passed to `unite()`) is a root of another disjoint tree
+  in the forest, a call to `ancestors()` to determine all nodes preceding it will be required to
+  keep the underlying array holding the forest in a consistent state.
 
   Adding up the values of each of these for every single one of the $n - 1$ iterations in the main
   loop should yield the total cost for the algorithm, where $n$ is the number of nodes in the tree,
   and on a higher--level, the number of points that the robot arm must go through.
 
   We'll start the analysis with the `min_fix()` operation. The core of this routine considers all
-  trees in the forest, and given some node $a$, determines the lightest edge in the graph, given by
-  the ordered pair $(a, b)$, sourced from the union of all sets yielded by each of the Cartesian
+  trees in the forest, and given some node $a$, determines the lightest edge in the graph, denoted
+  by ordered pair $(a, b)$, sourced from the union of all sets yielded by each of the Cartesian
   products. The behavior of this follows that for each of the $n - 1$ iterations of the main loop,
-  the program undergoes two different costs: #l-enum[on the first iteration, the Cartesian product
-    computed is the same for all nodes in the tree, as they are single--vertex disjoint trees in the
-    forest (initial state of the #smallcaps[UFDS])][on subsequent iterations, the nodes belonging to
-    the same tree will compute a Cartesian product equivalent to $n - i$, where $i$ denotes the
-    0--indexed, running iteration count]. The operation should thus have a cost of $n dot n$ when
-  iterating through the the first value of `current_node` in `Pairs`, and for all future iterations
-  compute $(n - 2) dot (i dot (n - i) + (n - i) dot n)$.
+  the program experiments two different costs: #l-enum[on the first iteration, the Cartesian product
+    computed is the same for all nodes in the tree, as they are single--vertex disjoint trees, this
+    being the initial state of the #smallcaps[UFDS]][on subsequent iterations, the nodes belonging
+    to the same tree will compute a Cartesian product equivalent to $n - i$, where $i$ denotes the
+    (0--indexed) running iteration count]. The operation should thus have a cost of $n dot n$ when
+  iterating through the the first value of `current_node` in `Pairs` (i.e. the first iteration of
+  the hot loop,) and for all future iterations should compute $(i dot (n - i) + (n - i) dot n)$,
+  where $i$ is the control variable keeping track of the iteration count ($[1, n)$.)
 
-  In a sum formula, this would be
+  In a sum formula, this would be expressed as
 
   $
     n dot n + sum_(i = 2)^(n - 1) i dot (n - i) + (n - i) dot n =
-    n^2 + sum_(i = 2)^(n - 1) n i + i^2 + n^2 - n i.
+    n^2 + sum_(i = 2)^(n - 1) n i - i^2 + n^2 - n i & = \
+    & = n^2 + sum_(i = 2)^(n - 1) n^2 - i^2 \
+    & = n^2 + n^2 dot sum_(i = 2)^(n - 1) 1 - sum_(i = 2)^(n - 1) i^2 \
+    & = n^2 + n^2 dot (sum_(i = 1)^(n - 1) (1) - 1) - sum_(i = 2)^(n - 1) i^2 \
+    & = n^2 + n^2 dot (n - 2) - (sum_(i = 1)^(n - 1) (i^2) - 1) \
+    & = n^2 + n^2 dot (n - 2) - (n (n + 1) (2n + 1) - 6) / 6 \
+    & = n^2 + n^3 - 2n^2 - ((n^2 + n) (2n + 1) - 6) / 6 \
+    & = n^2 + n^3 - 2n^2 - (2n^3 + n^2 + 2n^2 + n - 6) / 6 \
+    & = n^3 - n^2 - (2n^3 + 3n^2 + n - 6) / 6 \
+    & = (6n^3 - 6n^2 - 2n^3 + 3n^2 + n - 6) / 6 \
+    & = 1 / 6 (4n^3 - 3n^2 + n - 6) \
+    & approx Theta(n^3).
   $
+
+  I consider this a tight bound on $f(n) = n^3$ because the running time will always be tied to the
+  fixed $n - 1$ iterations of the overarching loop in the implementation, and each iteration is
+  assured to decrease the number of trees in the forest by one; Also, all Cartesian products are
+  computed without any consideration for caching, which forces the exact same procedure no matter
+  the case.
+
+  We move on now to the second part of the algorithm, namely the `unite()` #smallcaps[UFDS]
+  operation that is (also) guaranteed to run once on each $n - 1$ iteration. This operation is known
+  to have $upright(O)(lg n)$ sublinear performance on a traditional implementation of a union--find
+  DS, but this problem required slightly altering its usual behavior. Under normal circumstances,
+  `unite()` would incurr a (constant factors included) cost of $upright(O)(2 dot lg n)$, where $n$
+  denotes the upper bound for the sublinear `find()` operation (left unchanged from the regular
+  #smallcaps[UFDS] implementation) to reach the root of the tree nodes passed to the subroutine
+  (i.e. the largest cost of any one of the two `find()` operations per (the two) nodes.) The
+  implementation for this problem instead holds the invariant that the only, truly sublinear
+  operation is that of the node that will become the parent, as the other node (through the prior
+  workings of the reverse `ancestors()` in the algorithm's main loop, that we'll comment on later)
+  is always guaranteed to be a root node, and thus a call to `find()` on it would resolve
+  immediately with $approx Theta(1)$.
+
+  Because determining which edge (ordered pair) get selected as the lightest edge through the
+  `min_fix()` operation is not possible without prior knowledge of the set of points the
+  #smallcaps[TSP] tour is expected to go through, we will analyze the behavior of this operation in
+  terms of an upper asymptotic bound, instead of a tight bound as we did with the combination of
+  Cartesian products.
+
+  Let us define first the roles of each of the ordered pairs returned by the `min_fix()` operation.
+  Given some pair $(a, b)$, the `unite()` operation, as per the prior discussion, will be assured
+  that node $b$ is always a root, and thus a `find()` operation to reach the root of its tree will
+  resolve in $Theta(1)$. Thus node $a$ is the one node that may or may not be a root itself, and
+  will become the new parent of node $b$ in the disjoint set.
+
+  The worst case scenario here would be for some set of points the robot arm ought go through,
+  namely the closest edge $(a, b)$, to always bound to hold true that $a < b$ in the extended line
+  of $RR$. This would imply that setting up a forest of trees would always force the leaf node of
+  the largest tree to be joined with some other single--vertex tree. The effect of this would be
+  that for such a leaf node $a$ taking the role of the new parent in the #smallcaps[UFDS]--`unite()`
+  operation, the root node of the tree it would be contained in would be the largest possible tree
+  at any given iteration.
+
+  Thus, for some number of iterations $n - 1$, if a single tree is the one tree that always keep
+  growing, the resulting height of that tree at any given (0--indexed) iteration $i$ would be $i$
+  itself, such that by the end iteration, namely $n - 1$, the tree height would finally become a
+  linked list--like structure akin to a chain of vertices with height (length or size for linked
+  DSs) $n$ (upon completion of the last `unite()` operation prior to exitting the algorithm's main
+  loop.) This means that each `unite()` operation calling the `find()` routine on the
+  (to--be--parent) node would incurr $i$ stack frame allocations to find the actual parent of $a$.
+
+  In such a worst case, the total cost of the `unite()` operation would be
+
+  $
+    sum_(i = 1)^(n - 1) i & = sum_(i = 1)^n (i) - n = (n(n + 1)) / 2 - n \
+                          & = (n^2 + n - 2n) / 2 = 1 / 2 (n^2 - n) approx upright(O)(n^2).
+  $
+
+  The total running cost so far, accounting for both the prior, fixed--cost combination of Cartesian
+  products and for the latest conclusion on the cost of the (modified) `unite()` operation, is
+  $Theta(n^3) dot upright(O)(n^2)$. Note *there's a mistake* in the computation of the asymptotic
+  running time of the `min_fix()` operation, as it uses the known result on sums
+  $i = [1, n] "for" i^2 equiv (n(n + 1)(2n +1)) / 6$ even though the actual range for the treated
+  sum is $i = [1, n)$. Either way, the approximate behavior should compute similarly even with the
+  right treatment of the formula.
+
+  Finally, we discuss the time complexity of the conditional operation performed on some node $b$ in
+  some resulting min--edge denoted by ordered pair $(a, b)$, where node $b$ is the vertex to become
+  the child of node $a$ through the `unite()` operation. Note the routine about to be treated is
+  what actually allows node $b$ to be assumed to be a root node of the forest, which further allows
+  the assumption on the cost of `find()`ing the root of such node to be constant in the analysis of
+  the `unite()` operation.
+
+  First, much as with the `unite()` subroutine, we will operate on a worst--case scenario basis as
+  the actual behavior is instance--dependent. To that extent, we assume as a worst--case the
+  possibility for the node to--be--child to be a leaf node in a long tree within the disjoint set.
+  Such a situation would take place if say, the points the robot arm had to go through were
+  separated in such way so as to have half of those nodes tightly gathered around one side, and the
+  other half tightly gathered around the opposite side. This would force the disjoint set to, in
+  general, reach iteration $n - 1$ and have as the last ordered pair of points some node $a$ on one
+  side and some other node $b$ on the opposite side. This is due to the fact the closest pair
+  heuristic computes disjoint edges, and in all prior iterations would have kept adding up nodes to
+  one of two main trees, each representing a side of the surface area.
+
+  The behavior here would then be modelled in the exact same way as the cost of the (modified)
+  `unite()` operation, as the `ancestors()` function on the disjoint set fundamentally performs the
+  same steps as the `find()` operation, only iteratively instead of recursively. Upon yielding the
+  ancestors to some such node $b$, that part of the algorithm in the main loop traverses anew the
+  collection of ancestors from the root until node $b$ to perform an $upright(O)(1)$
+  parent--reversing operation on each of them. This would total
+  $2 dot upright(o)(n^2) approx upright(o)(n^2)$.
+
+  The final cost of the algorithm is then $Theta(n^3) dot (upright(O)(n^2) + upright(O)(n^2))$. This
+  is definitely worse than the fixed, sure cost of the nearest neighbor heuristic, and indeed, it
+  aligns with the expected performance drop that Skiena's book speaks of when proposing this
+  alternative approach.
+
+  Finally, the last part of the problem asks to implement a more optimized heuristic for the
+  instance of the #smallcaps[TSP] considered in the robot arm problem. For that, I can implement a
+  known method to solve for a 15--20% suboptimal heuristic based on finding an #smallcaps[MST] of
+  the complete graph under consideration, and then performing #smallcaps[BFS] on it (or was it
+  #smallcaps[DFS]? I need to check out the algorithm catalogue on the book,) while keeping a record
+  of each fully processed vertex in the graph serving as the sequence of points to be visited in the
+  tour. After having read the section on Skiena's catalogue, I can say the heuristic I'm going to
+  implement is the #smallcaps[MST]--finding one, followed by a #smallcaps[DFS] on the resulting
+  tree, which counter to what I said before, considers as the resulting path the set of vertices as
+  they are _discovered_, and not once they are _processed_. This approach should also allow me to
+  reuse the `Dfs` iterator I created for the purposes of solving the closest pair heuristic.
+
+  I may also want to research on Kernighan--Lin _k--opt tours_ to apply a 2--opt tour to the result
+  of performing #smallcaps[DFS] on the result of the #smallcaps[MST]. If time allows, research on
+  simulated annealing to further enhance the result of the heuristic would also be great.
+
+  To start off, I'll look into both sections of Skiena's book that treat with finding an
+  #smallcaps[mst] for a graph, namely the one on the chapter about graphs and the one receiving its
+  own section on the catalogue. The book chapter on graphs covering #smallcaps[MST]s does give some
+  pointers to sections of the catalogue that include content that may be of interest without
+  strictly being part of the core algorithm routine, per se.
+  *Following, I note such sections, for future reference.*
+
+  - Section 18.3, on the #smallcaps[MST] algorithm itself.
+  - Section 17.6, on techniques for quickly building set partitions (may be of use to improve
+    building the disjoint set at the core of the #smallcaps[UFDS] used for Kruskal's.)
+  - Section 15.5, on techniques to further improve the #smallcaps[UFDS] DS, beyond mere path
+    compression.
+
+  Based on readings about the asymptotic behavior of the #smallcaps[MST]--finding algorithms
+  discussed in the book chapter, I may consider implementing Prim's instead of Kruskal's as the
+  latter seems more fit for applications where the subject graph is sparse in nature. In the
+  instance of the #smallcaps[TSP] for the robot arm tour, the graph is known to be a complete,
+  simple graph so there's bound to be $m = n - 1 "edges, where" G = (V, E), abs(V) = n, abs(E) = m$.
+  This is an inherently dense graph, and for a quick test with $2^80$ vertices, the worst--case
+  result of Kruskal's is two orders of magnitude worse than that of Prim's.
+
+  The next step is going to be actually reading the above annotated sections on the topic and seeing
+  which approach should work best. After having browsed the section on the catalogue, it seems that
+  the most efficient implementation is going to go through solving the problem as a geometric
+  instance initially, such that after computing the Delauney triangulation on the set of points
+  (vertices of the complete graph,) and then running Kruskal's on the resulting graph provides an
+  $upright(O)(n lg n)$ total running time.
+
+  We'll go with this. For that, I'm going to need browsing through the pages of the catalogue on
+  Delauney triangulation (and possibly the chapters covering material on computational geometry
+  algorithms.) Once I've implemented this, I'll have to look into Kruskal's algorithm and optimizing
+  the #smallcaps[UFDS] involved in it (see the list of annotated sections above.)
 
 === LeetCode problems
 
