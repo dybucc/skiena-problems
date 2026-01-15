@@ -42,7 +42,7 @@ struct Pairs<'a> {
 struct AdjacencyList(HashMap<usize, HashSet<usize>>);
 
 impl AdjacencyList {
-    fn new(pairs: &Pairs) -> Self {
+    fn from_pairs(pairs: &Pairs) -> Self {
         let mut output = Self(HashMap::with_capacity(pairs.forest.len()));
         for ancestors in (0..pairs.forest.len()).filter_map(|node| {
             let ancestors = pairs
@@ -73,6 +73,21 @@ impl AdjacencyList {
 
         output
     }
+}
+
+#[derive(Debug)]
+struct AugAdjacencyMatrix(Vec<Vec<CoordEdge>>);
+
+#[derive(Debug, Clone)]
+enum CoordEdge {
+    NonExistent,
+    Weighted { weight: usize, coord: Point },
+}
+
+#[derive(Debug, Clone)]
+struct Point {
+    x: f64,
+    y: f64,
 }
 
 #[derive(Debug)]
@@ -120,11 +135,27 @@ macro_rules! matrix {
                 Ordering::Greater => Edge::Weighted($row as usize),
                 _ => unimplemented!(
                     "edges are forced to be `usize` in the `Ordering::Greater` branch so this \
-                    cannot happen"
+                    cannot happen",
                 ),
             }
         }),+]),+])
     };
+}
+
+macro_rules! geomatrix {
+    ($($(($x:literal, $y:literal, $weight:literal)),+);+ $(;)?) => {{
+        AugAdjacencyMatrix::new(&[$(vec![$({
+            let weight: usize = $weight;
+            match weight.cmp(&0) {
+                Ordering::Equal => CoordEdge::NonExistent,
+                Ordering::Greater => CoordEdge::Weighted { weight, coord: Point { x: $x, y: $y } },
+                _ => unimplemented!(
+                    "edges are forced to be `usize` in the `Ordering::Greater` branch so this \
+                    cannot happen",
+                )
+            }
+        }),+]),+])
+    }};
 }
 
 macro_rules! build_error {
@@ -338,7 +369,7 @@ impl Pairs<'_> {
         );
 
         Dfs {
-            graph: AdjacencyList::new(self),
+            graph: AdjacencyList::from_pairs(self),
             stack: {
                 let mut output = Vec::with_capacity(self.forest.len());
                 output.push(
@@ -465,12 +496,46 @@ impl Iterator for Dfs {
     }
 }
 
+impl AugAdjacencyMatrix {
+    fn new(inner: &[Vec<CoordEdge>]) -> Result<Self, AdjacencyMatrixError> {
+        ensure_or!(inner.len() > 1, NonSquareMatrix)?;
+
+        for (idx, vertex) in inner.iter().enumerate() {
+            ensure_or!(vertex.len() == inner.len(), NonSquareMatrix)?;
+
+            let row_vec: Vec<_> = vertex
+                .iter()
+                .enumerate()
+                .filter(|(_, edge)| matches!(edge, CoordEdge::Weighted { .. }))
+                .collect();
+
+            ensure_or!(
+                row_vec.iter().all(|&(inner_idx, _)| inner_idx != idx),
+                SelfLoops
+            )?;
+            ensure_or!(row_vec.len() == vertex.len() - 1, IncompleteGraph)?;
+
+            ensure_or!(false, DirectedGraph)?;
+        }
+
+        Ok(Self(inner.to_owned()))
+    }
+}
+
 trait TspNearestNeighbor {
     fn tsp(&self) -> Vec<usize>;
 }
 
 trait TspClosestPair {
     fn pairs(&self) -> Pairs<'_>;
+
+    fn tsp(&self) -> Vec<usize>;
+}
+
+trait TspMstDfs {
+    fn convex_hull(&mut self);
+    fn kruskal(&mut self);
+
     fn tsp(&self) -> Vec<usize>;
 }
 

@@ -1929,17 +1929,83 @@
   This is an inherently dense graph, and for a quick test with $2^80$ vertices, the worst--case
   result of Kruskal's is two orders of magnitude worse than that of Prim's.
 
-  The next step is going to be actually reading the above annotated sections on the topic and seeing
-  which approach should work best. After having browsed the section on the catalogue, it seems that
-  the most efficient implementation is going to go through solving the problem as a geometric
-  instance initially, such that after computing the Delauney triangulation on the set of points
-  (vertices of the complete graph,) and then running Kruskal's on the resulting graph provides an
-  $upright(O)(n lg n)$ total running time.
+  The next step is going to be actually reading the above sections on the topic and seeing which
+  approach should work best.
+
+  After having browsed the section on the catalogue, it seems that the most efficient implementation
+  is going to go through solving the problem as a geometric instance initially, such that after
+  computing the Delauney triangulation on the set of points (vertices of the complete graph,) and
+  then running Kruskal's on the resulting graph, we are left with an $upright(O)(n lg n)$ total
+  running time. This should be the most optimal solution, considering such a complete, simple graph
+  would contain $n$ vertices and $m = n^2 - n approx n^2$ edges (which for some large graphs makes
+  the cost of more conventional solutions to finding an #smallcaps[MST], like Prim's
+  $upright(O)(m + n lg n)$, inefficient in comparison.)
 
   We'll go with this. For that, I'm going to need browsing through the pages of the catalogue on
   Delauney triangulation (and possibly the chapters covering material on computational geometry
   algorithms.) Once I've implemented this, I'll have to look into Kruskal's algorithm and optimizing
-  the #smallcaps[UFDS] involved in it (see the list of annotated sections above.)
+  the #smallcaps[UFDS] involved in it (see the list of sections included above.) Once that is done,
+  I'll have to implement a #smallcaps[DFS] traversal on the resulting graph, and that should about
+  do it.
+
+  I'm done reading the catalogue, and I think I have an overall idea of the abstractions behind both
+  Delauney triangulation and Voronoi diagrams. Most of the material discussed, though, is not
+  relevant to the geometric instance of the robot arm tour problem, as I assume the surface in which
+  the robot is epxected to work in is 2--dimensional. Still, modelling the problem in terms of the
+  simpler approach whereby a convex hull polygon is formed from the sorted x--component of the
+  target points in Euclidean space likely won't do. This is because Skiena himself makes explicit in
+  the #smallcaps[TSP] section that solving it as a geometric problem requires specifically using
+  Delauney triangulation, and not merely _a_ method of triangulation.
+
+  I'll look now into the chapter on computational geometry to better understand the possibilities I
+  have, considering I will not have access to the Internet for some time.
+
+  I think I have a way to go, though it's not the most optimal. I'm going to be using the method
+  proposed by Skiena to build the convex hull of the point set, and as each point gets removed from
+  the convex hull because it turns left (as per Andrew's algorithm in _Guide to Competitive
+  Programming_,) the edge between the last point in the hull and the one that got cut off is added
+  as an edge that is part of the target triangulation. For this, I would need to further expand the
+  tests that I currently use for the previously implemented #smallcaps[TSP] heuristics, such that
+  they also include 2--dimensional geometric information on each the points the robot arm must go
+  through. Then I should hold in a contiguous collection all such points, and sort them in
+  $upright(O)(n lg n)$ first by their $x$--components, and second by their $y$--component. For that,
+  I must define a relation of total ordering for the algebraic data type that will represent the
+  2--dimensional points, such that the sorting algorithm performs unstable sorting where elements
+  with differing values of $y$ but equal values of $x$ are further sorted and not just grouped
+  together in their original (or possibly some other) order.
+
+  The next thing would be to implement the convex hull algorithm in such way so as to allow an
+  external closure to add elements onto another container (the target triangulation) whenever some
+  element of the point set is cut off from the points that denote the polygon's perimeter. For that,
+  I belive it best if I implement the convex hull algorithm first and make sure that both the above
+  sorting routine and the convex hull produce satisfactory results, prior to attempting anything
+  triangulation related.
+
+  In terms of implementation design, the trait should have an interface for the `tsp()` method that
+  serves as the only real call to solve the problem, as well as a method for performing the two main
+  routines involved in this heuristic; Namely, finding the #smallcaps[MST] of the input graph, and
+  performing #smallcaps[DFS] on that graph. The only difference now is that the input to `tsp()`
+  should augment the information held on each edge of the graph, such that it collects both the
+  weight and the 2--dimensional coordinates of each point. This is going to require new graph and
+  edge primitives. The edge primitive should continue being an enumeration, except for the variant
+  holding a weighted edge, which should be changed from a tuple--like `struct` to a named--field
+  `struct` containing the `weight: usize` and the `coord: Point`. The graph primitive should
+  continue being an adjacency matrix because the graph has the same high--density vertex count, but
+  it should replace the old edge primitive with the new edge data type. The new macro I already
+  introduced to build a vector of `Point`s should be refactored into taking in the weight of the
+  edge in the same way as the `matrix!` macro does, and pass it off to the `new()` function of the
+  new adjacency matrix.
+
+  The implementation of `AugAdjacencyMatrix::new()` should follow the same input requirements as
+  those enforced in `AdjacencyMatrix::new()`; namely that #l-enum[the input matrix should be a
+    square matrix][that it should have weighted edges everywhere but in the main diagonal, and][that
+    its transpose is equal to the original matrix (which for a square matrix implies that computing
+    the inverse twice returns the same original matrix.)] Implementation--wise, checking for the
+  matrix to be square involves having the function check each of the inner container elements of the
+  overarching container, and making sure the length of each of the formers is equal to the length of
+  the latter. the check for weighted edges should be two--part: #l-enum[filter out the nonexistent
+    edges, and ensure the length of the resulting collection is one less than the length of the
+    iterated--over row vector, and][].
 
 === LeetCode problems
 
