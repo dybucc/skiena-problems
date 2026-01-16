@@ -84,7 +84,7 @@ enum CoordEdge {
     Weighted { weight: usize, coord: Point },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct Point {
     x: f64,
     y: f64,
@@ -125,14 +125,15 @@ enum AdjacencyMatrixErrorType {
     IncompleteGraph(String),
     DirectedGraph(String),
     SelfLoops(String),
+    NonMatchingCoordinates(String),
 }
 
 macro_rules! matrix {
-    ($($($row:literal),+);+ $(;)?) => {
+    ($($($weight:literal),+);+ $(;)?) => {
         AdjacencyMatrix::new(&[$(vec![$({
-            match $row.cmp(&0) {
+            match $weight.cmp(&0) {
                 Ordering::Equal => Edge::NonExistent,
-                Ordering::Greater => Edge::Weighted($row as usize),
+                Ordering::Greater => Edge::Weighted($weight),
                 _ => unimplemented!(
                     "edges are forced to be `usize` in the `Ordering::Greater` branch so this \
                     cannot happen",
@@ -145,10 +146,12 @@ macro_rules! matrix {
 macro_rules! geomatrix {
     ($($(($x:literal, $y:literal, $weight:literal)),+);+ $(;)?) => {{
         AugAdjacencyMatrix::new(&[$(vec![$({
-            let weight: usize = $weight;
-            match weight.cmp(&0) {
+            match $weight.cmp(&0) {
                 Ordering::Equal => CoordEdge::NonExistent,
-                Ordering::Greater => CoordEdge::Weighted { weight, coord: Point { x: $x, y: $y } },
+                Ordering::Greater => CoordEdge::Weighted {
+                    weight: $weight,
+                    coord: Point { x: $x, y: $y },
+                },
                 _ => unimplemented!(
                     "edges are forced to be `usize` in the `Ordering::Greater` branch so this \
                     cannot happen",
@@ -159,36 +162,52 @@ macro_rules! geomatrix {
 }
 
 macro_rules! build_error {
-    (NonSquareMatrix) => {
+    () => {{
+        compile_error!(
+            r#"The macro supports one of the following enum error variants, each a sublist item of
+its overarching enum type:
+- `AdjacencyMatrixErrorType`:
+    - `NonSquareMatrix`
+    - `IncompleteGraph`
+    - `DirectedGraph`
+    - `SelfLoops`
+    - `NonMatchingCoordinates`
+- `PairsErrorType`:
+    - `IndexOutOfBounds`"#
+        )
+    }};
+    (NonSquareMatrix) => {{
         AdjacencyMatrixErrorType::NonSquareMatrix(String::from(
             "matrix is not square; adjacency matrices must be square",
         ))
-    };
-    (IncompleteGraph) => {
+    }};
+    (IncompleteGraph) => {{
         AdjacencyMatrixErrorType::IncompleteGraph(String::from(
             "matrix contains more nonexistent edges than it should; this is not a complete graph",
         ))
-    };
-    (DirectedGraph) => {
+    }};
+    (DirectedGraph) => {{
         AdjacencyMatrixErrorType::DirectedGraph(String::from(
             "matrix contains different values above and below the main diagonal; this is not an \
             undirected graph",
         ))
-    };
-    (SelfLoops) => {
+    }};
+    (SelfLoops) => {{
         AdjacencyMatrixErrorType::SelfLoops(String::from(
             "matrix contains self-loops; this is not a simple graph",
         ))
-    };
-    (IndexOutOfBounds) => {
-        PairsErrorType::IndexOutOfBounds(String::from("ufds doesn't contain such index element"))
-    };
+    }};
+    (NonMatchingCoordinates) => {{
+        AdjacencyMatrixErrorType::NonMatchingCoordinates(String::from(
+            "matrix contains non-matching coordinates on symmetric nodes; check the `geomatrix!` \
+            macro call for inconsistencies between values above and below the main diagonal",
+        ))
+    }};
+    (IndexOutOfBounds) => {{ PairsErrorType::IndexOutOfBounds(String::from("ufds doesn't contain such index element")) }};
 }
 
 macro_rules! ensure_or {
-    ($check:expr, $error:tt) => {
-        $check.then_some(()).ok_or_else(|| build_error!($error))
-    };
+    ($check:expr, $error:tt$(,)?) => {{ $check.then_some(()).ok_or_else(|| build_error!($error)) }};
 }
 
 impl From<AdjacencyMatrixErrorType> for AdjacencyMatrixError {
@@ -206,7 +225,6 @@ impl From<PairsErrorType> for PairsError {
 impl AdjacencyMatrix {
     fn new(input: &[Vec<Edge>]) -> Result<Self, AdjacencyMatrixError> {
         ensure_or!(input.len() > 1, NonSquareMatrix)?;
-
         for (idx, vertex) in input.iter().enumerate() {
             ensure_or!(vertex.len() == input.len(), NonSquareMatrix)?;
 
@@ -218,7 +236,7 @@ impl AdjacencyMatrix {
 
             ensure_or!(
                 row_vec.iter().all(|&(inner_idx, _)| inner_idx != idx),
-                SelfLoops
+                SelfLoops,
             )?;
             ensure_or!(row_vec.len() == vertex.len() - 1, IncompleteGraph)?;
 
@@ -233,7 +251,7 @@ impl AdjacencyMatrix {
 
                     weight == symmetric_weight
                 }),
-                DirectedGraph
+                DirectedGraph,
             )?;
         }
 
@@ -499,7 +517,6 @@ impl Iterator for Dfs {
 impl AugAdjacencyMatrix {
     fn new(inner: &[Vec<CoordEdge>]) -> Result<Self, AdjacencyMatrixError> {
         ensure_or!(inner.len() > 1, NonSquareMatrix)?;
-
         for (idx, vertex) in inner.iter().enumerate() {
             ensure_or!(vertex.len() == inner.len(), NonSquareMatrix)?;
 
@@ -511,11 +528,69 @@ impl AugAdjacencyMatrix {
 
             ensure_or!(
                 row_vec.iter().all(|&(inner_idx, _)| inner_idx != idx),
-                SelfLoops
+                SelfLoops,
             )?;
             ensure_or!(row_vec.len() == vertex.len() - 1, IncompleteGraph)?;
 
-            ensure_or!(false, DirectedGraph)?;
+            ensure_or!(
+                row_vec.iter().all(|&(inner_idx, edge)| {
+                    let CoordEdge::Weighted { weight, .. } = *edge else {
+                        unreachable!(
+                            "any `NonExistent` node under consideration has been filtered out so \
+                            this execution branch should not be possible",
+                        );
+                    };
+                    let CoordEdge::Weighted {
+                        weight: symmetric_weight,
+                        ..
+                    } = inner[inner_idx][idx]
+                    else {
+                        unimplemented!(
+                            "this should be caught when traversing the next row as the symmetric \
+                            node is always forward in the input array, but the graph checking \
+                            logic relies on traversing each row serially so at this point it is \
+                            not yet knonw that the next row would've thrown an \
+                            `AdjacencyErrorType::IncompleteGraph`",
+                        );
+                    };
+
+                    weight == symmetric_weight
+                }),
+                DirectedGraph,
+            )?;
+
+            // Even though the running conditions for the following iterator
+            // chain are the same as those for the above sequence, this is
+            // required to be separate because the type of thrown error is
+            // different (and this is not meant to be used as a real library, so
+            // no greater effort is put into designing efficient routines for
+            // failure propagation.)
+            ensure_or!(
+                row_vec.iter().all(|&(inner_idx, edge)| {
+                    let CoordEdge::Weighted { coord, .. } = edge else {
+                        unreachable!(
+                            "any `NonExistent` node under consideration has been filtered out \
+                            so this should not be possible",
+                        );
+                    };
+                    let CoordEdge::Weighted {
+                        coord: ref symmetric_coord,
+                        ..
+                    } = inner[inner_idx][idx]
+                    else {
+                        unimplemented!(
+                            "this should be caught when traversing the next row as the symmetric \
+                            node is always forward in the input array, but the graph checking \
+                            logic relies on traversing each row serially so at this point it is \
+                            not yet knonw that the next row would've thrown an \
+                            `AdjacencyErrorType::IncompleteGraph`",
+                        );
+                    };
+
+                    coord == symmetric_coord
+                }),
+                NonMatchingCoordinates,
+            )?;
         }
 
         Ok(Self(inner.to_owned()))
@@ -533,8 +608,9 @@ trait TspClosestPair {
 }
 
 trait TspMstDfs {
-    fn convex_hull(&mut self);
-    fn kruskal(&mut self);
+    fn triangulation(&self) -> AugAdjacencyMatrix;
+    fn kruskal(&self);
+    fn dfs(input: &AugAdjacencyMatrix) -> Vec<usize>;
 
     fn tsp(&self) -> Vec<usize>;
 }
@@ -620,6 +696,22 @@ impl TspClosestPair for AdjacencyMatrix {
     }
 }
 
+impl TspMstDfs for AugAdjacencyMatrix {
+    fn triangulation(&self) -> AugAdjacencyMatrix {
+        todo!();
+    }
+    fn kruskal(&self) {
+        todo!();
+    }
+    fn dfs(input: &AugAdjacencyMatrix) -> Vec<usize> {
+        todo!();
+    }
+
+    fn tsp(&self) -> Vec<usize> {
+        todo!();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -629,8 +721,21 @@ mod tests {
         assert!(
             AdjacencyMatrix::new(&[]).is_err(),
             "should've thrown an error about the graph not being a square matrix, or really a \
-            matrix"
+            matrix",
         );
+    }
+
+    #[test]
+    fn basic_geometric_graph() {
+        assert!(
+            geomatrix! {
+                (0., 0., 0), (1., 1., 2);
+                (1., 1., 2), (0., 0., 0);
+            }
+            .is_ok(),
+            "should've been an ok graph with 2 nodes layed out like the corners defining a \
+            rectangle",
+        )
     }
 
     #[test]
@@ -641,7 +746,7 @@ mod tests {
                 2, 0;
             }
             .is_ok(),
-            "should've been an ok graph with two vertices and one weight 2 edge between them"
+            "should've been an ok graph with two vertices and one weight 2 edge between them",
         );
     }
 
@@ -653,7 +758,19 @@ mod tests {
                 3, 0;
             }
             .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::DirectedGraph(_))),
-            "should've thrown an error about the graph not being undirected"
+            "should've thrown an error about the graph not being undirected",
+        );
+    }
+
+    #[test]
+    fn basic_geometric_directed_graph() {
+        assert!(
+            geomatrix! {
+                (0., 0., 0), (1., 1., 2);
+                (1., 1., 3), (0., 0., 0);
+            }
+            .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::DirectedGraph(_))),
+            "should've thrown an error about the graph not being undirected",
         );
     }
 
@@ -666,7 +783,20 @@ mod tests {
             }
             .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::NonSquareMatrix(_))),
             "should've thrown an error about the matrix not being square, or a matrix for that \
-            matter"
+            matter",
+        );
+    }
+
+    #[test]
+    fn malformed_geometric_matrix_graph() {
+        assert!(
+            geomatrix! {
+                (0., 0., 0), (0., 0., 2), (0., 0., 3);
+                (0., 0., 0), (0., 0., 2);
+            }
+            .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::NonSquareMatrix(_))),
+            "should've thrown an error about the matrix not being square, or a matrix for that \
+            matter",
         );
     }
 
@@ -678,8 +808,21 @@ mod tests {
                 2, 1;
             }
             .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::SelfLoops(_))),
-            "should've thrown an error about the graph having self-loops (i.e. the main diagonal is \
-            not made out of -1)"
+            "should've thrown an error about the graph having self-loops (i.e. the main diagonal \
+            is not made out of zeroes)",
+        );
+    }
+
+    #[test]
+    fn basic_geometric_nonsimple_graph() {
+        assert!(
+            geomatrix! {
+                (0., 0., 1), (0., 0., 2);
+                (0., 0., 2), (0., 0., 1);
+            }
+            .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::SelfLoops(_))),
+            "should've thrown an error about the graph having self-loops (i.e. the main diagonal \
+            is not made out of zeroes)",
         );
     }
 
@@ -692,8 +835,38 @@ mod tests {
             }
             .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::IncompleteGraph(_))),
             "should've thrown an error about the graph not having as many edges as a complete, \
-            simple graph is expected to have (i.e. the matrix has -1 outside the main diagonal)"
+            simple graph is expected to have (i.e. the matrix has -1 outside the main diagonal)",
         );
+    }
+
+    #[test]
+    fn basic_geometric_incomplete_graph() {
+        assert!(
+            geomatrix! {
+                (0., 0., 0), (0., 0., 0);
+                (0., 0., 2), (0., 0., 0);
+            }
+            .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::IncompleteGraph(_))),
+            "should've thrown an error about the graph not having as many edges as a complete, \
+            simple graph is expected to have (i.e. the matrix has -1 outside the main diagonal)",
+        );
+    }
+
+    #[test]
+    fn basic_geometric_nonmatching_coordinates_graph() {
+        assert!(
+            geomatrix! {
+                (0., 0., 0), (0., 1., 2);
+                (1., 0., 2), (0., 0., 0);
+            }
+            .is_err_and(|err| matches!(
+                err.inner,
+                AdjacencyMatrixErrorType::NonMatchingCoordinates(_)
+            )),
+            "should've thrown an error about the graph not having matching coordinates on \
+            symmetric vertices (this is not required to check for an undirected graph because the \
+            coordinates only serve as satellite data during construction of the adjacency matrix)",
+        )
     }
 
     #[test]
@@ -704,7 +877,7 @@ mod tests {
                 1, 0, 4;
                 3, 4, 0;
             }?),
-            vec![0, 1, 2, 0]
+            vec![0, 1, 2, 0],
         );
 
         Ok(())
@@ -720,7 +893,7 @@ mod tests {
                 4, 2, 3, 0, 2;
                 2, 2, 2, 2, 0;
             }?),
-            vec![0, 4, 1, 3, 2, 0]
+            vec![0, 4, 1, 3, 2, 0],
         );
 
         Ok(())
@@ -748,6 +921,35 @@ mod tests {
             2, 2, 2, 2, 0;
         }?);
         assert!(input == vec![2, 4, 1, 3, 0, 2] || input == vec![2, 4, 0, 1, 3, 2]);
+
+        Ok(())
+    }
+
+    #[test]
+    #[ignore = "the algorithm is a wip"]
+    fn tsp_mst_dfs1() -> Result<(), AdjacencyMatrixError> {
+        let _input = TspMstDfs::tsp(&geomatrix! {
+            (0., 0., 0), (0., 1., 1), (1., 1., 3);
+            (0., 1., 1), (0., 0., 0), (0., 2., 4);
+            (1., 1., 3), (0., 2., 4), (0., 0., 0);
+        }?);
+        todo!();
+
+        Ok(())
+    }
+
+    #[test]
+    #[ignore = "the algorithm is a wip, and the body of the test is yet to be replaced with the \
+                analogous `geomatrix!` macro"]
+    fn tsp_mst_dfs2() -> Result<(), AdjacencyMatrixError> {
+        let _input = TspClosestPair::tsp(&matrix! {
+            0, 3, 4, 4, 2;
+            3, 0, 4, 2, 2;
+            4, 4, 0, 3, 2;
+            4, 2, 3, 0, 2;
+            2, 2, 2, 2, 0;
+        }?);
+        todo!();
 
         Ok(())
     }

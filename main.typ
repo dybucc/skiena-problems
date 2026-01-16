@@ -1,4 +1,4 @@
-#import "@local/typst-template:0.28.0": *
+#import "@local/typst-template:0.31.0": *
 
 #show: template.with(
   title: [DSA],
@@ -15,7 +15,7 @@
 
 == Introduction to Algorithm Design
 
-/ Problem 1--9: \
+/ Problem 1-9: \
   The algorithm proves correct because the evolution of the resulting polynomial leads to a
   progressive multiplication of the unknown by all former factors, such that the largest exponent of
   the unknown in the polynomial remains the largest polynomial at the end of the multiplication.
@@ -25,16 +25,16 @@
   polynomial (i.e. the last constant factor is not multiplied by the unknown, as the problem expects
   from the polynomial of the form provided in the statement.)
 
-/ Problem 1--10: \
+/ Problem 1-10: \
   The algorithm considers the whole sequence for as many iterations as there are elements of the
   sequence minus 1. Throuhgout such iterations, the algorithm considers comparisons between all
   elements of each of the subsequences that have not yet been sorted, such that all numbers that are
-  in their right order--statistic will always remain in the tail end of the original sequence. This
+  in their right order-statistic will always remain in the tail end of the original sequence. This
   makes for an incrementally smaller amount of comparisons across iterations, as each iteration
   discards the last elements of the last subsequence formed through iterations, knowing the
-  order--statistic of the elements is that of incremental ordering.
+  order-statistic of the elements is that of incremental ordering.
 
-/ Problem 1--11: \
+/ Problem 1-11: \
   The problem is solved through a recursive procedure whereby the base assumption is that the GCD of
   a number and 0 is always going to be that number. Based on this, it performs the modulo operation
   between the numbers knowing that the residue of integer division represents the imprecission with
@@ -49,7 +49,7 @@
   possible number fitting the ever present difference between the initial numbers' largest prime
   factors; an alternative definition for the GCD.)
 
-/ Problem 1--12: \
+/ Problem 1-12: \
   The problem statement provides information on one of the basic formulas for sums. This formula is
   a consequence of summing some number starting at 1 to some other number $>= 0$. The base
   assumption in the induction is that the target number $n$ in the sum
@@ -149,29 +149,29 @@
   sum to $n - 1$, for $1 + 1$, the factor following the initial 1, is the only one between it and
   this $n$. Unlike with $n = 3$, though, $n = 4$ yields a different expression in terms of $n$ for
   the middle factors: $n + 1$. I can't quite discern a pattern in the signs, beyond a possibly
-  even/odd--relationship, which I am lead to believe will not help much for larger values of $n$.
+  even/odd-relationship, which I am lead to believe will not help much for larger values of $n$.
 
   For $n = 5$, the middle terms add up to 9, which indeed, yields $n + 4$. Maybe this describes a
   series related to powers of 2? Further, for $n = 6$, the middle terms sum to $n + 8$. Indeed, it
   seems as if the added factor could be described in terms of a power of 2 or possibly a fraction
-  with denominator 2. What about $n = 7$? The mid--terms sum to $n + 13$. Welp. No power of 2 nor
+  with denominator 2. What about $n = 7$? The mid-terms sum to $n + 13$. Welp. No power of 2 nor
   fraction with denominator 2 can possibly describe 13.
 
   But maybe there's still hope for a pattern; It seems as if the sum of the considered $n$ with the
-  additional factor of the mid--terms of the prior $n$, namely $n - 1$, seem to add up to a number
-  that, subtracting 2, yields the right mid--terms for the current value of $n$. Take $n = 5$.
-  Considering the sum for $n - 1$ yields mid--terms $(n - 1) + 1$, one can state that
-  $n + (n + 1 - 2) = n + 4$. Indeed, because the mid--terms of some $n$ integrate those of $n - 1$,
-  we can express them in terms of $n - 1$'s sum of mid--terms.
+  additional factor of the mid-terms of the prior $n$, namely $n - 1$, seem to add up to a number
+  that, subtracting 2, yields the right mid-terms for the current value of $n$. Take $n = 5$.
+  Considering the sum for $n - 1$ yields mid-terms $(n - 1) + 1$, one can state that
+  $n + (n + 1 - 2) = n + 4$. Indeed, because the mid-terms of some $n$ integrate those of $n - 1$,
+  we can express them in terms of $n - 1$'s sum of mid-terms.
 
-  Take now $n = 6$. The mid--terms for $n - 1 = 5$, yield $(n - 1) + 4$, and thus
-  $n + (n + 4 - 2) = n + 8$. As it turns out, that is, indeed, the sum of the mid--terms of $n = 6$.
+  Take now $n = 6$. The mid-terms for $n - 1 = 5$, yield $(n - 1) + 4$, and thus
+  $n + (n + 4 - 2) = n + 8$. As it turns out, that is, indeed, the sum of the mid-terms of $n = 6$.
   But let us test in full the results of our prior findings; Take now $n = 7$. For $n - 1 = 6$, we
-  have just described how the mid--terms are given by $(n - 1) + 8$, so the mid--terms of $n = 7$
+  have just described how the mid-terms are given by $(n - 1) + 8$, so the mid-terms of $n = 7$
   should be described by $n + (n + 8 - 2) = n + 13$. Well, that seems like a fine result, indeed.
 
-  Let us test now the mid--terms for $n = 8$, where we know the mid--terms of $n - 1 = 7$ to be
-  $(n - 1) + 13$, we should also know the mid--terms of $n = 8$ to be $n + (n + 13 - 2) = n + 19$.
+  Let us test now the mid-terms for $n = 8$, where we know the mid-terms of $n - 1 = 7$ to be
+  $(n - 1) + 13$, we should also know the mid-terms of $n = 8$ to be $n + (n + 13 - 2) = n + 19$.
   This, indeed, provides the correct result, as it is proven by the fact that
 
   $
@@ -180,13 +180,13 @@
   $
 
   The issue in our formulation lies now in the fact that the sum of some number $n$ depends on
-  knowing not only the sum of the mid--terms for the sum of $n - 1$, but on being capable of
+  knowing not only the sum of the mid-terms for the sum of $n - 1$, but on being capable of
   expressing those terms in the form $(n - 1) + k$, where $k$ is the key number in computing the
-  mid--terms of $n$ through the expression $n + (n + k - 2)$, such that the total sum may be
+  mid-terms of $n$ through the expression $n + (n + k - 2)$, such that the total sum may be
   expressed as
 
   $
-    underbrace(n + (n + k - 2), #[mid--terms]) + overbrace((n + 1), #[initial and final terms]).
+    underbrace(n + (n + k - 2), #[mid-terms]) + overbrace((n + 1), #[initial and final terms]).
   $
 
   For this, though, there may still be a pattern yet to be exploited. Consider the value of $k$ as
@@ -214,7 +214,7 @@
   $
 
   The value of $k$ is wrong for all of the above; $k$ is supposed to be factor in $(n - 1) + k$ used
-  to compute the mid--terms of $n - 1$. With this correction, maybe we can find another pattern in
+  to compute the mid-terms of $n - 1$. With this correction, maybe we can find another pattern in
   these results?
 
   $
@@ -272,7 +272,7 @@
     & dots.c + (1 + 1 + dots.c + 1_(n + 1) - 1)_n.
   $
 
-  Because the series described by the ever--present negative term $n - k$, where $0 <= k < n$, can
+  Because the series described by the ever-present negative term $n - k$, where $0 <= k < n$, can
   further expand in the development of the sum to
 
   $
@@ -287,7 +287,7 @@
   And this proves the sum formula correct. The key was in finding the equivalence between a sum of
   integer terms $[n, 1]$ to be $(n dot (n + 1)) / 2$. If we look closely at the sum
   $n + (n - 1) + dots.c + 1$, we realize that by grouping the first and last term, we consistently
-  form $n + 1$ terms, that on an even $n$ produce a division of the initial $n$--sized group into
+  form $n + 1$ terms, that on an even $n$ produce a division of the initial $n$-sized group into
   $n / 2$ subsets of $n + 1$. On odd values of $n$, the sequence always yields the expression
   $(n + 1) + (n + 1) + dots.c + (n + 1) / 2$, where there are $floor(n / 2) dot (n + 1)$ terms akin
   to the prior terms, and one $(n + 1) / 2$ term, totaling
@@ -298,7 +298,7 @@
                                            & = (n dot (n + 1)) / 2.
   $ <p112-basic-sum-c2>
 
-/ Problem 1--13: \
+/ Problem 1-13: \
   The problem asks for another famous formula on sums, that being a polynomial where the $i$ control
   variable is squared. Proving this should be easier than the prior formula because I can account
   for that formula as a true statement not requiring proof. The next statement to prove should also
@@ -319,8 +319,8 @@
     & ((1 + 1 + dots.c + 1_(n + 1) - 1) &dot& (1 + 1 + dots.c + 1_(n + 1) - 1)).&&
   $
 
-  Factorization can now be performed in terms of the additional $n$--term in each of the sum terms,
-  as the same $n$--term is mutliplying both expansions of each value of $i$ throughout the series.
+  Factorization can now be performed in terms of the additional $n$-term in each of the sum terms,
+  as the same $n$-term is mutliplying both expansions of each value of $i$ throughout the series.
   This can be done by considering, for generalization purposes, the first term $((n + 1) - n)^2$,
   which we can develop through the binomial theorem.
 
@@ -445,7 +445,7 @@
 
   Because $b$ is always known to be a negative factor, we can further extract constant components,
   such that the expression evaluates solely to $-2n dot abs(b)$. Because we also know $b$ takes on a
-  well--defined range of values, we can model this after a sum.
+  well-defined range of values, we can model this after a sum.
 
   $
     -2n dot abs(b) = -2n dot sum_(i = 1)^(n - 1) i = -2n dot (sum_(i = 1)^n (i) - 1) &= -2n dot ((n dot (n + 1)) / 2 - 1) \
@@ -473,7 +473,7 @@
 
   That doesn't look like the result on Skiena's book. No matter, moving on.
 
-/ Problem 1--14: \
+/ Problem 1-14: \
   Now we're proving a very much similar formula to the above, which could benefit from the same
   findings and that will hopefully help me sort out the actual procedure I followed with the prior
   proof.
@@ -526,7 +526,7 @@
   $
 
   The following terms require another binomial expansion of which, much like the present one, I will
-  treat separately on a term--by--term basis.
+  treat separately on a term-by-term basis.
 
   $
     sum_(j = 0)^(n - 1) 3! / (2!(3 - 2)!) dot (n + 1)^(3 - 2) dot (j - n)^2 &=
@@ -592,7 +592,7 @@
 
   No luck solving this. Moving on.
 
-/ Problem 1--15: \
+/ Problem 1-15: \
   Another proof, this time of the formula
 
   $
@@ -633,7 +633,7 @@
                                   & = (n^4 + 6n^3 + 11n^2 + 6n) / 4.
   $
 
-  The form we have arrived to is likely the non--factorized version of the result initially provided
+  The form we have arrived to is likely the non-factorized version of the result initially provided
   and expected to prove. This implies we can perform some form of factorization to get this sorted
   out, and maybe get to the same result.
 
@@ -645,7 +645,7 @@
   were only stated true for values of $n >= 0$, while this particular proof did not bound the range
   of $n$. Still, moving on.
 
-/ Problem 1--16: \
+/ Problem 1-16: \
   We're going back to proofs by induction. This time constrained by some $a != 1$ and $n >= 1$.
 
   $
@@ -668,7 +668,7 @@
 
   But what about base 3 and larger bases? We know that each power represents a position for bits in
   binary, so technically we should be expecting a similar translation for other bases. The only
-  pattern I see here is that for any given base, there exist as many in--between numbers between
+  pattern I see here is that for any given base, there exist as many in-between numbers between
   whole powers of such base that is equal to the number denoting the base times the targeted power
   (thus accounting for the numbers that came before it until the immediate prior power) minus one.
 
@@ -691,7 +691,7 @@
 
   Moving on.
 
-/ Problem 1--17: \
+/ Problem 1-17: \
   Another proof by induction. This time I think I can get through it just fine, though I'm not sure
   if the resulting proof would count as being inductive in nature. Anyway, here goes the formula.
 
@@ -743,7 +743,7 @@
 
   No matter, moving on.
 
-/ Problem 1--18: \
+/ Problem 1-18: \
   Another proof by induction. This time we ought show that
 
   $
@@ -843,7 +843,7 @@
 
   No matter, moving on.
 
-/ Problem 1--19: \
+/ Problem 1-19: \
   Another proof by induction, whereby I'm expected to show that a tree with $n$ vertices and $m$
   edges, has $m = n - 1$.
 
@@ -857,12 +857,12 @@
   For some other vertex $j in V$, if the edge $(i, j) in E$ already exists, as per the prior
   statements, one can only consider the existence of that single edge, namely $(i, j) in E$, because
   otherwise the graph would have a cycle from edge
-  $(j, k) in E "for some" k in V "where" (i, k) in E$. Assumming as well that no self--loops are
+  $(j, k) in E "for some" k in V "where" (i, k) in E$. Assumming as well that no self-loops are
   allowed, the only edge is that which was already considered from node $i$.
 
   And I think this is a good enough proof.
 
-/ Problem 1--20: \
+/ Problem 1-20: \
   The last proof by induction of this chapter. I must show that the following statement holds true.
 
   $
@@ -882,7 +882,7 @@
 
   This is by no means a proof, so I must think further.
 
-  If we think about what the left--hand side of @p120-initial expands to, maybe we can find a
+  If we think about what the left-hand side of @p120-initial expands to, maybe we can find a
   pattern.
 
   $
@@ -905,7 +905,7 @@
     & && (sum_(j = 1)^n 1)(n dot n).
   $
 
-  This implies the left--hand side of @p120-initial may be rewritten as
+  This implies the left-hand side of @p120-initial may be rewritten as
 
   $
     sum_(i = 1)^n i^3 = sum_(i = 1)^n i^2 dot sum_(j = 1)^i 1.
@@ -918,8 +918,8 @@
   $
 
   Still, this is meant to be proven by induction. So there must be a way of considering, on a
-  term--by--term basis, that the resulting relationship, namely the right--hand side of
-  @p120-initial, holds true.
+  term-by-term basis, that the resulting relationship, namely the right-hand side of @p120-initial,
+  holds true.
 
   So let's think smaller. Let's consider only the term for which $i = 1$, which is ever present,
   considering the sum starts there, unless $n = 0$ and we assume that $0 in NN$.
@@ -936,8 +936,7 @@
     & (1 dot 1 dot 1) + (2 dot 2 dot 2) + (3 dot 3 dot 3) + (4 dot 4 dot 4) && = (1 + 2 + 3 + 4) & dot & (1 + 2 + 3 + 4).
   $
 
-  Maybe we can start thinking from the right--hand side of @p120-initial instead. Let's take
-  $n = 2$.
+  Maybe we can start thinking from the right-hand side of @p120-initial instead. Let's take $n = 2$.
 
   $
     (1 + 2) dot (1 + 2) = (1 dot 1) + (1 dot 2) + (2 dot 1) + (2 dot 2).
@@ -945,7 +944,7 @@
 
   No matter, moving on.
 
-/ Problem 1--21: \
+/ Problem 1-21: \
   I'm asked about the total number of pages in the books I own and whether that number is around 1
   million pages. Then I'm also asked to estimate whether the total number of pages in my school
   library is also around that number.
@@ -999,10 +998,10 @@
   Accounting for books that are less than the lower end of the average (i.e. less than 500 pages,)
   this would still make for a number well above 1 million pages.
 
-/ Problem 1--22: \
+/ Problem 1-22: \
   This one asks about the amount of words on Skiena's book.
 
-  From looking at one regular (non--problem--full page,) I'd wager the font is a Computer Modern at
+  From looking at one regular (non-problem-full page,) I'd wager the font is a Computer Modern at
   $12 "pt"$ and the page size is a US Letter. Based on personal experience, I'd estimate there are
   about 350 to 400 words per page. Considering the first part of the book stands at about 430 pages,
   as that is the part of the book for which I'm considering this first approximation, there ought be
@@ -1016,18 +1015,18 @@
 
   Thus my total estimate is of $160 000 + 110 000 = 270 000$ words in Skiena's book.
 
-/ Problem 1--23: \
+/ Problem 1-23: \
   I am to estimate the number of hours in 1 million seconds, as well as possibly the number of days.
   Because the problem explicitly states that the arithmetic should be performed on one's own head,
   I'll just list the result I considered.
 
   In terms of hours, about 250 hours. In terms of days, about 10 days.
 
-/ Problem 1--24: \
+/ Problem 1-24: \
   I'm expected to compute the number of cities and towns in the whole of the USoA.
 
   I barely know the population distribution in the US, so I'm going to throw some wild guesses based
-  on the trends I've observed from other first--world, western countries.
+  on the trends I've observed from other first-world, western countries.
 
   The population centers are centered about the coasts, and I recall there being a bunch of names
   especially in the sides of the country that went across a large area of those regions. Dare I say,
@@ -1054,17 +1053,17 @@
     100 dot 2 + 90 dot 2 + 80 dot 2 + 70 dot 2 + 60 dot 2 = 800 "cities and towns in the US".
   $
 
-/ Problem 1--25: \
+/ Problem 1-25: \
   I am to estimate the number of cubic miles of water that flow out of the Mississipi River on a
   daily basis.
 
   I don't have the first idea of how wide that river is, but I've heard of it and there must be a
-  reason why the author is using a sort--of well--known river in his book, so I'm going to assume
-  it's fairly thick; Let's go for $2 "km"$ wide.
+  reason why the author is using a sort-of well-known river in his book, so I'm going to assume it's
+  fairly thick; Let's go for $2 "km"$ wide.
 
   Based on the same fact, I'd guess that river is likely fairly long, which in US terms possibly
   means it crosses 3 to 4 different, and big, states. If I define "big state" as a state of about
-  $1000 "km"$ cross--section, then if the river were to cross 3 of these, it should be about
+  $1000 "km"$ cross-section, then if the river were to cross 3 of these, it should be about
   $3 dot 1000 = 3000 "km"$ long.
 
   With a width of $2 "km"$ and a length of $3000 "km"$, and considering $1 "mi" approx 1.25 "km"$,
@@ -1078,14 +1077,14 @@
   $(1500 space "mi"^3) / (1.5 space "s") times 24 space "h" dot 3.6 times 10^2 space "s" approx 8 times 10^6 space "mi"^3$
   flowing out of the Mississipi River each day.
 
-/ Problem 1--26: \
+/ Problem 1-26: \
   Now I'm expected to estimate the amount of Starbucks and McDonald's in my country.
 
   Based on the fact my country only happens to have those in the "main cities" of each locality,
   there ought be about 20 between both franchises on each of the about 15 main cities around my
   country, so this goes for $20 dot 15 = 300$ Starbucks and McDonald's in my country.
 
-/ Problem 1--27: \
+/ Problem 1-27: \
   Now I need to compute the amount of time it would take to empty a bathhub with a drinking straw.
 
   Assumming the bathhub is full, and it can hold about $30 space "l"^3$, and assumming as well that
@@ -1097,7 +1096,7 @@
 
   So a bit less than 2 hours.
 
-/ Problem 1--30: \
+/ Problem 1-30: \
   I ought implement the #smallcaps[TSP] heuristics mentioned in the chapter and determine which of
   them is more performant. I should also try to think of a better solution if I can find one off the
   top of my head.
@@ -1110,15 +1109,15 @@
   This can be modeled after a complete, weighted graph $G = (V, E)$, where each edge $(i, j) in E$
   considers the distance between its connecting vertices, namely $i, j$.
 
-  The first heuristic mentioned in the book is that of the _nearest--neighbor_. This should prove to
+  The first heuristic mentioned in the book is that of the _nearest-neighbor_. This should prove to
   be the simplest to implement, even though it is far from finding the optimal path as it considers
   the nearest vertex to the one currently considered in a loop. This implies the path is not taken
   into consideration, because only the distance of every other vertex to the "current" vertex is
   regarded when taking the decision to move to the next edge. Adding up each of these distances, the
   total path ends up being much larger than it needs to be.
 
-  Using an adjacency matrix for the graph DS, the nearest--neighbor heuristic would require keeping
-  a list of all the vertices that have not yet been visited, while selecting some vertex from the
+  Using an adjacency matrix for the graph DS, the nearest-neighbor heuristic would require keeping a
+  list of all the vertices that have not yet been visited, while selecting some vertex from the
   matrix. Because the heuristic doesn't specify that the selected vertex be random, we can simply
   pick the first vertex.
 
@@ -1133,14 +1132,14 @@
 
   In Rust, we can keep track of an adjacency matrix DS with a custom type holding a vector of
   vectors of another custom type for edges. The edge type must consider one of two possible states;
-  Weighted edges and nonexistent edges. The nature of the problem follows that no self--loops are
+  Weighted edges and nonexistent edges. The nature of the problem follows that no self-loops are
   allowed, and the graph is complete because there's implicit edges between any nodes. By the
   problem description, it also follows that all edges are attributed a weight reflecting the
   distance between the connecting vertices.
 
-  This may be modeled in the constructor of the matrix DS through linear--cost operations that check
+  This may be modeled in the constructor of the matrix DS through linear-cost operations that check
   for the matrix to #l-enum[be square (i.e. it's a graph proper)][have a main diagonal made out of
-    nonexistent edge variants (i.e. it's got no self--loops,) and][have the values below and above
+    nonexistent edge variants (i.e. it's got no self-loops,) and][have the values below and above
     the main diagonal be equal (i.e. the graph is undirected.)]
 
   The pattern to check for when considering whether the elements of each row are nonexistent or
@@ -1148,10 +1147,9 @@
   as the current row's index in the overarching matrix are nonexistent, while all others are
   weighted.
 
-  Let me get some form of pseudocode out for what I understand the nearest--neighbor heuristic to
-  be.
+  Let me get some form of pseudocode out for what I understand the nearest-neighbor heuristic to be.
 
-  #pseudocode(title: smallcaps(all: false)[Nearest--Neighbor($G$)])[
+  #pseudocode(title: smallcaps(all: false)[Nearest-Neighbor($G$)])[
     + $"visited" <- emptyset$
     + *for* $v$ *in* $V, "where" G = (V, E)$ *do*
       + $"visited" <- "visited" union {0}$
@@ -1184,15 +1182,15 @@
   performing a full check of all elements of the adjacency matrix on every loop iteration, the
   iterator over the tracking list skips the first $n$ elements that are known to have already been
   checked. Or not, because it could very well be that the next node in the path is not the one
-  immediately "following" (in terms of 0--indexed vertex identifiers) the one we just processed.
+  immediately "following" (in terms of 0-indexed vertex identifiers) the one we just processed.
 
-  The next heuristic is based on the same concept as the union--find DS, as it uses a closest pair
-  approach whereby we initially consider a forest of single--vertex trees, each representing one of
+  The next heuristic is based on the same concept as the union-find DS, as it uses a closest pair
+  approach whereby we initially consider a forest of single-vertex trees, each representing one of
   the vertices/locations in the graph. For each one of those initial trees minus 1, the algorithm
   goes through all separate trees and considers the edge between vertices of differing trees that
   has the smallest separating distance (i.e. the lightest edge.)
 
-  Implementing this is likely going to require building an auxiliary DS for the union--find data
+  Implementing this is likely going to require building an auxiliary DS for the union-find data
   structure that is customized to the needs of this problem. This context has the particularity that
   each of the trees needs to additionally support an operation for traversal of the nodes in each
   tree of the forest/disjoint set, but doesn't require keeping track of the tree height because path
@@ -1200,19 +1198,19 @@
   implementing an iterator with special properties.
 
   The iterator should consider each of the trees, and for each node in the tree, it should produce a
-  2--tuple `Some((i, j))` where $mono(i) := T_0, mono(j) := T_1$. This means the iterator needs to
+  2-tuple `Some((i, j))` where $mono(i) := T_0, mono(j) := T_1$. This means the iterator needs to
   keep track of the current tree being explored, the node of the current tree being considered and
   additionally, it will require knowing how many and which trees are left, as well as their
   component nodes.
 
   To support this, the design of the DS will need to keep track of #l-enum[an identifier assigned to
-    each of the vertices][an array modeled after a backward--edge parent--tree, and][basic UFDS
+    each of the vertices][an array modeled after a backward-edge parent-tree, and][basic UFDS
     operations (`unite`, `find`, `same`.)]
 
   The first requirement is simple enough; We follow the same reasoning as with the nearest neighbor
   heuristic and use the indices of the vertices in the adjacency matrix as the numerical
-  identifiers. The second requirement should be enough to leave the heavy--lifting traversal logic
-  to the iterator, which itself is going to use the basic operations in abundance.
+  identifiers. The second requirement should be enough to leave the heavy-lifting traversal logic to
+  the iterator, which itself is going to use the basic operations in abundance.
 
   To allow for less computations to be performed on each call to `next()`, the iterator should also
   keep internal state to be initialized with the call to `iter()`. This should contain a record of
@@ -1221,7 +1219,7 @@
   currently considered node.
 
   Because all elements to be iterated over are known the moment the `iter()` call is made, the
-  iterator can precompute, on a per--node basis, the Cartesian product of
+  iterator can precompute, on a per-node basis, the Cartesian product of
 
   $
     {a} times {b, c, dots.c, n},
@@ -1247,14 +1245,14 @@
 
   The thing here is that the semantics of the `Pairs` iterator would be wrong if the `min()` method
   weren't overridden. Sure `min()` just calls `min_by()` with the standard `Ord` implementation of
-  the iterated--over `Item`, but this is no excuse for not overriding the implementation. We have an
+  the iterated-over `Item`, but this is no excuse for not overriding the implementation. We have an
   answer.
 
   To override `min()`, I believe the implementation should transform the iterated sequence in the
   same vein as `min_by_key()`'s parameterized closure, after which a regular `min()` may be called.
   The only issue here is that `min()` would force a reduction, which itself forces a fold, which
   itself forces complete consumption of the iterator. In and of itself, this is no issue,
-  considering this is a `self`--owning method in `Iterator`, but the way the iterator is built, this
+  considering this is a `self`-owning method in `Iterator`, but the way the iterator is built, this
   would make it so that `Pairs` would have to compute the complete set of... nothing.
 
   It's actually pretty simple. I need only call `min_by_key()` with a closure transforming the pairs
@@ -1293,35 +1291,35 @@
   overarching loop over $n - 1$ nodes of the graph.
 
   The implementation for `min()` should now be modified from the original use of `min_by_key()`, as
-  all logic pre--implemented on the iterator is not going to stop at the end of the current
-  Cartesian product. The implementation should follow that the `min()` method would call `next()`
-  for as long as the internal state on `Pairs` yields the same value on the `current_node` field.
-  For that, an infinite loop over `next()` calls, checking everytime that `self.currrent_node`
-  hasn't changed, while collecting all yielded values in a vector, should do just fine. Then we can
-  call `min_by_key()` on an interator over the vector such that we first transform each pair into
-  the corresponding weighted edge in the graph (including an `unreachable!()` macro call for the
-  case of an `Edge::None` variant,) and let this method do its thing with the `Ord` trait
-  implementation on the underlying weight (the `usize` field within the `Edge` tuple variant.)
+  all logic pre-implemented on the iterator is not going to stop at the end of the current Cartesian
+  product. The implementation should follow that the `min()` method would call `next()` for as long
+  as the internal state on `Pairs` yields the same value on the `current_node` field. For that, an
+  infinite loop over `next()` calls, checking everytime that `self.currrent_node` hasn't changed,
+  while collecting all yielded values in a vector, should do just fine. Then we can call
+  `min_by_key()` on an interator over the vector such that we first transform each pair into the
+  corresponding weighted edge in the graph (including an `unreachable!()` macro call for the case of
+  an `Edge::None` variant,) and let this method do its thing with the `Ord` trait implementation on
+  the underlying weight (the `usize` field within the `Edge` tuple variant.)
 
   Maybe the whole implementation is wrong. Revisiting Skiena's book, it does mention that the
   algorithm checks for the smallest weight among all pairs made out of vertices of differing chains.
   This implies the `min()` operation ought act on all computed Cartesian products, which itself
   means that the iterator should be completely iterated over but not consumed. This is so that after
   finding the minimum weight edge at the end of a full iteration, we may use the `unite()` operation
-  on the UFDS--like DS inside `Pairs` to update the forest of disjoint vertex chains. So this still
+  on the UFDS-like DS inside `Pairs` to update the forest of disjoint vertex chains. So this still
   means the approach with `by_ref()` is correct, but the more complex implementation of `min()` is
   not. Though this does imply a fully consuming operation with `min_by_key()` is possible, and very
   much simpler than the current implemenation with `min()`. If anything, the same operation may be
   reimplemented as it was before.
 
-  The thing to consider here is that the `Pairs` iterator ought be reset to a pre--iteration state
-  on all fields but `chains`, which keeps track of the vertex chain across #smallcaps[TSP] algorithm
+  The thing to consider here is that the `Pairs` iterator ought be reset to a pre-iteration state on
+  all fields but `chains`, which keeps track of the vertex chain across #smallcaps[TSP] algorithm
   iterations. More specifically, the iterator must call `min()` inside the hot loop of `tsp()`, then
-  `unite()` with the returned 2--tuple, and then it must reset all fields but `chains` prior to
+  `unite()` with the returned 2-tuple, and then it must reset all fields but `chains` prior to
   continuing with the next iteration of said loop. The `output` auxiliary vector on the `tsp()`
   implementation should not be required once the forest in `pairs_iter` is made out of only a single
   vertex chain. Still, at the end of `tsp()` there's no indication of which node in field `chains`
-  is the "leaf" of the chain, and for that matter, there's no invariant that holds between non--leaf
+  is the "leaf" of the chain, and for that matter, there's no invariant that holds between non-leaf
   nodes and branch nodes. The only invariant is that of the root node, which will refer to itself.
   So the auxiliary variable is necessary.
 
@@ -1336,19 +1334,19 @@
     ), "where negative weights denote nonexistent edges".
   $
 
-  This should yield the 0--indexed--based #smallcaps[TSP] ${0, 1, 2, 0}$.
+  This should yield the 0-indexed-based #smallcaps[TSP] ${0, 1, 2, 0}$.
 
   I've stumbled upon what seems like an issue in the way Rust is considering overridden
-  implementations of trait methods after calling a non--overridden implementation of some other
+  implementations of trait methods after calling a non-overridden implementation of some other
   (same) trait method, both outfit with a default implementation in the `trait` block. The call
   chain in question follows that for some trait `E` implemented on a type `T`, where a method `a`
-  with a by--value, consuming receiver `self`, is overridden, such overridden method is _not_
-  correctly handled when called after another non--overidden method returning a `&mut self` to the
+  with a by-value, consuming receiver `self`, is overridden, such overridden method is _not_
+  correctly handled when called after another non-overidden method returning a `&mut self` to the
   type `T`.
 
-  The most natural way for the issue to arise is by a (non--overridden) call to `by_ref()` on a type
+  The most natural way for the issue to arise is by a (non-overridden) call to `by_ref()` on a type
   `T` implementing the `Iterator` trait, followed by an overridden call to some method `a()` taking
-  in as a receiver a non--mutable, consuming, `self`. Instead of having the overriden method `a()`
+  in as a receiver a non-mutable, consuming, `self`. Instead of having the overriden method `a()`
   act on the mutable reference returned by `by_ref()`, thus still changing the iterator's state but
   not consuming it, the call is performed to the default implementation in `Iterator` of method
   `a()` (the compiler does not complain and the reference doesn't seem to speak of any issues with
@@ -1393,7 +1391,7 @@
   chain.
 
   *Note: _the following comments use the word_ permutation _quite loosely to describe the result of
-  a combinatorial process whereby a set of integer numbers is mapped to an equivalent--length set of
+  a combinatorial process whereby a set of integer numbers is mapped to an equivalent-length set of
   Cartesian products where each one of those numbers is the lhs of such operation, and an improper
   subset comprising the complement of the intersection of the prior singleton set with the original
   set makes up the rhs._*
@@ -1441,19 +1439,19 @@
 
   $
     underbrace(sum_(i = 1)^(n - 1), "loop")
-    (overbrace(n, "min"#repr([--])"finding operation") dot
+    (overbrace(n, "min"#repr([-])"finding operation") dot
       underbrace((n dot k), "permutation of Cartesian products")).
   $ <p130-initialformula>
 
   The actual cost $k$ of a single Cartesian product in the above formula should be $n - 1$ on the
   first iteration, but on subsequent iterations should become $n - i$ only for those nodes now
-  contained within the same tree (i.e. whichever two nodes were UFDS--`unite`d at the end of the
+  contained within the same tree (i.e. whichever two nodes were UFDS-`unite`d at the end of the
   prior iteration upon computing the minimum value of all Cartesian products.) This, though, is
   still deterministic in nature; At any given iteration one should expect a cost of $i dot (n - i)$
   for the trees that are not in the same node, and $(n - i) dot n$ for whichever trees are still
-  only made out of single--vertex roots.
+  only made out of single-vertex roots.
 
-  This would model the $k$--term of @p130-initialformula as follows.
+  This would model the $k$-term of @p130-initialformula as follows.
 
   $
     &k = i dot (n - i) + (n - i) dot n, "such that" \
@@ -1467,10 +1465,10 @@
   $n^2 - i^2 != (n - i) dot n, "for some" n, "and" i = 1$. Still, because this is not an unknown, we
   can factor out of the sum the first term, and continue using @p130-secondformula in terms of
   $i > 1$. Or not, because the whole term in @p130-initialformula considering the cost of the
-  permutation may very well be wrong, as it considers the existence of $n$--equivalent permutations,
+  permutation may very well be wrong, as it considers the existence of $n$-equivalent permutations,
   independent of the developed formula for $k$ in @p130-secondformula. This latter term already
   covers the behavior of each individual instance of either #l-enum[nodes in the same tree,
-    or][single--vertex nodes in a disjoint tree], so adding a factor of $n$ to the resulting
+    or][single-vertex nodes in a disjoint tree], so adding a factor of $n$ to the resulting
   computation does not seem logical. I could be wrong, though, as these notes are being taken while
   I solve another, more practical software engineering problem.
 
@@ -1505,7 +1503,7 @@
 
   The actual traversal is likely going to follow the same idea as the original `DFS`, but will not
   be recursive in nature. Instead, it will approach the problem as what it really is; a traversal
-  with a stack--based data structure holding the _discovered_ nodes.
+  with a stack-based data structure holding the _discovered_ nodes.
 
   The underlying structure to be used as a representation of the graph (the tree of `Pairs`) should
   be an adjacency list, considering it's a simple #smallcaps[DAG]. The structure could then be
@@ -1519,7 +1517,7 @@
   passed to the method on `Pairs` should try to find the root of the tree it belongs to not for
   purposes of prioritizing it in the graph, but rather to allow finding the rest of the nodes in the
   UFDS of `Pairs` that are in the same tree. Upon finding the root, the method should contain logic
-  to perform a forest--wide search to find the nodes that also evaluate to the same tree root. Even
+  to perform a forest-wide search to find the nodes that also evaluate to the same tree root. Even
   though I don't plan to call this until the disjoint set is reduced to a single tree, it's best if
   I provide a more generic implementation because the method can't be restricted to be called once a
   single tree is left, and neither is the implementation of such a check any better than performing
@@ -1527,15 +1525,15 @@
   is right.
 
   In terms of the logic to actually build the edge relationships between nodes, I belive it's best
-  if this is also performed in--place along with vertex creation in the graph builder. And maybe
-  this whole logic can be transferred to the graph type's `new()` function, passing it a shared
-  reference to the method--calling `Pairs` instance. In here, as each node in the `Pairs` tree is
-  found to be related to each other by means of belonging to the same tree (as determined by the
-  UFDS `same()` operation,) the overarching graph type being built should consider either
-  #l-enum[pushing the node if its vector doesn't yet contain the corresponding node, or][adding to
-    the corresponding node's linked list an edge relating to the other node being pushed].
+  if this is also performed in-place along with vertex creation in the graph builder. And maybe this
+  whole logic can be transferred to the graph type's `new()` function, passing it a shared reference
+  to the method-calling `Pairs` instance. In here, as each node in the `Pairs` tree is found to be
+  related to each other by means of belonging to the same tree (as determined by the UFDS `same()`
+  operation,) the overarching graph type being built should consider either #l-enum[pushing the node
+    if its vector doesn't yet contain the corresponding node, or][adding to the corresponding node's
+    linked list an edge relating to the other node being pushed].
 
-  To implement this dual--node addition, where one node is always a node that's present (except the
+  To implement this dual-node addition, where one node is always a node that's present (except the
   first time we push onto the adjacency list) and another node is always a new node, such that there
   exists an edge between these, the `ancestors()` method on the passed `Pairs` instance can be used.
 
@@ -1574,7 +1572,7 @@
   element the index itself (i.e. there's only a single root, and thus there's only a single tree.) I
   am lead to believe this could be implemented in terms of an `all()` or `any()` method on an
   iterator over the array, but both of these happen to check for the exact same condition
-  irrespective of the element in question, and they're short--circuiting. Maybe there's something
+  irrespective of the element in question, and they're short-circuiting. Maybe there's something
   else in either the `Vec` docs or the `Iterator` docs that better fits the need of this particular
   context. Maybe a `filter()` on a shared reference iterator over the array and a subsequent
   iterator consumer method like `count()` to assure that there's only a single element whose index
@@ -1586,7 +1584,7 @@
 
   That part of the implementation is done, and now the only thing that remains is implementing
   `Iterator` for `Dfs`. As commented in previous notes, the implementation of the algorithm follows
-  a stack--based DS traversal, which is often implemented in terms of a recursive routine with
+  a stack-based DS traversal, which is often implemented in terms of a recursive routine with
   backtracking once there are no more edges to be traversed. This being an iterator that must
   resolve to a `Some` variant for each element of such traversal, it will require implementing the
   stack behavior manually. The implementation should then be similar in nature to the implementation
@@ -1610,7 +1608,7 @@
   a `Vec<bool>` or in terms of a `usize` where each bit of the bit mask determines the state of one
   of the vertices in the graph. Of course, on most platforms (_most_ here meaning platforms
   following either one of the #smallcaps[LP] or #smallcaps[LLP] memory model abstraction) this would
-  allow up to 256 bits to be used, assumming an 8--byte pointer size on the target the program would
+  allow up to 256 bits to be used, assumming an 8-byte pointer size on the target the program would
   run on. This would also pair well with the current unit tests, which consider graphs with a very
   small amount of vertices (well within bounds of a graph with $abs(V) = 256$.) Still, a
   conservative approach would use an estimate based on the comments of Skiena's book, where
@@ -1634,7 +1632,7 @@
   Indeed, if the element to be returned is the one at index 0, then the `None` branch should not do
   anything beyond setting `current_iter` to `Some(0)`, and returning that same `Some(0)`. Then the
   `discovered` field should still set the flag for the elemetn (index here) for that node, namely
-  index 0, and actually proceed to return the `Option`--wrapped index.
+  index 0, and actually proceed to return the `Option`-wrapped index.
 
   Even though this could yield an valid traversal out of context, this doesn't assure that traversal
   starts at the root of the original tree. This implies that, contrary to what was mentioned before
@@ -1660,7 +1658,7 @@
   unordered container, each run of #smallcaps[DFS] is going to yield a different traversal, as
   iterating through the hashset multiple times, even with the same graph layout, provides no
   guarentees on the order of the yielded elements across runs. This routine, though, relies heavily
-  on performing a pre--order traversal akin to that of binary trees to have the tree in `Pairs` link
+  on performing a pre-order traversal akin to that of binary trees to have the tree in `Pairs` link
   its leaves together. The solution could quite possibly go through replacing the hashset in the
   adjacency list used for the `Dfs` graph to a collection storing its elements in contiguous memory.
   The downside is going to be refactoring `new()` from `AdjacencyList` such that it still performs
@@ -1705,7 +1703,7 @@
   setting.
 
   Given a tree with three child nodes stemming from the root, the second call to `next()` would add
-  all child nodes to the stack, and then select one of those (this being "non--deterministic" in
+  all child nodes to the stack, and then select one of those (this being "non-deterministic" in
   nature because the source of those child nodes is the hashset holding the vertices adjacent to, in
   this instance, the root node of the tree.) Assume then that 2 of those child nodes are leaf nodes,
   and the other roots itself a subtree with a single descendant. Assume as well that the top of the
@@ -1721,15 +1719,15 @@
   that could be made from, off the top of my head, #l-enum(
     numbering: "(a)",
   )[performing the inherent conversion into a binary tree that is possible with any simple
-    #smallcaps[DAG] and then more easily implementing a pre--order traversal iterator such that the
+    #smallcaps[DAG] and then more easily implementing a pre-order traversal iterator such that the
     child nodes are actually modelled after an equivalent, embedded graph, or][keep track of the
     original nodes from the `Pairs` tree such that the stack can decide which of the equivalently
     possible nodes to move on to `current_iter` should actually move on to].
 
-  To recap the high--level sequence of steps that this execution branch should go through: Update
-  the stack by pushing to it the vertices adjacent to `current_iter`, then fetch the top of the
-  stack and update `current_iter` with that value, prior to popping the top of the stack off, and
-  finally setting the flag in `discovered` for the new value of `current_iter`.
+  To recap the high-level sequence of steps that this execution branch should go through: Update the
+  stack by pushing to it the vertices adjacent to `current_iter`, then fetch the top of the stack
+  and update `current_iter` with that value, prior to popping the top of the stack off, and finally
+  setting the flag in `discovered` for the new value of `current_iter`.
 
   Testing has already started with the supposedly completed `tsp()` method for `TSPClosestPair`. The
   thing is done, but the tests fail with a panic in the `Iterator` implementation for the `Dfs`
@@ -1737,7 +1735,7 @@
   perform an indexed access operation over the hashmap being used in the adjacency list abstraction,
   and that hashmap doesn't seem to contain the look up key. This shouldn't even be possible,
   considering the thing that indexes the hashmap is `current_iter`, and this only ever gets values
-  from the original `Pairs` tree. If there really is no way the logic in the non--graph--exclusive
+  from the original `Pairs` tree. If there really is no way the logic in the non-graph-exclusive
   fields of the `Dfs` iterator is wrong, then maybe what's wrong is the logic building the
   `AdjacencyList` in its `new()` associated function.
 
@@ -1750,7 +1748,7 @@
   The last comments I made on the analysis were debating the possibility for it to be completely
   wrong, so instead of trying to accomodate some new conclusion to the existing material, I believe
   it best to simply analyze the implementation from the scratch. This was going to be necessary
-  anyway, considernig the latest, working implementation adds more non--constant time operations.
+  anyway, considernig the latest, working implementation adds more non-constant time operations.
 
   Prior to jumping onto the analysis, it's important to note the three main components with linear
   or sublinear cost in the operations performed within the hot loop of the algorithm. First, the
@@ -1765,17 +1763,17 @@
 
   Adding up the values of each of these for every single one of the $n - 1$ iterations in the main
   loop should yield the total cost for the algorithm, where $n$ is the number of nodes in the tree,
-  and on a higher--level, the number of points that the robot arm must go through.
+  and on a higher-level, the number of points that the robot arm must go through.
 
   We'll start the analysis with the `min_fix()` operation. The core of this routine considers all
   trees in the forest, and given some node $a$, determines the lightest edge in the graph, denoted
   by ordered pair $(a, b)$, sourced from the union of all sets yielded by each of the Cartesian
   products. The behavior of this follows that for each of the $n - 1$ iterations of the main loop,
   the program experiments two different costs: #l-enum[on the first iteration, the Cartesian product
-    computed is the same for all nodes in the tree, as they are single--vertex disjoint trees, this
+    computed is the same for all nodes in the tree, as they are single-vertex disjoint trees, this
     being the initial state of the #smallcaps[UFDS]][on subsequent iterations, the nodes belonging
     to the same tree will compute a Cartesian product equivalent to $n - i$, where $i$ denotes the
-    (0--indexed) running iteration count]. The operation should thus have a cost of $n dot n$ when
+    (0-indexed) running iteration count]. The operation should thus have a cost of $n dot n$ when
   iterating through the the first value of `current_node` in `Pairs` (i.e. the first iteration of
   the hot loop,) and for all future iterations should compute $(i dot (n - i) + (n - i) dot n)$,
   where $i$ is the control variable keeping track of the iteration count ($[1, n)$.)
@@ -1806,7 +1804,7 @@
 
   We move on now to the second part of the algorithm, namely the `unite()` #smallcaps[UFDS]
   operation that is (also) guaranteed to run once on each $n - 1$ iteration. This operation is known
-  to have $upright(O)(lg n)$ sublinear performance on a traditional implementation of a union--find
+  to have $upright(O)(lg n)$ sublinear performance on a traditional implementation of a union-find
   DS, but this problem required slightly altering its usual behavior. Under normal circumstances,
   `unite()` would incurr a (constant factors included) cost of $upright(O)(2 dot lg n)$, where $n$
   denotes the upper bound for the sublinear `find()` operation (left unchanged from the regular
@@ -1833,18 +1831,18 @@
   The worst case scenario here would be for some set of points the robot arm ought go through,
   namely the closest edge $(a, b)$, to always bound to hold true that $a < b$ in the extended line
   of $RR$. This would imply that setting up a forest of trees would always force the leaf node of
-  the largest tree to be joined with some other single--vertex tree. The effect of this would be
-  that for such a leaf node $a$ taking the role of the new parent in the #smallcaps[UFDS]--`unite()`
+  the largest tree to be joined with some other single-vertex tree. The effect of this would be that
+  for such a leaf node $a$ taking the role of the new parent in the #smallcaps[UFDS]-`unite()`
   operation, the root node of the tree it would be contained in would be the largest possible tree
   at any given iteration.
 
   Thus, for some number of iterations $n - 1$, if a single tree is the one tree that always keep
-  growing, the resulting height of that tree at any given (0--indexed) iteration $i$ would be $i$
+  growing, the resulting height of that tree at any given (0-indexed) iteration $i$ would be $i$
   itself, such that by the end iteration, namely $n - 1$, the tree height would finally become a
-  linked list--like structure akin to a chain of vertices with height (length or size for linked
-  DSs) $n$ (upon completion of the last `unite()` operation prior to exitting the algorithm's main
-  loop.) This means that each `unite()` operation calling the `find()` routine on the
-  (to--be--parent) node would incurr $i$ stack frame allocations to find the actual parent of $a$.
+  linked list-like structure akin to a chain of vertices with height (length or size for linked DSs)
+  $n$ (upon completion of the last `unite()` operation prior to exitting the algorithm's main loop.)
+  This means that each `unite()` operation calling the `find()` routine on the (to-be-parent) node
+  would incurr $i$ stack frame allocations to find the actual parent of $a$.
 
   In such a worst case, the total cost of the `unite()` operation would be
 
@@ -1853,7 +1851,7 @@
                           & = (n^2 + n - 2n) / 2 = 1 / 2 (n^2 - n) approx upright(O)(n^2).
   $
 
-  The total running cost so far, accounting for both the prior, fixed--cost combination of Cartesian
+  The total running cost so far, accounting for both the prior, fixed-cost combination of Cartesian
   products and for the latest conclusion on the cost of the (modified) `unite()` operation, is
   $Theta(n^3) dot upright(O)(n^2)$. Note *there's a mistake* in the computation of the asymptotic
   running time of the `min_fix()` operation, as it uses the known result on sums
@@ -1862,15 +1860,15 @@
   right treatment of the formula.
 
   Finally, we discuss the time complexity of the conditional operation performed on some node $b$ in
-  some resulting min--edge denoted by ordered pair $(a, b)$, where node $b$ is the vertex to become
+  some resulting min-edge denoted by ordered pair $(a, b)$, where node $b$ is the vertex to become
   the child of node $a$ through the `unite()` operation. Note the routine about to be treated is
   what actually allows node $b$ to be assumed to be a root node of the forest, which further allows
   the assumption on the cost of `find()`ing the root of such node to be constant in the analysis of
   the `unite()` operation.
 
-  First, much as with the `unite()` subroutine, we will operate on a worst--case scenario basis as
-  the actual behavior is instance--dependent. To that extent, we assume as a worst--case the
-  possibility for the node to--be--child to be a leaf node in a long tree within the disjoint set.
+  First, much as with the `unite()` subroutine, we will operate on a worst-case scenario basis as
+  the actual behavior is instance-dependent. To that extent, we assume as a worst-case the
+  possibility for the node to-be-child to be a leaf node in a long tree within the disjoint set.
   Such a situation would take place if say, the points the robot arm had to go through were
   separated in such way so as to have half of those nodes tightly gathered around one side, and the
   other half tightly gathered around the opposite side. This would force the disjoint set to, in
@@ -1884,7 +1882,7 @@
   same steps as the `find()` operation, only iteratively instead of recursively. Upon yielding the
   ancestors to some such node $b$, that part of the algorithm in the main loop traverses anew the
   collection of ancestors from the root until node $b$ to perform an $upright(O)(1)$
-  parent--reversing operation on each of them. This would total
+  parent-reversing operation on each of them. This would total
   $2 dot upright(o)(n^2) approx upright(o)(n^2)$.
 
   The final cost of the algorithm is then $Theta(n^3) dot (upright(O)(n^2) + upright(O)(n^2))$. This
@@ -1894,18 +1892,18 @@
 
   Finally, the last part of the problem asks to implement a more optimized heuristic for the
   instance of the #smallcaps[TSP] considered in the robot arm problem. For that, I can implement a
-  known method to solve for a 15--20% suboptimal heuristic based on finding an #smallcaps[MST] of
-  the complete graph under consideration, and then performing #smallcaps[BFS] on it (or was it
+  known method to solve for a 15-20% suboptimal heuristic based on finding an #smallcaps[MST] of the
+  complete graph under consideration, and then performing #smallcaps[BFS] on it (or was it
   #smallcaps[DFS]? I need to check out the algorithm catalogue on the book,) while keeping a record
   of each fully processed vertex in the graph serving as the sequence of points to be visited in the
   tour. After having read the section on Skiena's catalogue, I can say the heuristic I'm going to
-  implement is the #smallcaps[MST]--finding one, followed by a #smallcaps[DFS] on the resulting
-  tree, which counter to what I said before, considers as the resulting path the set of vertices as
-  they are _discovered_, and not once they are _processed_. This approach should also allow me to
-  reuse the `Dfs` iterator I created for the purposes of solving the closest pair heuristic.
+  implement is the #smallcaps[MST]-finding one, followed by a #smallcaps[DFS] on the resulting tree,
+  which counter to what I said before, considers as the resulting path the set of vertices as they
+  are _discovered_, and not once they are _processed_. This approach should also allow me to reuse
+  the `Dfs` iterator I created for the purposes of solving the closest pair heuristic.
 
-  I may also want to research on Kernighan--Lin _k--opt tours_ to apply a 2--opt tour to the result
-  of performing #smallcaps[DFS] on the result of the #smallcaps[MST]. If time allows, research on
+  I may also want to research on Kernighan-Lin _k-opt tours_ to apply a 2-opt tour to the result of
+  performing #smallcaps[DFS] on the result of the #smallcaps[MST]. If time allows, research on
   simulated annealing to further enhance the result of the heuristic would also be great.
 
   To start off, I'll look into both sections of Skiena's book that treat with finding an
@@ -1921,12 +1919,12 @@
   - Section 15.5, on techniques to further improve the #smallcaps[UFDS] DS, beyond mere path
     compression.
 
-  Based on readings about the asymptotic behavior of the #smallcaps[MST]--finding algorithms
+  Based on readings about the asymptotic behavior of the #smallcaps[MST]-finding algorithms
   discussed in the book chapter, I may consider implementing Prim's instead of Kruskal's as the
   latter seems more fit for applications where the subject graph is sparse in nature. In the
   instance of the #smallcaps[TSP] for the robot arm tour, the graph is known to be a complete,
   simple graph so there's bound to be $m = n - 1 "edges, where" G = (V, E), abs(V) = n, abs(E) = m$.
-  This is an inherently dense graph, and for a quick test with $2^80$ vertices, the worst--case
+  This is an inherently dense graph, and for a quick test with $2^80$ vertices, the worst-case
   result of Kruskal's is two orders of magnitude worse than that of Prim's.
 
   The next step is going to be actually reading the above sections on the topic and seeing which
@@ -1951,10 +1949,10 @@
   I'm done reading the catalogue, and I think I have an overall idea of the abstractions behind both
   Delauney triangulation and Voronoi diagrams. Most of the material discussed, though, is not
   relevant to the geometric instance of the robot arm tour problem, as I assume the surface in which
-  the robot is epxected to work in is 2--dimensional. Still, modelling the problem in terms of the
-  simpler approach whereby a convex hull polygon is formed from the sorted x--component of the
-  target points in Euclidean space likely won't do. This is because Skiena himself makes explicit in
-  the #smallcaps[TSP] section that solving it as a geometric problem requires specifically using
+  the robot is epxected to work in is 2-dimensional. Still, modelling the problem in terms of the
+  simpler approach whereby a convex hull polygon is formed from the sorted x-component of the target
+  points in Euclidean space likely won't do. This is because Skiena himself makes explicit in the
+  #smallcaps[TSP] section that solving it as a geometric problem requires specifically using
   Delauney triangulation, and not merely _a_ method of triangulation.
 
   I'll look now into the chapter on computational geometry to better understand the possibilities I
@@ -1966,11 +1964,11 @@
   Programming_,) the edge between the last point in the hull and the one that got cut off is added
   as an edge that is part of the target triangulation. For this, I would need to further expand the
   tests that I currently use for the previously implemented #smallcaps[TSP] heuristics, such that
-  they also include 2--dimensional geometric information on each the points the robot arm must go
+  they also include 2-dimensional geometric information on each the points the robot arm must go
   through. Then I should hold in a contiguous collection all such points, and sort them in
-  $upright(O)(n lg n)$ first by their $x$--components, and second by their $y$--component. For that,
-  I must define a relation of total ordering for the algebraic data type that will represent the
-  2--dimensional points, such that the sorting algorithm performs unstable sorting where elements
+  $upright(O)(n lg n)$ first by their $x$-components, and second by their $y$-component. For that, I
+  must define a relation of total ordering for the algebraic data type that will represent the
+  2-dimensional points, such that the sorting algorithm performs unstable sorting where elements
   with differing values of $y$ but equal values of $x$ are further sorted and not just grouped
   together in their original (or possibly some other) order.
 
@@ -1986,11 +1984,11 @@
   routines involved in this heuristic; Namely, finding the #smallcaps[MST] of the input graph, and
   performing #smallcaps[DFS] on that graph. The only difference now is that the input to `tsp()`
   should augment the information held on each edge of the graph, such that it collects both the
-  weight and the 2--dimensional coordinates of each point. This is going to require new graph and
+  weight and the 2-dimensional coordinates of each point. This is going to require new graph and
   edge primitives. The edge primitive should continue being an enumeration, except for the variant
-  holding a weighted edge, which should be changed from a tuple--like `struct` to a named--field
+  holding a weighted edge, which should be changed from a tuple-like `struct` to a named-field
   `struct` containing the `weight: usize` and the `coord: Point`. The graph primitive should
-  continue being an adjacency matrix because the graph has the same high--density vertex count, but
+  continue being an adjacency matrix because the graph has the same high-density vertex count, but
   it should replace the old edge primitive with the new edge data type. The new macro I already
   introduced to build a vector of `Point`s should be refactored into taking in the weight of the
   edge in the same way as the `matrix!` macro does, and pass it off to the `new()` function of the
@@ -2000,16 +1998,53 @@
   those enforced in `AdjacencyMatrix::new()`; namely that #l-enum[the input matrix should be a
     square matrix][that it should have weighted edges everywhere but in the main diagonal, and][that
     its transpose is equal to the original matrix (which for a square matrix implies that computing
-    the inverse twice returns the same original matrix.)] Implementation--wise, checking for the
-  matrix to be square involves having the function check each of the inner container elements of the
-  overarching container, and making sure the length of each of the formers is equal to the length of
-  the latter. the check for weighted edges should be two--part: #l-enum[filter out the nonexistent
-    edges, and ensure the length of the resulting collection is one less than the length of the
-    iterated--over row vector, and][].
+    the inverse twice (starting with the original matrix) returns the source matrix.)]
+
+  Implementation-wise, checking for the matrix to be square involves having the function make sure
+  each of the inner container elements of the overarching container have the same length as the
+  latter. The check for weighted arcs should be two-part: #l-enum[filter out nonexistent ones, and
+    ensure the length of the resulting collection is one less than the length of the iterated-over
+    vector of arcs for the current vertex; And][ensure the first three row vectors (first three rows
+    of the overarching shared reference to the input matrix) can be checked against their symmetric
+    equivalents for a relation of total equality].
+
+  The last check could be performed by means of an `all()` adapter call to the iterator over the
+  (filtered) row vector, where the passed closure would evaluate whether each element's weight is
+  equal to the weight assigned to the element with reversed indices (i.e. the element in the input
+  matrix that refers to its major (2-dimensional) index as the minor index of the current element,
+  and the same the other way around, starting with the minor index.)
+
+  The approach may prove to be incorrect in the end. The triangulation method proposed by Skiena
+  does not work well with Andrew's algorithm for building the convex hull of a 2-dimensional point
+  set. Following the two-step procedure outlined in the book on competitive programming, during
+  construction of the upper convex hull, the procedure would not always connect with all points
+  lying inside the hull, and so triangulation would quite possibly fail. This is only a theory,
+  though, but it seems that when Skiena specifically mentioned Delauney triangulation, he only meant
+  _Delauney_ triangulation and not regular, convex hull-based triangulation. If this is the case, I
+  have no offline bibliography that explains this specific algorithm.
+
+  It may still work, though. If I can understand Skiena's algorithm, or alternatively get Andrew's
+  algorithm to work with the logic required for triangulation, there seems to be a method to obtain
+  a Delauney triangulation from a regular (possibly) non-delauney triangulation.
+
+  Provided I compute a triangulation for a point set, a linear pass over all edges of that point set
+  can yield a more optimal triangulation, where we define optimality as decreasing the presence of
+  "skinny" triangles, by considering the two triangles formed by that one iteration edge, and
+  whether the quadrilateral formed from joining both of those triangles is convex. If the resulting
+  polygon is convex (which can be found out by checking if all the points in the segment formed from
+  joining the vertices of any two points in it lies within the inner area of the polygon,) then the
+  iterated-over edge, namely the internal edge, can be replaced by another edge joining the two
+  other vertices of the quadrilateral to see whether this new local triangulation yields less
+  "skinny" triangles. Repeating this over all edges should produce a Delauney triangulation from any
+  other triangulation.
+
+  The point now is to see whether I can understand Skiena's algorithm for building the convex hull,
+  or whether Andrew's algorithm (which I already understand) can also be used in conjunction with
+  Skiena's algorithm for building a triangulation from the cut off points of the convex hull.
 
 === LeetCode problems
 
-/ Problem 1--1: \
+/ Problem 1-1: \
   *Daily temperatures*
 
   Given an array of integers `temperatures` representing daily temperatures, return an array
@@ -2037,7 +2072,7 @@
   - $1 <= mono("temperatures.length") <= 10^5$
   - $30 <= mono("temperatures[i]") <= 100$
 
-/ Problem 1--2: \
+/ Problem 1-2: \
   *Rotate list*
 
   Given the `head` of a linked list, rotate the list to the right by `k` places.
@@ -2058,7 +2093,7 @@
   - $-100 <= mono("Node.val") <= 100$
   - $0 <= mono("k") <= 2 dot 109$
 
-/ Problem 1--3: \
+/ Problem 1-3: \
   *Wiggle Sort II*
 
   Given an integer array `nums`, reorder it such that
