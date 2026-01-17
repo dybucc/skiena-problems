@@ -1097,14 +1097,14 @@
   So a bit less than 2 hours.
 
 / Problem 1-30: \
-  I ought implement the #smallcaps[TSP] heuristics mentioned in the chapter and determine which of
-  them is more performant. I should also try to think of a better solution if I can find one off the
-  top of my head.
+  I ought implement the TSP heuristics mentioned in the chapter and determine which of them is more
+  performant. I should also try to think of a better solution if I can find one off the top of my
+  head.
 
-  The problem treated in the section pointed to by the problem is a symmetric instance of the
-  #smallcaps[TSP], where a robot arm ought go through a set of points, starting from some point $a$
-  and ending at the same point $a$ while taking as little time as possible in taking the tour across
-  the rest of the locations.
+  The problem treated in the section pointed to by the problem is a symmetric instance of the TSP,
+  where a robot arm ought go through a set of points, starting from some point $a$ and ending at the
+  same point $a$ while taking as little time as possible in taking the tour across the rest of the
+  locations.
 
   This can be modeled after a complete, weighted graph $G = (V, E)$, where each edge $(i, j) in E$
   considers the distance between its connecting vertices, namely $i, j$.
@@ -1268,17 +1268,17 @@
   trees.) There's two alternatives: #l-enum[Continue overriding the `min` implementation of
     `Iterator` with the right collection of values, or][Implement a method on the `Pairs` type with
     the same logic but fully correct semantics (such that no cloning is involved in the process of
-    computing the minimum weight edge in the #smallcaps[TSP] algorithm in which it is used.)]
+    computing the minimum weight edge in the TSP algorithm in which it is used.)]
 
   Embedding the right semantics for unordered pairs of edges in the graph within the `min()` method
   of `Iterator`, such that it doesn't consume the whole iterator, is hard. The trait method
   signature cannot be overridden, so even if the iterator performed the correct set of operations,
   the mere call to the consumer method would force a move on the `Pairs` instance we intended on
-  keeping valid throughout the whole #smallcaps[TSP] algorithm implementation. The only real option
-  is using a method on the type, such that it makes use of a mutable receiver and allows for
-  consistent mutation through select calls to the `Iterator` trait methods to advance the Cartesian
-  product pair so long as the next call to the iterator does not yield a Cartesian product where the
-  first element is different from the `self.current_node` taking up the lhs of said operation.
+  keeping valid throughout the whole TSP algorithm implementation. The only real option is using a
+  method on the type, such that it makes use of a mutable receiver and allows for consistent
+  mutation through select calls to the `Iterator` trait methods to advance the Cartesian product
+  pair so long as the next call to the iterator does not yield a Cartesian product where the first
+  element is different from the `self.current_node` taking up the lhs of said operation.
 
   An alternative to the method implementation would be to implement `min()` as `Iterator` under the
   assumption that the method will be called after `by_ref()`, which should yield a mutable reference
@@ -1313,15 +1313,15 @@
   reimplemented as it was before.
 
   The thing to consider here is that the `Pairs` iterator ought be reset to a pre-iteration state on
-  all fields but `chains`, which keeps track of the vertex chain across #smallcaps[TSP] algorithm
-  iterations. More specifically, the iterator must call `min()` inside the hot loop of `tsp()`, then
-  `unite()` with the returned 2-tuple, and then it must reset all fields but `chains` prior to
-  continuing with the next iteration of said loop. The `output` auxiliary vector on the `tsp()`
-  implementation should not be required once the forest in `pairs_iter` is made out of only a single
-  vertex chain. Still, at the end of `tsp()` there's no indication of which node in field `chains`
-  is the "leaf" of the chain, and for that matter, there's no invariant that holds between non-leaf
-  nodes and branch nodes. The only invariant is that of the root node, which will refer to itself.
-  So the auxiliary variable is necessary.
+  all fields but `chains`, which keeps track of the vertex chain across TSP algorithm iterations.
+  More specifically, the iterator must call `min()` inside the hot loop of `tsp()`, then `unite()`
+  with the returned 2-tuple, and then it must reset all fields but `chains` prior to continuing with
+  the next iteration of said loop. The `output` auxiliary vector on the `tsp()` implementation
+  should not be required once the forest in `pairs_iter` is made out of only a single vertex chain.
+  Still, at the end of `tsp()` there's no indication of which node in field `chains` is the "leaf"
+  of the chain, and for that matter, there's no invariant that holds between non-leaf nodes and
+  branch nodes. The only invariant is that of the root node, which will refer to itself. So the
+  auxiliary variable is necessary.
 
   So the implementation is done, but it may be faulty in some respects. Considering the simple
   adjacency matrix $M_1$ as follows,
@@ -1334,7 +1334,7 @@
     ), "where negative weights denote nonexistent edges".
   $
 
-  This should yield the 0-indexed-based #smallcaps[TSP] ${0, 1, 2, 0}$.
+  This should yield the 0-indexed-based TSP ${0, 1, 2, 0}$.
 
   I've stumbled upon what seems like an issue in the way Rust is considering overridden
   implementations of trait methods after calling a non-overridden implementation of some other
@@ -1396,10 +1396,9 @@
   subset comprising the complement of the intersection of the prior singleton set with the original
   set makes up the rhs._*
 
-  After having finished the implementation of the the two (feasible) #smallcaps[TSP] heuristics in
-  Section 1.1 of the book, I can not say which is more efficient based on benchmarks, as I happen to
-  have found what seems like a compiler error in my langauge of choice when implementing the second
-  heuristic.
+  After having finished the implementation of the the two (feasible) TSP heuristics in Section 1.1
+  of the book, I can not say which is more efficient based on benchmarks, as I happen to have found
+  what seems like a compiler error in my langauge of choice when implementing the second heuristic.
 
   But purely out of manual, theoretical (and personally primitive) algorithm time complexity
   analysis, my implementation of the nearest neighbor heuristic seems to run in
@@ -1434,8 +1433,7 @@
   This behavior is completely deterministic in nature, as each iteration is assured to decrease the
   number of disjoint trees in the forest by exactly 1. Thus the total cost upon exitting the loop
   can be modeled as follows on any run of the algorithm so long as the precondition on the type of
-  graph used is upkept (which always holds true if the problem is a symmetric instance of the
-  #smallcaps[TSP].)
+  graph used is upkept (which always holds true if the problem is a symmetric instance of the TSP.)
 
   $
     underbrace(sum_(i = 1)^(n - 1), "loop")
@@ -1487,9 +1485,9 @@
   function parameter node.
 
   So the algorithm has been implemented successfully. Now the thing that remains is to add a new
-  iterator type that can perform #smallcaps[DFS] on the resulting tree, such that it yields each of
-  the nodes in the path, while the caller of the iterator adds those nodes to the vector that is to
-  be returned in the `tsp()` trait method of `TSPClosestPair`.
+  iterator type that can perform DFS on the resulting tree, such that it yields each of the nodes in
+  the path, while the caller of the iterator adds those nodes to the vector that is to be returned
+  in the `tsp()` trait method of `TSPClosestPair`.
 
   The implementation should follow that `Pairs` should have a method of its own, such that provided
   the index of a node within the bounds the of its underlying `forest` field, it returns a `DFS`
@@ -1497,20 +1495,20 @@
 
   To more easily compute the `DFS` of the provided tree, it's best if the method on `Pairs` also
   includes logic to compute a graph structure (not `AdjacencyMatrix` because that's only valid for
-  the symmetric instance of the #smallcaps[TSP],) such that `DFS` keeps ownership over that
-  structure, but the structure itself is made out of references to the `Pairs` iterator, thus tying
-  the lifetime of the whole `DFS` to that of the `Pairs` iterator, which makes sense.
+  the symmetric instance of the TSP,) such that `DFS` keeps ownership over that structure, but the
+  structure itself is made out of references to the `Pairs` iterator, thus tying the lifetime of the
+  whole `DFS` to that of the `Pairs` iterator, which makes sense.
 
   The actual traversal is likely going to follow the same idea as the original `DFS`, but will not
   be recursive in nature. Instead, it will approach the problem as what it really is; a traversal
   with a stack-based data structure holding the _discovered_ nodes.
 
   The underlying structure to be used as a representation of the graph (the tree of `Pairs`) should
-  be an adjacency list, considering it's a simple #smallcaps[DAG]. The structure could then be
-  modeled after the `std::collections::LinkedList` container, such that it would act as a wrapper
-  around the type, where an `inner` field would hold a `Vec` of `LinkedList`s to refer to the edges
-  of each of the vertices in the graph. This is going to require some preprocessing on the side of
-  the `Pairs` builder method.
+  be an adjacency list, considering it's a simple DAG. The structure could then be modeled after the
+  `std::collections::LinkedList` container, such that it would act as a wrapper around the type,
+  where an `inner` field would hold a `Vec` of `LinkedList`s to refer to the edges of each of the
+  vertices in the graph. This is going to require some preprocessing on the side of the `Pairs`
+  builder method.
 
   Because the structure that will hold the graph that will then be part of `DFS` is a graph DS, the
   notion of _root node_ is devoid of meaning, and this logic follows that same idea. Thus the node
@@ -1552,10 +1550,10 @@
   name of the graph DS type.) This is not going to be ideal because each of those checks is going to
   be $Omega(n + m), "where" G = (V, E), abs(V) = n, abs(E) = m$. This has been solved by means of
   replacing the underlying DS to be a hashmap instead of a contiguous chunk of memory, each hashmap
-  contaning itself another hashset to perform as well $upright(O)(1)$ queries into the existence of
-  some key. This should still prove to be correct, as the container an adjacency list is modelled
-  after doesn't require there being an order between nodes, nor does it expect to keep an order
-  between the edges each of those nodes has.
+  contaning itself another hashset to perform as well $O(1)$ queries into the existence of some key.
+  This should still prove to be correct, as the container an adjacency list is modelled after
+  doesn't require there being an order between nodes, nor does it expect to keep an order between
+  the edges each of those nodes has.
 
   The `dfs()` method to return the `Dfs` iterator may end up having to perform the check I mentioned
   on all nodes being part of a single tree, because I implemented `AdjacencyList::new()` in terms of
@@ -1576,7 +1574,7 @@
   else in either the `Vec` docs or the `Iterator` docs that better fits the need of this particular
   context. Maybe a `filter()` on a shared reference iterator over the array and a subsequent
   iterator consumer method like `count()` to assure that there's only a single element whose index
-  is equal to the element it contains? Seems good enough, considering it performs an $upright(O)(n)$
+  is equal to the element it contains? Seems good enough, considering it performs an $O(n)$
   operation and linear cost for what will likely be a single call to the assertion should prove to
   be good enough. This, though, will require also performing a call to `enumerate()` for the
   subsequent iterator call chain to be capable of using the elements _and_ their indices for
@@ -1607,14 +1605,13 @@
   checked for returning a `None` and finishing iteration. This can be either implemented in terms of
   a `Vec<bool>` or in terms of a `usize` where each bit of the bit mask determines the state of one
   of the vertices in the graph. Of course, on most platforms (_most_ here meaning platforms
-  following either one of the #smallcaps[LP] or #smallcaps[LLP] memory model abstraction) this would
-  allow up to 256 bits to be used, assumming an 8-byte pointer size on the target the program would
-  run on. This would also pair well with the current unit tests, which consider graphs with a very
-  small amount of vertices (well within bounds of a graph with $abs(V) = 256$.) Still, a
-  conservative approach would use an estimate based on the comments of Skiena's book, where
-  apparently, one of the robots for which such a symmetric instance of the #smallcaps[TSP] is
-  required may expect to visit up to 1000 different points. For this reason, the implementation will
-  use a `Vec<bool>`.
+  following either one of the LP or LLP memory model abstraction) this would allow up to 256 bits to
+  be used, assumming an 8-byte pointer size on the target the program would run on. This would also
+  pair well with the current unit tests, which consider graphs with a very small amount of vertices
+  (well within bounds of a graph with $abs(V) = 256$.) Still, a conservative approach would use an
+  estimate based on the comments of Skiena's book, where apparently, one of the robots for which
+  such a symmetric instance of the TSP is required may expect to visit up to 1000 different points.
+  For this reason, the implementation will use a `Vec<bool>`.
 
   Upon entering the `None` arm of the `match`, the state of the `current_iter` should be set to
   `Some(0)`. Then the `stack` field will use such index as the initial vertex with which to start
@@ -1624,10 +1621,10 @@
   edges with,) the first thing that should be done is to mark index 0 (whichever element that turned
   out to be) as having been discovered by setting the flag inside the `discovered` field (itself
   already provided with as many elements as there were nodes in the `Pairs` tree.) Then the same
-  loop as the one performed with a recursive #smallcaps[DFS] should consider each of the adjacent
-  nodes by traversing the hashset returned from accessing the value of key 0, after which each of
-  those elements should be pushed to the `stack` field. Then it holds that the element to be
-  returned from the first call to `next()` should be the element at index 0.
+  loop as the one performed with a recursive DFS should consider each of the adjacent nodes by
+  traversing the hashset returned from accessing the value of key 0, after which each of those
+  elements should be pushed to the `stack` field. Then it holds that the element to be returned from
+  the first call to `next()` should be the element at index 0.
 
   Indeed, if the element to be returned is the one at index 0, then the `None` branch should not do
   anything beyond setting `current_iter` to `Some(0)`, and returning that same `Some(0)`. Then the
@@ -1637,15 +1634,15 @@
   Even though this could yield an valid traversal out of context, this doesn't assure that traversal
   starts at the root of the original tree. This implies that, contrary to what was mentioned before
   about the root node of the `Pairs` tree not having any special meaning in the graph DS used to
-  perform #smallcaps[DFS], the root node _does_ need to be recorded in some way, such that traversal
-  of the graph starts at that node, and not at other nodes. This also implies that the resulting
-  graph stored in the `AdjacencyList` of `Dfs` will have to be a directed graph, and thus not add to
-  both nodes considered in its `new()` asssociated function the same arc. Instead, during the hot
-  loop in that routine, only `node1` should have added `node2` to its list of adjacent nodes. I
-  believe the simplest way to keep track of the root node in the `Pairs` tree is going to be using
-  the `stack` field to get stored in it (initally as its single element) that vertex (its index,
-  really.) Then, because it only get used once, and future calls to `next()` will yield other
-  vertices of the graph, that first element can be scraped after the first iteration.
+  perform DFS, the root node _does_ need to be recorded in some way, such that traversal of the
+  graph starts at that node, and not at other nodes. This also implies that the resulting graph
+  stored in the `AdjacencyList` of `Dfs` will have to be a directed graph, and thus not add to both
+  nodes considered in its `new()` asssociated function the same arc. Instead, during the hot loop in
+  that routine, only `node1` should have added `node2` to its list of adjacent nodes. I believe the
+  simplest way to keep track of the root node in the `Pairs` tree is going to be using the `stack`
+  field to get stored in it (initally as its single element) that vertex (its index, really.) Then,
+  because it only get used once, and future calls to `next()` will yield other vertices of the
+  graph, that first element can be scraped after the first iteration.
 
   The revised implementation of `next()` upon entering the `None` branch should follow that
   `current_iter` should be set to `Some(idx)` where `idx` denotes the index of that first element
@@ -1655,21 +1652,21 @@
   The implementation of the `Some` branch starting on the second call to `next()` should then
   actually consider traversing the hashset of the vertex given by `current_iter`, and push onto the
   stack whichever element is yield first in that hashset. The only issue is that because this is an
-  unordered container, each run of #smallcaps[DFS] is going to yield a different traversal, as
-  iterating through the hashset multiple times, even with the same graph layout, provides no
-  guarentees on the order of the yielded elements across runs. This routine, though, relies heavily
-  on performing a pre-order traversal akin to that of binary trees to have the tree in `Pairs` link
-  its leaves together. The solution could quite possibly go through replacing the hashset in the
-  adjacency list used for the `Dfs` graph to a collection storing its elements in contiguous memory.
-  The downside is going to be refactoring `new()` from `AdjacencyList` such that it still performs
-  the required checks when creating a new arc in the graph.
+  unordered container, each run of DFS is going to yield a different traversal, as iterating through
+  the hashset multiple times, even with the same graph layout, provides no guarentees on the order
+  of the yielded elements across runs. This routine, though, relies heavily on performing a
+  pre-order traversal akin to that of binary trees to have the tree in `Pairs` link its leaves
+  together. The solution could quite possibly go through replacing the hashset in the adjacency list
+  used for the `Dfs` graph to a collection storing its elements in contiguous memory. The downside
+  is going to be refactoring `new()` from `AdjacencyList` such that it still performs the required
+  checks when creating a new arc in the graph.
 
   The hashset was replaced with a binary tree set, though the issue on the order in which edges are
   added to this container still holds because the `Pairs` tree is traversed in terms of the
   contiguous elements of the array, and not in terms of the actual tree node layout (this being the
-  whole purpose of performing #smallcaps[DFS] and thus creating a graph proper.) We'll ignore it for
-  now, and see how things turn out. Because of this, the container will be restored to a hashset as
-  we've concluded that order is not even maintained by the iterated elements of the `Pairs` tree.
+  whole purpose of performing DFS and thus creating a graph proper.) We'll ignore it for now, and
+  see how things turn out. Because of this, the container will be restored to a hashset as we've
+  concluded that order is not even maintained by the iterated elements of the `Pairs` tree.
 
   Back to the implementation of `next()`, the element yield initially on the `None` branch should
   quite possible not be popped off the stack, as only values that have had all descendant nodes
@@ -1712,17 +1709,17 @@
   be added to the vector, to then fetch the value at the top the stack and return it as the next
   item in the iterator sequence. Because the elements added to the stack are not concerned with the
   order of nodes in the orignal `Pairs` tree, the node that the iterator would move on to next could
-  be any one of #l-enum[the sibling leaf, or][the subtree with a single child]. At the
-  #smallcaps[TSP] level, which one it moves to next is of great importance, but at the tree level,
-  this is not so much the case. Thus, because the abstraction seems to be leaning further towards
-  the latter (and because I've spent too much time on this problem,) we will ignore the improvements
-  that could be made from, off the top of my head, #l-enum(
+  be any one of #l-enum[the sibling leaf, or][the subtree with a single child]. At the TSP level,
+  which one it moves to next is of great importance, but at the tree level, this is not so much the
+  case. Thus, because the abstraction seems to be leaning further towards the latter (and because
+  I've spent too much time on this problem,) we will ignore the improvements that could be made
+  from, off the top of my head, #l-enum(
     numbering: "(a)",
-  )[performing the inherent conversion into a binary tree that is possible with any simple
-    #smallcaps[DAG] and then more easily implementing a pre-order traversal iterator such that the
-    child nodes are actually modelled after an equivalent, embedded graph, or][keep track of the
-    original nodes from the `Pairs` tree such that the stack can decide which of the equivalently
-    possible nodes to move on to `current_iter` should actually move on to].
+  )[performing the inherent conversion into a binary tree that is possible with any simple DAG and
+    then more easily implementing a pre-order traversal iterator such that the child nodes are
+    actually modelled after an equivalent, embedded graph, or][keep track of the original nodes from
+    the `Pairs` tree such that the stack can decide which of the equivalently possible nodes to move
+    on to `current_iter` should actually move on to].
 
   To recap the high-level sequence of steps that this execution branch should go through: Update the
   stack by pushing to it the vertices adjacent to `current_iter`, then fetch the top of the stack
@@ -1771,12 +1768,12 @@
   products. The behavior of this follows that for each of the $n - 1$ iterations of the main loop,
   the program experiments two different costs: #l-enum[on the first iteration, the Cartesian product
     computed is the same for all nodes in the tree, as they are single-vertex disjoint trees, this
-    being the initial state of the #smallcaps[UFDS]][on subsequent iterations, the nodes belonging
-    to the same tree will compute a Cartesian product equivalent to $n - i$, where $i$ denotes the
-    (0-indexed) running iteration count]. The operation should thus have a cost of $n dot n$ when
-  iterating through the the first value of `current_node` in `Pairs` (i.e. the first iteration of
-  the hot loop,) and for all future iterations should compute $(i dot (n - i) + (n - i) dot n)$,
-  where $i$ is the control variable keeping track of the iteration count ($[1, n)$.)
+    being the initial state of the UFDS][on subsequent iterations, the nodes belonging to the same
+    tree will compute a Cartesian product equivalent to $n - i$, where $i$ denotes the (0-indexed)
+    running iteration count]. The operation should thus have a cost of $n dot n$ when iterating
+  through the the first value of `current_node` in `Pairs` (i.e. the first iteration of the hot
+  loop,) and for all future iterations should compute $(i dot (n - i) + (n - i) dot n)$, where $i$
+  is the control variable keeping track of the iteration count ($[1, n)$.)
 
   In a sum formula, this would be expressed as
 
@@ -1802,25 +1799,23 @@
   computed without any consideration for caching, which forces the exact same procedure no matter
   the case.
 
-  We move on now to the second part of the algorithm, namely the `unite()` #smallcaps[UFDS]
-  operation that is (also) guaranteed to run once on each $n - 1$ iteration. This operation is known
-  to have $upright(O)(lg n)$ sublinear performance on a traditional implementation of a union-find
-  DS, but this problem required slightly altering its usual behavior. Under normal circumstances,
-  `unite()` would incurr a (constant factors included) cost of $upright(O)(2 dot lg n)$, where $n$
-  denotes the upper bound for the sublinear `find()` operation (left unchanged from the regular
-  #smallcaps[UFDS] implementation) to reach the root of the tree nodes passed to the subroutine
-  (i.e. the largest cost of any one of the two `find()` operations per (the two) nodes.) The
-  implementation for this problem instead holds the invariant that the only, truly sublinear
-  operation is that of the node that will become the parent, as the other node (through the prior
-  workings of the reverse `ancestors()` in the algorithm's main loop, that we'll comment on later)
-  is always guaranteed to be a root node, and thus a call to `find()` on it would resolve
-  immediately with $approx Theta(1)$.
+  We move on now to the second part of the algorithm, namely the `unite()` UFDS operation that is
+  (also) guaranteed to run once on each $n - 1$ iteration. This operation is known to have $O(lg n)$
+  sublinear performance on a traditional implementation of a union-find DS, but this problem
+  required slightly altering its usual behavior. Under normal circumstances, `unite()` would incurr
+  a (constant factors included) cost of $O(2 dot lg n)$, where $n$ denotes the upper bound for the
+  sublinear `find()` operation (left unchanged from the regular UFDS implementation) to reach the
+  root of the tree nodes passed to the subroutine (i.e. the largest cost of any one of the two
+  `find()` operations per (the two) nodes.) The implementation for this problem instead holds the
+  invariant that the only, truly sublinear operation is that of the node that will become the
+  parent, as the other node (through the prior workings of the reverse `ancestors()` in the
+  algorithm's main loop, that we'll comment on later) is always guaranteed to be a root node, and
+  thus a call to `find()` on it would resolve immediately with $approx Theta(1)$.
 
   Because determining which edge (ordered pair) get selected as the lightest edge through the
-  `min_fix()` operation is not possible without prior knowledge of the set of points the
-  #smallcaps[TSP] tour is expected to go through, we will analyze the behavior of this operation in
-  terms of an upper asymptotic bound, instead of a tight bound as we did with the combination of
-  Cartesian products.
+  `min_fix()` operation is not possible without prior knowledge of the set of points the TSP tour is
+  expected to go through, we will analyze the behavior of this operation in terms of an upper
+  asymptotic bound, instead of a tight bound as we did with the combination of Cartesian products.
 
   Let us define first the roles of each of the ordered pairs returned by the `min_fix()` operation.
   Given some pair $(a, b)$, the `unite()` operation, as per the prior discussion, will be assured
@@ -1832,9 +1827,9 @@
   namely the closest edge $(a, b)$, to always bound to hold true that $a < b$ in the extended line
   of $RR$. This would imply that setting up a forest of trees would always force the leaf node of
   the largest tree to be joined with some other single-vertex tree. The effect of this would be that
-  for such a leaf node $a$ taking the role of the new parent in the #smallcaps[UFDS]-`unite()`
-  operation, the root node of the tree it would be contained in would be the largest possible tree
-  at any given iteration.
+  for such a leaf node $a$ taking the role of the new parent in the UFDS-`unite()` operation, the
+  root node of the tree it would be contained in would be the largest possible tree at any given
+  iteration.
 
   Thus, for some number of iterations $n - 1$, if a single tree is the one tree that always keep
   growing, the resulting height of that tree at any given (0-indexed) iteration $i$ would be $i$
@@ -1848,13 +1843,13 @@
 
   $
     sum_(i = 1)^(n - 1) i & = sum_(i = 1)^n (i) - n = (n(n + 1)) / 2 - n \
-                          & = (n^2 + n - 2n) / 2 = 1 / 2 (n^2 - n) approx upright(O)(n^2).
+                          & = (n^2 + n - 2n) / 2 = 1 / 2 (n^2 - n) approx O(n^2).
   $
 
   The total running cost so far, accounting for both the prior, fixed-cost combination of Cartesian
   products and for the latest conclusion on the cost of the (modified) `unite()` operation, is
-  $Theta(n^3) dot upright(O)(n^2)$. Note *there's a mistake* in the computation of the asymptotic
-  running time of the `min_fix()` operation, as it uses the known result on sums
+  $Theta(n^3) dot O(n^2)$. Note *there's a mistake* in the computation of the asymptotic running
+  time of the `min_fix()` operation, as it uses the known result on sums
   $i = [1, n] "for" i^2 equiv (n(n + 1)(2n +1)) / 6$ even though the actual range for the treated
   sum is $i = [1, n)$. Either way, the approximate behavior should compute similarly even with the
   right treatment of the formula.
@@ -1881,51 +1876,48 @@
   `unite()` operation, as the `ancestors()` function on the disjoint set fundamentally performs the
   same steps as the `find()` operation, only iteratively instead of recursively. Upon yielding the
   ancestors to some such node $b$, that part of the algorithm in the main loop traverses anew the
-  collection of ancestors from the root until node $b$ to perform an $upright(O)(1)$
-  parent-reversing operation on each of them. This would total
-  $2 dot upright(o)(n^2) approx upright(o)(n^2)$.
+  collection of ancestors from the root until node $b$ to perform an $O(1)$ parent-reversing
+  operation on each of them. This would total $2 dot O(n^2) approx O(n^2)$.
 
-  The final cost of the algorithm is then $Theta(n^3) dot (upright(O)(n^2) + upright(O)(n^2))$. This
-  is definitely worse than the fixed, sure cost of the nearest neighbor heuristic, and indeed, it
-  aligns with the expected performance drop that Skiena's book speaks of when proposing this
-  alternative approach.
+  The final cost of the algorithm is then $Theta(n^3) dot (O(n^2) + O(n^2))$. This is definitely
+  worse than the fixed, sure cost of the nearest neighbor heuristic, and indeed, it aligns with the
+  expected performance drop that Skiena's book speaks of when proposing this alternative approach.
 
   Finally, the last part of the problem asks to implement a more optimized heuristic for the
-  instance of the #smallcaps[TSP] considered in the robot arm problem. For that, I can implement a
-  known method to solve for a 15-20% suboptimal heuristic based on finding an #smallcaps[MST] of the
-  complete graph under consideration, and then performing #smallcaps[BFS] on it (or was it
-  #smallcaps[DFS]? I need to check out the algorithm catalogue on the book,) while keeping a record
-  of each fully processed vertex in the graph serving as the sequence of points to be visited in the
-  tour. After having read the section on Skiena's catalogue, I can say the heuristic I'm going to
-  implement is the #smallcaps[MST]-finding one, followed by a #smallcaps[DFS] on the resulting tree,
-  which counter to what I said before, considers as the resulting path the set of vertices as they
-  are _discovered_, and not once they are _processed_. This approach should also allow me to reuse
-  the `Dfs` iterator I created for the purposes of solving the closest pair heuristic.
+  instance of the TSP considered in the robot arm problem. For that, I can implement a known method
+  to solve for a 15-20% suboptimal heuristic based on finding an MST of the complete graph under
+  consideration, and then performing BFS on it (or was it DFS? I need to check out the algorithm
+  catalogue on the book,) while keeping a record of each fully processed vertex in the graph serving
+  as the sequence of points to be visited in the tour. After having read the section on Skiena's
+  catalogue, I can say the heuristic I'm going to implement is the MST-finding one, followed by a
+  DFS on the resulting tree, which counter to what I said before, considers as the resulting path
+  the set of vertices as they are _discovered_, and not once they are _processed_. This approach
+  should also allow me to reuse the `Dfs` iterator I created for the purposes of solving the closest
+  pair heuristic.
 
   I may also want to research on Kernighan-Lin _k-opt tours_ to apply a 2-opt tour to the result of
-  performing #smallcaps[DFS] on the result of the #smallcaps[MST]. If time allows, research on
-  simulated annealing to further enhance the result of the heuristic would also be great.
+  performing DFS on the result of the MST. If time allows, research on simulated annealing to
+  further enhance the result of the heuristic would also be great.
 
-  To start off, I'll look into both sections of Skiena's book that treat with finding an
-  #smallcaps[mst] for a graph, namely the one on the chapter about graphs and the one receiving its
-  own section on the catalogue. The book chapter on graphs covering #smallcaps[MST]s does give some
-  pointers to sections of the catalogue that include content that may be of interest without
-  strictly being part of the core algorithm routine, per se.
+  To start off, I'll look into both sections of Skiena's book that treat with finding an mst for a
+  graph, namely the one on the chapter about graphs and the one receiving its own section on the
+  catalogue. The book chapter on graphs covering MSTs does give some pointers to sections of the
+  catalogue that include content that may be of interest without strictly being part of the core
+  algorithm routine, per se.
   *Following, I note such sections, for future reference.*
 
-  - Section 18.3, on the #smallcaps[MST] algorithm itself.
+  - Section 18.3, on the MST algorithm itself.
   - Section 17.6, on techniques for quickly building set partitions (may be of use to improve
-    building the disjoint set at the core of the #smallcaps[UFDS] used for Kruskal's.)
-  - Section 15.5, on techniques to further improve the #smallcaps[UFDS] DS, beyond mere path
-    compression.
+    building the disjoint set at the core of the UFDS used for Kruskal's.)
+  - Section 15.5, on techniques to further improve the UFDS DS, beyond mere path compression.
 
-  Based on readings about the asymptotic behavior of the #smallcaps[MST]-finding algorithms
-  discussed in the book chapter, I may consider implementing Prim's instead of Kruskal's as the
-  latter seems more fit for applications where the subject graph is sparse in nature. In the
-  instance of the #smallcaps[TSP] for the robot arm tour, the graph is known to be a complete,
-  simple graph so there's bound to be $m = n - 1 "edges, where" G = (V, E), abs(V) = n, abs(E) = m$.
-  This is an inherently dense graph, and for a quick test with $2^80$ vertices, the worst-case
-  result of Kruskal's is two orders of magnitude worse than that of Prim's.
+  Based on readings about the asymptotic behavior of the MST-finding algorithms discussed in the
+  book chapter, I may consider implementing Prim's instead of Kruskal's as the latter seems more fit
+  for applications where the subject graph is sparse in nature. In the instance of the TSP for the
+  robot arm tour, the graph is known to be a complete, simple graph so there's bound to be
+  $m = n - 1 "edges, where" G = (V, E), abs(V) = n, abs(E) = m$. This is an inherently dense graph,
+  and for a quick test with $2^80$ vertices, the worst-case result of Kruskal's is two orders of
+  magnitude worse than that of Prim's.
 
   The next step is going to be actually reading the above sections on the topic and seeing which
   approach should work best.
@@ -1933,27 +1925,26 @@
   After having browsed the section on the catalogue, it seems that the most efficient implementation
   is going to go through solving the problem as a geometric instance initially, such that after
   computing the Delauney triangulation on the set of points (vertices of the complete graph,) and
-  then running Kruskal's on the resulting graph, we are left with an $upright(O)(n lg n)$ total
-  running time. This should be the most optimal solution, considering such a complete, simple graph
-  would contain $n$ vertices and $m = n^2 - n approx n^2$ edges (which for some large graphs makes
-  the cost of more conventional solutions to finding an #smallcaps[MST], like Prim's
-  $upright(O)(m + n lg n)$, inefficient in comparison.)
+  then running Kruskal's on the resulting graph, we are left with an $O(n lg n)$ total running time.
+  This should be the most optimal solution, considering such a complete, simple graph would contain
+  $n$ vertices and $m = n^2 - n approx n^2$ edges (which for some large graphs makes the cost of
+  more conventional solutions to finding an MST, like Prim's $O(m + n lg n)$, inefficient in
+  comparison.)
 
   We'll go with this. For that, I'm going to need browsing through the pages of the catalogue on
   Delauney triangulation (and possibly the chapters covering material on computational geometry
   algorithms.) Once I've implemented this, I'll have to look into Kruskal's algorithm and optimizing
-  the #smallcaps[UFDS] involved in it (see the list of sections included above.) Once that is done,
-  I'll have to implement a #smallcaps[DFS] traversal on the resulting graph, and that should about
-  do it.
+  the UFDS involved in it (see the list of sections included above.) Once that is done, I'll have to
+  implement a DFS traversal on the resulting graph, and that should about do it.
 
   I'm done reading the catalogue, and I think I have an overall idea of the abstractions behind both
   Delauney triangulation and Voronoi diagrams. Most of the material discussed, though, is not
   relevant to the geometric instance of the robot arm tour problem, as I assume the surface in which
   the robot is epxected to work in is 2-dimensional. Still, modelling the problem in terms of the
-  simpler approach whereby a convex hull polygon is formed from the sorted x-component of the target
-  points in Euclidean space likely won't do. This is because Skiena himself makes explicit in the
-  #smallcaps[TSP] section that solving it as a geometric problem requires specifically using
-  Delauney triangulation, and not merely _a_ method of triangulation.
+  simpler approach whereby a convex hull polygon is formed from the sorted $x$-component of the
+  target points in Euclidean space likely won't do. This is because Skiena himself makes explicit in
+  the TSP section that solving it as a geometric problem requires specifically using Delauney
+  triangulation, and not merely _a_ method of triangulation.
 
   I'll look now into the chapter on computational geometry to better understand the possibilities I
   have, considering I will not have access to the Internet for some time.
@@ -1963,39 +1954,38 @@
   the convex hull because it turns left (as per Andrew's algorithm in _Guide to Competitive
   Programming_,) the edge between the last point in the hull and the one that got cut off is added
   as an edge that is part of the target triangulation. For this, I would need to further expand the
-  tests that I currently use for the previously implemented #smallcaps[TSP] heuristics, such that
-  they also include 2-dimensional geometric information on each the points the robot arm must go
-  through. Then I should hold in a contiguous collection all such points, and sort them in
-  $upright(O)(n lg n)$ first by their $x$-components, and second by their $y$-component. For that, I
-  must define a relation of total ordering for the algebraic data type that will represent the
-  2-dimensional points, such that the sorting algorithm performs unstable sorting where elements
-  with differing values of $y$ but equal values of $x$ are further sorted and not just grouped
-  together in their original (or possibly some other) order.
+  tests that I currently use for the previously implemented TSP heuristics, such that they also
+  include 2-dimensional geometric information on each the points the robot arm must go through. Then
+  I should hold in a contiguous collection all such points, and sort them in $O(n lg n)$ first by
+  their $x$-components, and second by their $y$-component. For that, I must define a relation of
+  total ordering for the algebraic data type that will represent the 2-dimensional points, such that
+  the sorting algorithm performs unstable sorting where elements with differing values of $y$ but
+  equal values of $x$ are further sorted and not just grouped together in their original (or
+  possibly some other) order.
 
   The next thing would be to implement the convex hull algorithm in such way so as to allow an
   external closure to add elements onto another container (the target triangulation) whenever some
   element of the point set is cut off from the points that denote the polygon's perimeter. For that,
-  I belive it best if I implement the convex hull algorithm first and make sure that both the above
+  I belive it best if *I implement the convex hull algorithm first and make sure that both the above
   sorting routine and the convex hull produce satisfactory results, prior to attempting anything
-  triangulation related.
+  triangulation related*.
 
   In terms of implementation design, the trait should have an interface for the `tsp()` method that
   serves as the only real call to solve the problem, as well as a method for performing the two main
-  routines involved in this heuristic; Namely, finding the #smallcaps[MST] of the input graph, and
-  performing #smallcaps[DFS] on that graph. The only difference now is that the input to `tsp()`
-  should augment the information held on each edge of the graph, such that it collects both the
-  weight and the 2-dimensional coordinates of each point. This is going to require new graph and
-  edge primitives. The edge primitive should continue being an enumeration, except for the variant
-  holding a weighted edge, which should be changed from a tuple-like `struct` to a named-field
-  `struct` containing the `weight: usize` and the `coord: Point`. The graph primitive should
-  continue being an adjacency matrix because the graph has the same high-density vertex count, but
-  it should replace the old edge primitive with the new edge data type. The new macro I already
-  introduced to build a vector of `Point`s should be refactored into taking in the weight of the
-  edge in the same way as the `matrix!` macro does, and pass it off to the `new()` function of the
-  new adjacency matrix.
+  routines involved in this heuristic; Namely, finding the MST of the input graph, and performing
+  DFS on that graph. The only difference now is that the input to `tsp()` should augment the
+  information held on each edge of the graph, such that it collects both the weight and the
+  2-dimensional coordinates of each point. This is going to require new graph and edge primitives.
+  The edge primitive should continue being an enumeration, except for the variant holding a weighted
+  edge, which should be changed from a tuple-like `struct` to a named-field `struct` containing
+  `weight: usize` and `coord: Point`. The graph primitive should continue being an adjacency matrix
+  because the graph has the same high-density vertex count, but it should replace the old edge
+  primitive with the new edge data type. The new macro I already introduced to build a vector of
+  `Point`s should be refactored into taking in the weight of the edge in the same way as the
+  `matrix!` macro does, and pass it off to the `new()` function of the new adjacency matrix.
 
   The implementation of `AugAdjacencyMatrix::new()` should follow the same input requirements as
-  those enforced in `AdjacencyMatrix::new()`; namely that #l-enum[the input matrix should be a
+  those enforced in `AdjacencyMatrix::new()`; Namely that #l-enum[the input matrix should be a
     square matrix][that it should have weighted edges everywhere but in the main diagonal, and][that
     its transpose is equal to the original matrix (which for a square matrix implies that computing
     the inverse twice (starting with the original matrix) returns the source matrix.)]
@@ -2010,37 +2000,163 @@
 
   The last check could be performed by means of an `all()` adapter call to the iterator over the
   (filtered) row vector, where the passed closure would evaluate whether each element's weight is
-  equal to the weight assigned to the element with reversed indices (i.e. the element in the input
-  matrix that refers to its major (2-dimensional) index as the minor index of the current element,
-  and the same the other way around, starting with the minor index.)
+  equal to the weight assigned to the element with reversed indices.
 
-  The approach may prove to be incorrect in the end. The triangulation method proposed by Skiena
-  does not work well with Andrew's algorithm for building the convex hull of a 2-dimensional point
-  set. Following the two-step procedure outlined in the book on competitive programming, during
-  construction of the upper convex hull, the procedure would not always connect with all points
-  lying inside the hull, and so triangulation would quite possibly fail. This is only a theory,
-  though, but it seems that when Skiena specifically mentioned Delauney triangulation, he only meant
-  _Delauney_ triangulation and not regular, convex hull-based triangulation. If this is the case, I
-  have no offline bibliography that explains this specific algorithm.
+  The whole approach may prove to be incorrect in the end. The triangulation method proposed by
+  Skiena does not work well with Andrew's algorithm for building the convex hull of a 2-dimensional
+  point set. Following the two-step procedure outlined in the book on competitive programming,
+  during construction of the upper convex hull, the procedure would not always connect with all
+  points lying inside the hull, and so triangulation would quite possibly fail. This is only a
+  theory, though, but it seems that when Skiena specifically mentioned Delauney triangulation, he
+  _only_ meant _Delauney_ triangulation and not regular, convex hull-based triangulation. If this is
+  the case, *maybe Knuth's book on the Stanford GraphBase can give me some pointers, as one of the
+  generative modules uses Delauney triangulation*.
 
   It may still work, though. If I can understand Skiena's algorithm, or alternatively get Andrew's
   algorithm to work with the logic required for triangulation, there seems to be a method to obtain
-  a Delauney triangulation from a regular (possibly) non-delauney triangulation.
+  a Delauney triangulation from a regular (possibly) non-Delauney triangulation.
 
   Provided I compute a triangulation for a point set, a linear pass over all edges of that point set
   can yield a more optimal triangulation, where we define optimality as decreasing the presence of
-  "skinny" triangles, by considering the two triangles formed by that one iteration edge, and
+  "skinny" triangles, by considering the two triangles formed by each iterated-over edge, and
   whether the quadrilateral formed from joining both of those triangles is convex. If the resulting
   polygon is convex (which can be found out by checking if all the points in the segment formed from
   joining the vertices of any two points in it lies within the inner area of the polygon,) then the
   iterated-over edge, namely the internal edge, can be replaced by another edge joining the two
-  other vertices of the quadrilateral to see whether this new local triangulation yields less
-  "skinny" triangles. Repeating this over all edges should produce a Delauney triangulation from any
-  other triangulation.
+  other vertices of the quadrilateral to see whether this new local triangulation yields two "less
+  skinny" triangles. Repeating this over all edges should produce a Delauney triangulation from any
+  other triangulation. If this approach ends up being _the_ approach, then a more formal
+  specification of the implementation should be thought up, as determining which of the vertices
+  makes up a given quadrilateral from a single edge doesn't seem at all like a linear cost
+  operation.
 
   The point now is to see whether I can understand Skiena's algorithm for building the convex hull,
   or whether Andrew's algorithm (which I already understand) can also be used in conjunction with
   Skiena's algorithm for building a triangulation from the cut off points of the convex hull.
+
+  I think I understand Skiena's algorithm for building the convex hull, even if the explanation
+  doesn't quite make it clear that each newly added point must be tested as being part of a
+  quadrilateral formed from all points currently in the hull except the neighbor of the previously
+  inserted point. I get it, but even now I'm not sure if this yields a triangulation, as cut off
+  points aren't enough to get 3-side polygons from every tree vertices. Some will be left with
+  quadrilaterals, and that is no triangulation. Gotta think harder.
+
+  The "extension" to the algorithm for building triangulations from convex hulls in Skiena's book
+  does mention that a chord should be added to each point newly cut off from the hull, while also
+  adding each point from left-to-right as his algorithm for building 2-dimensional convex hulls
+  does.
+
+  I think I get it now. The method follows that one must first compute the convex hull with Skiena's
+  algorithm, and during construction of this primitive, build the triangulation by adding a chord to
+  whichever vertex has been cut off from all vertices _but_ the newly added vertex with which the
+  polygon under consideration determined that the cut off point was to be discarded.
+
+  It's implementation time.
+
+  My approach to the algorithm was wrong, I think (this time for sure) I've finally figured it out.
+  For the most part, it's the same idea as the one I initially thought about in terms of initially
+  adding points to the convex hull until we get a polygon with more than 3 sides. It's only once we
+  reach this point that I've changed my stance on the steps that follow; To form the polygon that
+  will determine which of the points may be removed from the hull, one must pick the leftmost point
+  (first in the sorted vector,) the rightmost point (last one added in the current iteration,) _and
+  only then_ determine in a (linear cost) pass which point is the bottommost and topmost point in
+  the current convex hull (by comparing their $y$ components.) Once all of those are determined
+  (more on disambiguating between multiple elements qualifiying as any of these later,) then the
+  target/delineating polygon may be formed by joining the leftmost vertex with both the bottommost
+  and topmost vertices, and the rightmost vertex with the bottommost and topmost vertices.
+
+  If multiple points qualify as any one of _bottommost_ or _topmost_, then the final point will be
+  whichever one is not yet one of the rightmost or topmost points (which are never ambiguous because
+  the former is the first point in the $x$-sorted list of points, and the latter is always the point
+  to be added later.)
+
+  This, though, may not be the most efficient way of going about things, and likely also means I'm
+  misinterpreting the meaning of Skiena's words when describing the algorithm. Still, as an initial
+  implementation, I'm going to focus on getting it solved and not so much on efficency.
+
+  The issue now is how do I compute the area of a 4-sided arbitrary polygon. Maybe I can compute the
+  area of the triangle formed by adding an edge between two vertices that are not joined by an edge
+  in the input polygon, and then compute the area of the other triangle formed by switching the
+  vertex of the triangle under consideration to be the vertex that was not considered initially (but
+  is part of the input polygon.)
+
+  It's important to note that the algorithm may also compute the polygon as being 3-sided and not
+  just 4-sided on the first iteration, where the total amount of elements in the container holding
+  the current state of the convex hull is larger than 3. Because I don't think it makes that big a
+  difference if I wait for the convex hull to have 5 elements under consideration, I'm just going to
+  change the condition for further processing to check for the presence of more than 4 elements.
+  Still, that wouldn't be any good for triangulation purposes, as it would potentially skip some
+  chords and produce an incorrect triangulation.
+
+  The implementation is going to have to consider two cases. If the resulting polygon is 3-sided,
+  then computing the formula for the area of a triangle should do just fine. If the resulting
+  polygon is 4-sided, then taking any two of the vertices and separately computing the area of the
+  triangle formed from adding an edge between two non-adjacent vertices, and doing this again
+  replacing the other edge in that triangle with the edge in the polygon not considered in this
+  triangle should allow us to add up the resulting areas of both triangles, and get the total inner
+  area of the polygon.
+
+  The problem now is in computing the area of a triangle. I don't remember how, but I can attempt to
+  derive a formula. From looking at a triangle, I can guess that if we know its height, we can
+  compute the area of the rectangles formed from multiplying the height of the rectangle by the
+  segment between each one of the vertices that doesn't participate in determining height, and
+  halving the result of each of those rectangle areas.
+
+  To determine the length of those segments, I would have to first determine the height of the
+  triangle. To do that, I would require computing the line perpendicular to the segment of the line
+  connecting whichever vertices don't form the largest angles in the triangle, that also crosses the
+  other vertex (with the largest angle in the triangle.) I can't quite determine the angle of each
+  vertex without already having computed the one thing I was attempting to get from this, namely the
+  height of the triangle. So instead I'm going to assume the segment against which the latter edge
+  ought have a perpendicular line computed to get the height is the largest segment in the triangle.
+  I can easily determine this by computing the difference between the coordinates of each connected
+  vertex, which is a fairly simple task.
+
+  Once I have the right segment, I have to (somehow) compute the line perpendicular to it that also
+  crosses the vertex of the triangle that does _not_ make up the segment. Afterwards, I can compute
+  the intersection of that line with the line described by the segment above and then compute the
+  length of the segment between the prior vertex and the yielded intersection point. The length of
+  this segment should be the height of the triangle.
+
+  Finally, I can compute the area of the corresponding rectangles mentioned initially by finding the
+  distance between the other two vertices to the intersection point, and multiplying each by the
+  distance computed above. Then I just have to divide each of those areas by 2 and add them up.
+
+  To recap on the things I don't now how to compute in the above procedure: #l-enum[I don't know how
+    to compute the equation of the line that crosses a point and is also perpendicular to another
+    line, and][I don't know how to compute the equation of a line from a given segment between two
+    points].
+
+  What I _do_ know is that I can model the equation of a line as $y = m x + b$, where $m$ is the
+  slope of the line and $b$ is its displacement on the $x$-axis. Because the points already have
+  coordinates in the plane, I can try to compute the slope and displacement parameters by sampling
+  these coordinates, but I'm not sure how to proceed further. I'm going to need help with this part
+  of the problem.
+
+  Or I can use Skiena's recommendation for computing the area of a triangle more easily. And also
+  his recommendation on computing point locations, *both in the catalogue*. I'm going with this, and
+  scratching all of the above, more rudimentary approach.
+
+  According to Skiena, the area of a triangle can be computed by considering the determinant that
+  _twice_ such area more easily evaluates to.
+
+  $
+    2 dot A(t) = det(
+      mat(
+        a_x, a_y, 1;
+        b_x, b_y, 1;
+        c_x, c_y, 1;
+      )
+    ) = a_x b_y - a_y b_x + a_y c_x - a_x c_y + b_x c_y - c_x b_y, \
+    "for some triangle" A "with sides" (a, b, c).
+  $
+
+  Though Skiena also advises against using this formula directly, as (obviously) one must half the
+  result to get the real formula, but prior to that one must compute the absolute value as the
+  determinant could yield negative values. To compute more easily this determinant, Skiena also has
+  me covered.
+
+#pagebreak()
 
 === LeetCode problems
 
@@ -2069,8 +2185,8 @@
 
   _Constraints_:
 
-  - $1 <= mono("temperatures.length") <= 10^5$
-  - $30 <= mono("temperatures[i]") <= 100$
+  - $1 <= #raw("temperatures.length") <= 10^5$
+  - $30 <= #raw("temperatures[i]") <= 100$
 
 / Problem 1-2: \
   *Rotate list*
@@ -2090,14 +2206,14 @@
   _Constraints_:
 
   - The number of nodes in the list is in the range $[0, 500]$.
-  - $-100 <= mono("Node.val") <= 100$
-  - $0 <= mono("k") <= 2 dot 109$
+  - $-100 <= #raw("Node.val") <= 100$
+  - $0 <= #raw("k") <= 2 dot 10^9$
 
 / Problem 1-3: \
   *Wiggle Sort II*
 
   Given an integer array `nums`, reorder it such that
-  $mono("nums[0]") < mono("nums[1]") > mono("nums[2]") < mono("nums[3]") dots.c$
+  $#raw("nums[0]") < #raw("nums[1]") > #raw("nums[2]") < #raw("nums[3]") dots.c$
   You may assume the input array always has a valid answer.
 
   _Example 1_:
@@ -2114,9 +2230,8 @@
 
   _Constraints_:
 
-  - $1 <= mono("nums.length") <= 5 times 10^4$
-  - $0 <= mono("nums[i]") <= 5000$
+  - $1 <= #raw("nums.length") <= 5 times 10^4$
+  - $0 <= #raw("nums[i]") <= 5000$
   - It is guaranteed that there will be an answer for the given input `nums`.
 
-  _Follow Up_: Can you do it in $upright(O)(n)$ time and/or in-place with $upright(O)(1)$ extra
-  space?
+  _Follow Up_: Can you do it in $O(n)$ time and/or in-place with $O(1)$ extra space?

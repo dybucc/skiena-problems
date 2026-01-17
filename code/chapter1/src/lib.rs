@@ -1,7 +1,16 @@
+//! Problems in _The Algorithm Design Manual_, by S. Skiena, 3rd ed., chapter 1.
+//!
+//! The use of traits in this crate is not idiomatic; In a real library, the
+//! associated functions would've probably been free functions taking in some
+//! type implementing a trait that provided information on any graph DS.
+//!
+//! The goal is to simply group under a single umbrella the methods required to
+//! implement a certain algorithm.
+
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
-    iter::repeat_n,
+    iter,
     sync::LazyLock,
 };
 
@@ -76,16 +85,16 @@ impl AdjacencyList {
 }
 
 #[derive(Debug)]
-struct AugAdjacencyMatrix(Vec<Vec<CoordEdge>>);
+struct GeoAdjacencyMatrix(Vec<Vec<CoordEdge>>);
 
 #[derive(Debug, Clone)]
 enum CoordEdge {
     NonExistent,
-    Weighted { weight: usize, coord: Point },
+    Weighted { weight: usize, coord: Point2d },
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct Point {
+struct Point2d {
     x: f64,
     y: f64,
 }
@@ -145,12 +154,12 @@ macro_rules! matrix {
 
 macro_rules! geomatrix {
     ($($(($x:literal, $y:literal, $weight:literal)),+);+ $(;)?) => {{
-        AugAdjacencyMatrix::new(&[$(vec![$({
+        GeoAdjacencyMatrix::new(&[$(vec![$({
             match $weight.cmp(&0) {
                 Ordering::Equal => CoordEdge::NonExistent,
                 Ordering::Greater => CoordEdge::Weighted {
                     weight: $weight,
-                    coord: Point { x: $x, y: $y },
+                    coord: Point2d { x: $x, y: $y },
                 },
                 _ => unimplemented!(
                     "edges are forced to be `usize` in the `Ordering::Greater` branch so this \
@@ -318,7 +327,7 @@ impl Pairs<'_> {
     fn build_tree_from(&mut self, this: usize) -> Result<(), PairsError> {
         ensure_or!(this < self.forest.len(), IndexOutOfBounds)?;
         self.current_tree = Some(
-            repeat_n(this, self.forest.len())
+            iter::repeat_n(this, self.forest.len())
                 .zip(0..self.forest.len())
                 .filter_map(|(this, other)| {
                     self.same(this, other)
@@ -352,7 +361,7 @@ impl Pairs<'_> {
             })
             .collect();
 
-        self.current_product = repeat_n(self.current_node.expect(&ERROR_MSG), others.len())
+        self.current_product = iter::repeat_n(self.current_node.expect(&ERROR_MSG), others.len())
             .zip(others)
             .collect();
 
@@ -366,7 +375,7 @@ impl Pairs<'_> {
         self.min_by_key(|&(node1, node2)| {
             let Edge::Weighted(weight) = self.src.inner[node1][node2] else {
                 unreachable!(
-                    "no node considered in the `Pairs` iterator should be `Edge::NonExistent`"
+                    "no node considered in the `Pairs` iterator should be `Edge::NonExistent`",
                 )
             };
 
@@ -480,7 +489,7 @@ impl Iterator for Pairs<'_> {
         self.min_by_key(|&(node1, node2)| {
             let Edge::Weighted(weight) = matrix[node1][node2] else {
                 unreachable!(
-                    "no node considered in the `Pairs` iterator should be `Edge::NonExistent`"
+                    "no node considered in the `Pairs` iterator should be `Edge::NonExistent`",
                 )
             };
 
@@ -514,7 +523,7 @@ impl Iterator for Dfs {
     }
 }
 
-impl AugAdjacencyMatrix {
+impl GeoAdjacencyMatrix {
     fn new(inner: &[Vec<CoordEdge>]) -> Result<Self, AdjacencyMatrixError> {
         ensure_or!(inner.len() > 1, NonSquareMatrix)?;
         for (idx, vertex) in inner.iter().enumerate() {
@@ -561,7 +570,7 @@ impl AugAdjacencyMatrix {
 
             // Even though the running conditions for the following iterator
             // chain are the same as those for the above sequence, this is
-            // required to be separate because the type of thrown error is
+            // required to be separate because the type of error thrown is
             // different (and this is not meant to be used as a real library, so
             // no greater effort is put into designing efficient routines for
             // failure propagation.)
@@ -569,8 +578,8 @@ impl AugAdjacencyMatrix {
                 row_vec.iter().all(|&(inner_idx, edge)| {
                     let CoordEdge::Weighted { coord, .. } = edge else {
                         unreachable!(
-                            "any `NonExistent` node under consideration has been filtered out \
-                            so this should not be possible",
+                            "any `NonExistent` node under consideration has been filtered out so \
+                            this should not be possible",
                         );
                     };
                     let CoordEdge::Weighted {
@@ -608,9 +617,9 @@ trait TspClosestPair {
 }
 
 trait TspMstDfs {
-    fn triangulation(&self) -> AugAdjacencyMatrix;
-    fn kruskal(&self);
-    fn dfs(input: &AugAdjacencyMatrix) -> Vec<usize>;
+    fn triangulation(&self) -> Self;
+    fn mst(input: &Self) -> Vec<usize>;
+    fn dfs(input: &Self) -> Vec<usize>;
 
     fn tsp(&self) -> Vec<usize>;
 }
@@ -672,7 +681,7 @@ impl TspClosestPair for AdjacencyMatrix {
                 infallible"
             });
 
-            // If the node to be `unite`d is not a root node, then make it a
+            // If the node to be `unite()`d is not a root node, then make it a
             // root node by reversing the parent node of its ancestors.
             if pairs_iter.find(node2).expect(&ERROR_MSG) != node2 {
                 let ancestors = pairs_iter.ancestors(node2).expect(&ERROR_MSG);
@@ -683,8 +692,8 @@ impl TspClosestPair for AdjacencyMatrix {
                 pairs_iter.forest[node2] = node2;
             }
             pairs_iter.unite(node1, node2).expect(
-                "the node indices are sourced directly from the iterator itself so the \
-                operation should be infallible",
+                "the node indices are sourced directly from the iterator itself so the operation \
+                should be infallible",
             );
 
             // Resets the state of the iterator to force cycling on the next
@@ -696,14 +705,64 @@ impl TspClosestPair for AdjacencyMatrix {
     }
 }
 
-impl TspMstDfs for AugAdjacencyMatrix {
-    fn triangulation(&self) -> AugAdjacencyMatrix {
+impl TspMstDfs for GeoAdjacencyMatrix {
+    fn triangulation(&self) -> Self {
+        let mut points: Vec<_> = self
+            .0
+            .iter()
+            .take(2)
+            .enumerate()
+            .flat_map(|(vertex, edges)| {
+                edges
+                    .iter()
+                    .take(if vertex == 0 { edges.len() } else { 1 })
+                    .enumerate()
+                    .filter_map(|(inner_idx, edge)| {
+                        if let CoordEdge::Weighted { coord, .. } = edge {
+                            Some((inner_idx, coord))
+                        } else {
+                            None
+                        }
+                    })
+            })
+            .collect();
+        points.sort_unstable_by(
+            |&(_, coord1), &(_, coord2)| match coord1.x.total_cmp(&coord2.x) {
+                order @ (Ordering::Less | Ordering::Greater) => order,
+                Ordering::Equal => coord1.y.total_cmp(&coord2.y),
+            },
+        );
+
+        let points = points;
+        let mut hull = Vec::with_capacity(points.len());
+
+        for (_, point) in &points {
+            hull.push(point);
+            if hull.len() > 3 {
+                let ((_, left), right, bottom, top) = (
+                    points[0],
+                    *point,
+                    points
+                        .iter()
+                        .min_by(|&(_, point1), &(_, point2)| point1.y.total_cmp(&point2.y)),
+                    points
+                        .iter()
+                        .max_by(|&(_, point1), &(_, point2)| point1.y.total_cmp(&point2.y)),
+                );
+
+                todo!(
+                    "Compute the area of the polygon formed from the above sides and check if all \
+                    other points in the current convex hull are within that area to discard them.",
+                );
+            }
+        }
+
         todo!();
     }
-    fn kruskal(&self) {
+    fn mst(_input: &Self) -> Vec<usize> {
         todo!();
     }
-    fn dfs(input: &AugAdjacencyMatrix) -> Vec<usize> {
+    fn dfs(_input: &Self) -> Vec<usize> {
         todo!();
     }
 
@@ -717,11 +776,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn empty_graph() {
+    fn basic_graph() {
         assert!(
-            AdjacencyMatrix::new(&[]).is_err(),
-            "should've thrown an error about the graph not being a square matrix, or really a \
-            matrix",
+            matrix! {
+                0, 2;
+                2, 0;
+            }
+            .is_ok(),
+            "should've been an ok graph with two vertices and one weight 2 edge between them",
         );
     }
 
@@ -736,18 +798,6 @@ mod tests {
             "should've been an ok graph with 2 nodes layed out like the corners defining a \
             rectangle",
         )
-    }
-
-    #[test]
-    fn basic_graph() {
-        assert!(
-            matrix! {
-                0, 2;
-                2, 0;
-            }
-            .is_ok(),
-            "should've been an ok graph with two vertices and one weight 2 edge between them",
-        );
     }
 
     #[test]
@@ -835,7 +885,8 @@ mod tests {
             }
             .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::IncompleteGraph(_))),
             "should've thrown an error about the graph not having as many edges as a complete, \
-            simple graph is expected to have (i.e. the matrix has -1 outside the main diagonal)",
+            simple graph is expected to have (i.e. the matrix has zeroes outside the main \
+            diagonal)",
         );
     }
 
@@ -848,7 +899,8 @@ mod tests {
             }
             .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::IncompleteGraph(_))),
             "should've thrown an error about the graph not having as many edges as a complete, \
-            simple graph is expected to have (i.e. the matrix has -1 outside the main diagonal)",
+            simple graph is expected to have (i.e. the matrix has zeroes outside the main \
+            diagonal)",
         );
     }
 
@@ -939,16 +991,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "the algorithm is a wip, and the body of the test is yet to be replaced with the \
-                analogous `geomatrix!` macro"]
+    #[ignore = "the algorithm is a wip, and the test sample case is not ready yet"]
     fn tsp_mst_dfs2() -> Result<(), AdjacencyMatrixError> {
-        let _input = TspClosestPair::tsp(&matrix! {
-            0, 3, 4, 4, 2;
-            3, 0, 4, 2, 2;
-            4, 4, 0, 3, 2;
-            4, 2, 3, 0, 2;
-            2, 2, 2, 2, 0;
-        }?);
         todo!();
 
         Ok(())
