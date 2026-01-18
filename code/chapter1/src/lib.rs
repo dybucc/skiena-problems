@@ -5,7 +5,7 @@
 //! type implementing a trait that provided information on any graph DS.
 //!
 //! The goal is to simply group under a single umbrella the methods required to
-//! implement a certain algorithm.
+//! implement a certain algorithm for a specific instance of a problem.
 
 use std::{
     cmp::Ordering,
@@ -85,10 +85,10 @@ impl AdjacencyList {
 }
 
 #[derive(Debug)]
-struct GeoAdjacencyMatrix(Vec<Vec<CoordEdge>>);
+struct GeoAdjacencyMatrix(Vec<Vec<GeoEdge>>);
 
 #[derive(Debug, Clone)]
-enum CoordEdge {
+enum GeoEdge {
     NonExistent,
     Weighted { weight: usize, coord: Point2d },
 }
@@ -156,8 +156,8 @@ macro_rules! geomatrix {
     ($($(($x:literal, $y:literal, $weight:literal)),+);+ $(;)?) => {{
         GeoAdjacencyMatrix::new(&[$(vec![$({
             match $weight.cmp(&0) {
-                Ordering::Equal => CoordEdge::NonExistent,
-                Ordering::Greater => CoordEdge::Weighted {
+                Ordering::Equal => GeoEdge::NonExistent,
+                Ordering::Greater => GeoEdge::Weighted {
                     weight: $weight,
                     coord: Point2d { x: $x, y: $y },
                 },
@@ -524,7 +524,7 @@ impl Iterator for Dfs {
 }
 
 impl GeoAdjacencyMatrix {
-    fn new(inner: &[Vec<CoordEdge>]) -> Result<Self, AdjacencyMatrixError> {
+    fn new(inner: &[Vec<GeoEdge>]) -> Result<Self, AdjacencyMatrixError> {
         ensure_or!(inner.len() > 1, NonSquareMatrix)?;
         for (idx, vertex) in inner.iter().enumerate() {
             ensure_or!(vertex.len() == inner.len(), NonSquareMatrix)?;
@@ -532,7 +532,7 @@ impl GeoAdjacencyMatrix {
             let row_vec: Vec<_> = vertex
                 .iter()
                 .enumerate()
-                .filter(|(_, edge)| matches!(edge, CoordEdge::Weighted { .. }))
+                .filter(|(_, edge)| matches!(edge, GeoEdge::Weighted { .. }))
                 .collect();
 
             ensure_or!(
@@ -543,13 +543,13 @@ impl GeoAdjacencyMatrix {
 
             ensure_or!(
                 row_vec.iter().all(|&(inner_idx, edge)| {
-                    let CoordEdge::Weighted { weight, .. } = *edge else {
+                    let GeoEdge::Weighted { weight, .. } = *edge else {
                         unreachable!(
                             "any `NonExistent` node under consideration has been filtered out so \
                             this execution branch should not be possible",
                         );
                     };
-                    let CoordEdge::Weighted {
+                    let GeoEdge::Weighted {
                         weight: symmetric_weight,
                         ..
                     } = inner[inner_idx][idx]
@@ -569,20 +569,20 @@ impl GeoAdjacencyMatrix {
             )?;
 
             // Even though the running conditions for the following iterator
-            // chain are the same as those for the above sequence, this is
+            // chain are the same as those of the above sequence, this is
             // required to be separate because the type of error thrown is
             // different (and this is not meant to be used as a real library, so
             // no greater effort is put into designing efficient routines for
             // failure propagation.)
             ensure_or!(
                 row_vec.iter().all(|&(inner_idx, edge)| {
-                    let CoordEdge::Weighted { coord, .. } = edge else {
+                    let GeoEdge::Weighted { coord, .. } = edge else {
                         unreachable!(
                             "any `NonExistent` node under consideration has been filtered out so \
                             this should not be possible",
                         );
                     };
-                    let CoordEdge::Weighted {
+                    let GeoEdge::Weighted {
                         coord: ref symmetric_coord,
                         ..
                     } = inner[inner_idx][idx]
@@ -617,7 +617,7 @@ trait TspClosestPair {
 }
 
 trait TspMstDfs {
-    fn triangulation(&self) -> Self;
+    fn triangulate(&mut self) -> Result<(), AdjacencyMatrixError>;
     fn mst(input: &Self) -> Vec<usize>;
     fn dfs(input: &Self) -> Vec<usize>;
 
@@ -692,12 +692,12 @@ impl TspClosestPair for AdjacencyMatrix {
                 pairs_iter.forest[node2] = node2;
             }
             pairs_iter.unite(node1, node2).expect(
-                "the node indices are sourced directly from the iterator itself so the operation \
-                should be infallible",
+                "the node indices are sourced directly from the iterator itself so the \
+                operation should be infallible",
             );
 
-            // Resets the state of the iterator to force cycling on the next
-            // iteration of the overarching loop with updated state.
+            // Resets the state of the iterator to force cycling with updated
+            // state on the next iteration of the overarching loop.
             pairs_iter.current_node = None;
         }
 
@@ -706,7 +706,7 @@ impl TspClosestPair for AdjacencyMatrix {
 }
 
 impl TspMstDfs for GeoAdjacencyMatrix {
-    fn triangulation(&self) -> Self {
+    fn triangulate(&mut self) -> Result<(), AdjacencyMatrixError> {
         let mut points: Vec<_> = self
             .0
             .iter()
@@ -717,47 +717,95 @@ impl TspMstDfs for GeoAdjacencyMatrix {
                     .iter()
                     .take(if vertex == 0 { edges.len() } else { 1 })
                     .enumerate()
-                    .filter_map(|(inner_idx, edge)| {
-                        if let CoordEdge::Weighted { coord, .. } = edge {
-                            Some((inner_idx, coord))
+                    .filter_map(|(vertex, edge)| {
+                        if let GeoEdge::Weighted { coord, .. } = edge {
+                            Some((vertex, coord))
                         } else {
                             None
                         }
                     })
             })
             .collect();
+
+        let (mut upper_hull, mut lower_hull, mut triangulation) = (
+            Vec::with_capacity(points.len().div_ceil(2)),
+            Vec::with_capacity(points.len().div_ceil(2)),
+            Vec::with_capacity(points.len()),
+        );
+
+        triangulation.resize_with(points.len(), || {
+            let mut output = Vec::with_capacity(points.len());
+            output.resize(points.len(), GeoEdge::NonExistent);
+
+            output
+        });
+
+        fn build_hull<'a>(
+            triangulation: &mut [Vec<GeoEdge>],
+            hull: &mut Vec<(usize, &'a Point2d)>,
+            compare: impl Fn(f64, f64) -> bool,
+            points: &[(usize, &'a Point2d)],
+            edge_src: &[Vec<GeoEdge>],
+        ) {
+            for &(vertex, point) in points {
+                while hull.len() > 2
+                    && let Some((rm, _)) = hull.pop_if(|(_, last)| compare(last.y, point.y))
+                {
+                    let &(prev, _) = hull
+                        .last()
+                        .expect("The hull should have at least two points here.");
+                    let post = vertex;
+
+                    (triangulation[prev][rm], triangulation[post][rm]) =
+                        (edge_src[prev][rm].clone(), edge_src[post][rm].clone());
+                }
+
+                hull.push((vertex, point));
+            }
+        }
+
+        // Sort increasingly by both x- and y-components and build the upper
+        // hull.
         points.sort_unstable_by(
             |&(_, coord1), &(_, coord2)| match coord1.x.total_cmp(&coord2.x) {
                 order @ (Ordering::Less | Ordering::Greater) => order,
                 Ordering::Equal => coord1.y.total_cmp(&coord2.y),
             },
         );
+        build_hull(
+            &mut triangulation,
+            &mut upper_hull,
+            |last, point| last <= point,
+            &points,
+            &self.0,
+        );
 
-        let points = points;
-        let mut hull = Vec::with_capacity(points.len());
+        // Sort increasingly by x-component and decreasingly by y-component, and
+        // build the lower hull.
+        points.sort_unstable_by(
+            |&(_, coord1), &(_, coord2)| match coord1.x.total_cmp(&coord2.x) {
+                order @ (Ordering::Less | Ordering::Greater) => order,
+                Ordering::Equal => match coord1.y.total_cmp(&coord2.y) {
+                    Ordering::Less => Ordering::Greater,
+                    Ordering::Greater => Ordering::Less,
+                    equal => equal,
+                },
+            },
+        );
+        build_hull(
+            &mut triangulation,
+            &mut lower_hull,
+            |last, point| last >= point,
+            &points,
+            &self.0,
+        );
 
-        for (_, point) in &points {
-            hull.push(point);
-            if hull.len() > 3 {
-                let ((_, left), right, bottom, top) = (
-                    points[0],
-                    *point,
-                    points
-                        .iter()
-                        .min_by(|&(_, point1), &(_, point2)| point1.y.total_cmp(&point2.y)),
-                    points
-                        .iter()
-                        .max_by(|&(_, point1), &(_, point2)| point1.y.total_cmp(&point2.y)),
-                );
+        todo!("Add perimeter edges of both `upper_hull` and `lower_hull` to `triangulation`");
 
-                todo!(
-                    "Compute the area of the polygon formed from the above sides and check if all \
-                    other points in the current convex hull are within that area to discard them.",
-                );
-            }
-        }
-
-        todo!();
+        todo!(
+            "Improve the triangulation with the local maxima algorithm for building Delauney \
+            triangulations from other triangulations in Skiena, page 631.",
+        );
     }
     fn mst(_input: &Self) -> Vec<usize> {
         todo!();

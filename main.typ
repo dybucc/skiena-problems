@@ -2153,8 +2153,46 @@
 
   Though Skiena also advises against using this formula directly, as (obviously) one must half the
   result to get the real formula, but prior to that one must compute the absolute value as the
-  determinant could yield negative values. To compute more easily this determinant, Skiena also has
-  me covered.
+  determinant could yield negative values. Skiena also recommends using an algorithmtic solution to
+  computing determinants, but this shouldn't be necessary in this instance, as the result is easily
+  computable from the 2-dimensional coordinates that are part of the input.
+
+  For the problem at hand, the "right" formula would be
+
+  $
+    abs(a_x b_y - a_y b_x + a_y c_x - a_x c_y + b_x c_y - c_x b_y) / 2 #h(1em)
+    "for some triangle" A "with sides" (a, b, c).
+  $
+
+  For the one instance where the computed sides of the polygon evaluate to those of a triangle, the
+  application is direct. Otherwise, simple triangulation through edge addition between non-adjacent
+  vertices should allow computing the areas of the two inner triangles in the 4-sided polygon.
+
+  Once the area is known, determining whether each of the points in the currently considered convex
+  hull lies within that area is going to require point area detection, which is discussed in
+  Skiena's catalogue.
+
+  It could be that the whole approach to creating a triangulation as an after effect of Skiena's
+  algorithm for constructing convex hulls may be wrong after all. Going through the convex hull
+  algorithm again with a different test case, it could potentially be wrong, because there's no
+  specification about disambiguating elements that compare equal and also resolve to being either
+  one of the topmost or bottommost vertices in the convex hull. Maybe a better approach goes through
+  checking out either O'Rourke's book, de Berg's or the handbook on computational and discrete
+  geometry.
+
+  It may be that Andrew's algorithm can still get the job done. The default implementation of
+  Andrew's algorithm doesn't work correclty with triangulation, as it produces the right chords when
+  processing the upper hull, but creates intersecting chords when building the lower hull. This is a
+  consequence of having to make an additional assumption over the sorted order of the point set when
+  computing the lower hull, which must instead have, between elements of equal $x$-component, a
+  decreasingly sorted $y$-component. The upper hull building routine required the $y$-component of
+  points with the same $x$-component to be sorted increasingly.
+
+  A possible fix may go through performing the same lower hull construction but modifying the sorted
+  order of the input point set to be the same as that used with upper hull creation. This would
+  require computing both the "right" lower hull routine to get the perimeter edges that are getting
+  added later to the triangulation, and the "wrong" but triangulation-wise correct routine to have
+  non-intersecting chords added to the triangulation.
 
 #pagebreak()
 
