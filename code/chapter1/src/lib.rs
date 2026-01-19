@@ -2,10 +2,10 @@
 //!
 //! The use of traits in this crate is not idiomatic; In a real library, the
 //! associated functions would've probably been free functions taking in some
-//! type implementing a trait that provided information on any graph DS.
+//! type implementing a trait providing information on any graph DS.
 //!
 //! The goal is to simply group under a single umbrella the methods required to
-//! implement a certain algorithm for a specific instance of a problem.
+//! implement a certain algorithm for a specific instance of a specific problem.
 
 use std::{
     cmp::Ordering,
@@ -162,8 +162,8 @@ macro_rules! geomatrix {
                     coord: Point2d { x: $x, y: $y },
                 },
                 _ => unimplemented!(
-                    "edges are forced to be `usize` in the `Ordering::Greater` branch so this \
-                    cannot happen",
+                    "edge weights are forced to be `usize` in the `Ordering::Greater` branch so \
+                    this cannot happen",
                 )
             }
         }),+]),+])
@@ -310,7 +310,9 @@ impl Pairs<'_> {
 
         Ok(this == other)
     }
+}
 
+impl Pairs<'_> {
     fn ancestors(&self, this: usize) -> Result<Vec<usize>, PairsError> {
         let (this_root, mut parent, mut ancestors) = (self.find(this)?, this, vec![this]);
 
@@ -349,16 +351,8 @@ impl Pairs<'_> {
             LazyLock::new(|| "this method should not be called outside iterator chains");
 
         let current_tree = self.current_tree.as_ref().expect(&ERROR_MSG);
-        let others: Vec<_> = self
-            .forest
-            .iter()
-            .enumerate()
-            .filter_map(|(node, _)| {
-                current_tree
-                    .iter()
-                    .all(|&tree_node| tree_node != node)
-                    .then_some(node)
-            })
+        let others: Vec<_> = (0..self.forest.len())
+            .filter(|&node| current_tree.iter().all(|&tree_node| tree_node != node))
             .collect();
 
         self.current_product = iter::repeat_n(self.current_node.expect(&ERROR_MSG), others.len())
@@ -477,9 +471,9 @@ impl Iterator for Pairs<'_> {
     // NOTE: this doesn't seem to resolve to the overridden implementation when
     //       used in `tsp()` from `TSPClosestPair`, so the `min_fix()` method on
     //       `Pairs` is being used instead as a drop-in replacement.
-    // TODO: ask in Rust community forums about this behavior, and if it a bug
-    //       then report it with the write up you have in the notes under
-    //       ~/algorist.
+    // TODO: ask in Rust community forums about this behavior, and if it is a
+    //       bug then report it with the write up you have in the notes under
+    //       `~/algorist`.
     fn min(self) -> Option<Self::Item>
     where
         Self: Sized,
@@ -591,7 +585,7 @@ impl GeoAdjacencyMatrix {
                             "this should be caught when traversing the next row as the symmetric \
                             node is always forward in the input array, but the graph checking \
                             logic relies on traversing each row serially so at this point it is \
-                            not yet knonw that the next row would've thrown an \
+                            not yet known that the next row would've thrown an \
                             `AdjacencyErrorType::IncompleteGraph`",
                         );
                     };
@@ -643,11 +637,14 @@ impl TspNearestNeighbor for AdjacencyMatrix {
                     (!visited[idx] && matches!(edge, Edge::Weighted(_))).then_some((idx, edge))
                 })
                 .min_by(|(_, elem1), (_, elem2)| {
+                    static ERROR_MSG: LazyLock<&str> =
+                        LazyLock::new(|| "matrix elements yielded here should have a weight");
+
                     let Edge::Weighted(weight1) = elem1 else {
-                        unreachable!("matrix elements yielded here should have a weight")
+                        unreachable!("{:#?}", &ERROR_MSG)
                     };
                     let Edge::Weighted(weight2) = elem2 else {
-                        unreachable!("matrix elements yielded here should have a weight")
+                        unreachable!("{:#?}", &ERROR_MSG)
                     };
 
                     weight1.cmp(weight2)
@@ -740,8 +737,14 @@ impl TspMstDfs for GeoAdjacencyMatrix {
             output
         });
 
+        // Uses an optional triangulation because the convex hull should always
+        // be built, but the triangulation should only be built alongside the
+        // upper hull. The triangulation considered with the lower hull must use
+        // an incorrect approach to building the latter because otherwise the
+        // chords produced intersect with those produced while building the
+        // upper hull.
         fn build_hull<'a>(
-            triangulation: &mut [Vec<GeoEdge>],
+            mut triangulation: Option<&mut [Vec<GeoEdge>]>,
             hull: &mut Vec<(usize, &'a Point2d)>,
             compare: impl Fn(f64, f64) -> bool,
             points: &[(usize, &'a Point2d)],
@@ -750,14 +753,25 @@ impl TspMstDfs for GeoAdjacencyMatrix {
             for &(vertex, point) in points {
                 while hull.len() > 2
                     && let Some((rm, _)) = hull.pop_if(|(_, last)| compare(last.y, point.y))
+                    && let Some(ref mut triangulation) = triangulation
                 {
-                    let &(prev, _) = hull
-                        .last()
-                        .expect("The hull should have at least two points here.");
-                    let post = vertex;
+                    let (&(prev, _), post) = (
+                        hull.last()
+                            .expect("The hull should have at least two points here."),
+                        vertex,
+                    );
 
-                    (triangulation[prev][rm], triangulation[post][rm]) =
-                        (edge_src[prev][rm].clone(), edge_src[post][rm].clone());
+                    (
+                        triangulation[prev][rm],
+                        triangulation[post][rm],
+                        triangulation[rm][prev],
+                        triangulation[rm][post],
+                    ) = (
+                        edge_src[prev][rm].clone(),
+                        edge_src[post][rm].clone(),
+                        edge_src[rm][prev].clone(),
+                        edge_src[rm][post].clone(),
+                    );
                 }
 
                 hull.push((vertex, point));
@@ -767,13 +781,13 @@ impl TspMstDfs for GeoAdjacencyMatrix {
         // Sort increasingly by both x- and y-components and build the upper
         // hull.
         points.sort_unstable_by(
-            |&(_, coord1), &(_, coord2)| match coord1.x.total_cmp(&coord2.x) {
+            |(_, Point2d { x: x1, y: y1 }), (_, Point2d { x: x2, y: y2 })| match x1.total_cmp(x2) {
                 order @ (Ordering::Less | Ordering::Greater) => order,
-                Ordering::Equal => coord1.y.total_cmp(&coord2.y),
+                Ordering::Equal => y1.total_cmp(y2),
             },
         );
         build_hull(
-            &mut triangulation,
+            Some(&mut triangulation),
             &mut upper_hull,
             |last, point| last <= point,
             &points,
@@ -783,9 +797,9 @@ impl TspMstDfs for GeoAdjacencyMatrix {
         // Sort increasingly by x-component and decreasingly by y-component, and
         // build the lower hull.
         points.sort_unstable_by(
-            |&(_, coord1), &(_, coord2)| match coord1.x.total_cmp(&coord2.x) {
+            |(_, Point2d { x: x1, y: y1 }), (_, Point2d { x: x2, y: y2 })| match x1.total_cmp(x2) {
                 order @ (Ordering::Less | Ordering::Greater) => order,
-                Ordering::Equal => match coord1.y.total_cmp(&coord2.y) {
+                Ordering::Equal => match y1.total_cmp(y2) {
                     Ordering::Less => Ordering::Greater,
                     Ordering::Greater => Ordering::Less,
                     equal => equal,
@@ -793,14 +807,62 @@ impl TspMstDfs for GeoAdjacencyMatrix {
             },
         );
         build_hull(
-            &mut triangulation,
+            None,
             &mut lower_hull,
             |last, point| last >= point,
             &points,
             &self.0,
         );
 
-        todo!("Add perimeter edges of both `upper_hull` and `lower_hull` to `triangulation`");
+        // This is a piece of shit. It's an inefficient necessity arising from
+        // my obstinate obsession towards building a Delauney triangulation
+        // through a method of local maxima optimization of other, "regular"
+        // triangulations; Section 20.3, page 631, Skiena, 2020.
+        {
+            points.sort_unstable_by(
+                |(_, Point2d { x: x1, y: y1 }), (_, Point2d { x: x2, y: y2 })| match x1
+                    .total_cmp(x2)
+                {
+                    order @ (Ordering::Less | Ordering::Greater) => order,
+                    Ordering::Equal => y1.total_cmp(y2),
+                },
+            );
+
+            // Reverse the ascending sorting of points with the same x-component
+            // to be descending instead, as that's still required for the
+            // "incorrect" approach to building the lower hull.
+            let first_samex_num = points
+                .iter()
+                .take_while(|&&(_, &Point2d { x, .. })| x == points[0].1.x)
+                .count();
+            let first_samex = &mut points[0..first_samex_num];
+            first_samex.reverse();
+
+            let mut dummy_lower_hull = Vec::with_capacity(lower_hull.len());
+            build_hull(
+                Some(&mut triangulation),
+                &mut dummy_lower_hull,
+                |last, point| last >= point,
+                &points,
+                &self.0,
+            );
+        }
+
+        // Retrieve the perimeter chords from the hull if they weren't already
+        // part of the triangulation, and get rid of the convex hull altogether.
+        {
+            let mut consume_and_triangulate = |collection: Vec<(usize, &Point2d)>| {
+                collection
+                    .windows(2)
+                    .map(|inner| (inner[0].0, inner[1].0))
+                    .for_each(|(src, dst)| {
+                        triangulation[src][dst] = self.0[src][dst].clone();
+                    });
+            };
+
+            consume_and_triangulate(upper_hull);
+            consume_and_triangulate(lower_hull);
+        }
 
         todo!(
             "Improve the triangulation with the local maxima algorithm for building Delauney \

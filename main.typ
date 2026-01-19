@@ -2189,10 +2189,54 @@
   points with the same $x$-component to be sorted increasingly.
 
   A possible fix may go through performing the same lower hull construction but modifying the sorted
-  order of the input point set to be the same as that used with upper hull creation. This would
+  order of the input point set to be the same as that used with upper hull construction. This would
   require computing both the "right" lower hull routine to get the perimeter edges that are getting
-  added later to the triangulation, and the "wrong" but triangulation-wise correct routine to have
+  added later to the triangulation, and the, "wrong" but triangulation-wise correct, routine to have
   non-intersecting chords added to the triangulation.
+
+  The fix has been implemented and it _should_ work. The thing that remains to be done with the
+  triangulation is to implement the local maxima algorithm for producing the target Delauney
+  triangulation that the whole `triangulate()` trait method aimed for in the first place. For that,
+  the algorithm described by Skiena doesn't quite completely describe the procedure, but it should
+  be fine so long as I implement a subset of robust geometric primitives from those presented in
+  Section 20.1.
+
+  The high-level implementation idea of the algorithm can be broken down into three steps;
+  #l-enum[traversing linearly through all of the edges and checking for each whether the
+    quadrilateral formed from the two triangles sharing that one edge is convex or not][computing
+    the areas of those two triangles as they are now, and the two (different) triangles resulting
+    from flipping that inner edge to connect the other two (non-adjacent) vertices, and][making the
+    changes persistent if the above condition holds true, thus repeating anew with the remaining
+    edges of the triangulation].
+
+  The two roadblocks right now are checking whether an edge is actually shared by two triangles and
+  isn't one of the perimeter edges of the point set, and upon determining that one is, indeed, such
+  an edge, checking which vertices are connected to it, and which two _other_ vertices form the two
+  triangles around the edge.
+
+  Linear passes would do just fine, and considering the implementation is already suboptimal in its
+  ways, this may be the path forward.
+
+  The first issue with the edges should be something that is solved by solving the second issue; If
+  an attempt to determine which triangles are formed from an edge fails to resolve to _two_
+  triangles, this implies that the chord proved to be an "outer" edge and not an "inner" edge. Thus,
+  we will focus on solving the second problem.
+
+  The algorithm to determine whether an edge is shared by two triangles should first determine which
+  two vertices it is made out of. This is fairly simple with the DS chosen to store data on the
+  triangulation, as an adjacency matrix makes that lookup an $O(1)$ operation; The edge itself is
+  denoted by the index-based vertex representation of one of the vertices in the row with index
+  corresponding to the other vertex. It is in determining which _other_ vertices are connected to
+  each of these while forming a triangle that shares the one edge being iterated over, that there's
+  more complexity involved.
+
+  Resolution would go through computing a partial Floyd-Warshall APSP having as the source vertex
+  any one of the two known vertices, and stopping the creation of the resulting distance array as
+  soon as one the total distance to another vertex hits 2. The moment this happens, we can check
+  whether the final destination turned out to be the other vertex that we already had knowledge of,
+  and if that's the case, then we have found one triangle. If this happens twice while running the
+  algorithm, we have two triangles and thus the edge is an inner edge. We can also stop the
+  algorithm as soon as we hit this landmark.
 
 #pagebreak()
 
