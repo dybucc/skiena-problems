@@ -7,6 +7,12 @@
 //! The goal is to simply group under a single umbrella the methods required to
 //! implement a certain algorithm for a specific instance of a specific problem.
 
+#![allow(
+    dead_code,
+    reason = "All of the reportedly unused items are actually used."
+)]
+#![allow(unused_macros, reason = "Ibid.")]
+
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
@@ -737,12 +743,6 @@ impl TspMstDfs for GeoAdjacencyMatrix {
             output
         });
 
-        // Uses an optional triangulation because the convex hull should always
-        // be built, but the triangulation should only be built alongside the
-        // upper hull. The triangulation considered with the lower hull must use
-        // an incorrect approach to building the latter because otherwise the
-        // chords produced intersect with those produced while building the
-        // upper hull.
         fn build_hull<'a>(
             mut triangulation: Option<&mut [Vec<GeoEdge>]>,
             hull: &mut Vec<(usize, &'a Point2d)>,
@@ -778,8 +778,6 @@ impl TspMstDfs for GeoAdjacencyMatrix {
             }
         }
 
-        // Sort increasingly by both x- and y-components and build the upper
-        // hull.
         points.sort_unstable_by(
             |(_, Point2d { x: x1, y: y1 }), (_, Point2d { x: x2, y: y2 })| match x1.total_cmp(x2) {
                 order @ (Ordering::Less | Ordering::Greater) => order,
@@ -794,8 +792,6 @@ impl TspMstDfs for GeoAdjacencyMatrix {
             &self.0,
         );
 
-        // Sort increasingly by x-component and decreasingly by y-component, and
-        // build the lower hull.
         points.sort_unstable_by(
             |(_, Point2d { x: x1, y: y1 }), (_, Point2d { x: x2, y: y2 })| match x1.total_cmp(x2) {
                 order @ (Ordering::Less | Ordering::Greater) => order,
@@ -814,10 +810,6 @@ impl TspMstDfs for GeoAdjacencyMatrix {
             &self.0,
         );
 
-        // This is a piece of shit. It's an inefficient necessity arising from
-        // my obstinate obsession towards building a Delauney triangulation
-        // through a method of local maxima optimization of other, "regular"
-        // triangulations; Section 20.3, page 631, Skiena, 2020.
         {
             points.sort_unstable_by(
                 |(_, Point2d { x: x1, y: y1 }), (_, Point2d { x: x2, y: y2 })| match x1
@@ -828,9 +820,6 @@ impl TspMstDfs for GeoAdjacencyMatrix {
                 },
             );
 
-            // Reverse the ascending sorting of points with the same x-component
-            // to be descending instead, as that's still required for the
-            // "incorrect" approach to building the lower hull.
             let first_samex_num = points
                 .iter()
                 .take_while(|&&(_, &Point2d { x, .. })| x == points[0].1.x)
@@ -848,8 +837,6 @@ impl TspMstDfs for GeoAdjacencyMatrix {
             );
         }
 
-        // Retrieve the perimeter chords from the hull if they weren't already
-        // part of the triangulation, and get rid of the convex hull altogether.
         {
             let mut consume_and_triangulate = |collection: Vec<(usize, &Point2d)>| {
                 collection
@@ -857,6 +844,7 @@ impl TspMstDfs for GeoAdjacencyMatrix {
                     .map(|inner| (inner[0].0, inner[1].0))
                     .for_each(|(src, dst)| {
                         triangulation[src][dst] = self.0[src][dst].clone();
+                        triangulation[dst][src] = self.0[dst][src].clone();
                     });
             };
 
@@ -864,10 +852,123 @@ impl TspMstDfs for GeoAdjacencyMatrix {
             consume_and_triangulate(lower_hull);
         }
 
-        todo!(
-            "Improve the triangulation with the local maxima algorithm for building Delauney \
-            triangulations from other triangulations in Skiena, page 631.",
-        );
+        let mut tracking_list: Vec<(usize, usize)> = Vec::with_capacity(triangulation.len());
+        for (src, edges) in triangulation.iter().enumerate().map(|(src, edges)| {
+            (
+                src,
+                edges
+                    .iter()
+                    .enumerate()
+                    .filter(|&(dst, edge)| {
+                        (!tracking_list.contains(&(dst, src)))
+                            .then(|| {
+                                tracking_list.push((src, dst));
+                            })
+                            .is_some()
+                            && matches!(edge, GeoEdge::Weighted { .. })
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        }) {
+            for &(dst, dst_point) in &edges {
+                let (p1, p2) = {
+                    let mut input_check = edges.iter().filter(|(src_adjacent, _)| {
+                        *src_adjacent != dst
+                            && triangulation[*src_adjacent]
+                                .iter()
+                                .enumerate()
+                                .any(|(dst_potential, _)| dst_potential == dst)
+                    });
+
+                    (input_check.next(), input_check.next())
+                };
+
+                if let Some((_, GeoEdge::Weighted { coord: p1, .. })) = p1
+                    && let Some((_, GeoEdge::Weighted { coord: p2, .. })) = p2
+                    && let GeoEdge::Weighted { coord: p_dst, .. } = dst_point
+                    && let GeoEdge::Weighted { coord: p_src, .. } = &triangulation[dst][src]
+                {
+                    static EPS: LazyLock<f64> = LazyLock::new(|| 1e-9);
+
+                    let quadrilateral_area = {
+                        let (a, b, c) = (p1, p_dst, p_src);
+                        let area_1 = (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y + b.x * c.y
+                            - c.x * b.y)
+                            .abs()
+                            / 2.;
+                        let (a, b, c) = (p2, p_dst, p_src);
+                        let area_2 = (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y + b.x * c.y
+                            - c.x * b.y)
+                            .abs()
+                            / 2.;
+
+                        area_1 + area_2
+                    };
+
+                    let p1p2psrc_check = {
+                        let (a, b, c) = (p1, p2, p_src);
+                        let area = (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y + b.x * c.y
+                            - c.x * b.y)
+                            .abs()
+                            / 2.;
+                        let p_dst_area = {
+                            let (a, b, c) = (p1, p_src, p_dst);
+                            let mut output = (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y
+                                + b.x * c.y
+                                - c.x * b.y)
+                                .abs()
+                                / 2.;
+                            let (a, b, c) = (p2, p_src, p_dst);
+                            output += (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y + b.x * c.y
+                                - c.x * b.y)
+                                .abs()
+                                / 2.;
+                            let (a, b, c) = (p1, p2, p_dst);
+                            output += (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y + b.x * c.y
+                                - c.x * b.y)
+                                .abs()
+                                / 2.;
+
+                            output
+                        };
+
+                        (area - p_dst_area).abs() <= *EPS
+                    };
+
+                    let p1p2pdst_check = {
+                        let (a, b, c) = (p1, p2, p_dst);
+                        let area = (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y + b.x * c.y
+                            - c.x * b.y)
+                            .abs()
+                            / 2.;
+                        let p_src_area = {
+                            let (a, b, c) = (p1, p_dst, p_src);
+                            let mut output = (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y
+                                + b.x * c.y
+                                - c.x * b.y)
+                                .abs()
+                                / 2.;
+                            let (a, b, c) = (p2, p_dst, p_src);
+                            output += (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y + b.x * c.y
+                                - c.x * b.y)
+                                .abs()
+                                / 2.;
+                            let (a, b, c) = (p1, p2, p_src);
+                            output += (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y + b.x * c.y
+                                - c.x * b.y)
+                                .abs()
+                                / 2.;
+
+                            output
+                        };
+
+                        (area - p_src_area).abs() <= *EPS
+                    };
+                }
+            }
+        }
+
+        Ok(())
     }
     fn mst(_input: &Self) -> Vec<usize> {
         todo!();

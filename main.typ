@@ -2186,7 +2186,7 @@
   consequence of having to make an additional assumption over the sorted order of the point set when
   computing the lower hull, which must instead have, between elements of equal $x$-component, a
   decreasingly sorted $y$-component. The upper hull building routine required the $y$-component of
-  points with the same $x$-component to be sorted increasingly.
+  points with the same $x$-component to be sorted in ascending order.
 
   A possible fix may go through performing the same lower hull construction but modifying the sorted
   order of the input point set to be the same as that used with upper hull construction. This would
@@ -2196,47 +2196,125 @@
 
   The fix has been implemented and it _should_ work. The thing that remains to be done with the
   triangulation is to implement the local maxima algorithm for producing the target Delauney
-  triangulation that the whole `triangulate()` trait method aimed for in the first place. For that,
-  the algorithm described by Skiena doesn't quite completely describe the procedure, but it should
-  be fine so long as I implement a subset of robust geometric primitives from those presented in
-  Section 20.1.
+  triangulation that the whole `triangulate()` trait method aimed for in the first place.
 
   The high-level implementation idea of the algorithm can be broken down into three steps;
-  #l-enum[traversing linearly through all of the edges and checking for each whether the
-    quadrilateral formed from the two triangles sharing that one edge is convex or not][computing
-    the areas of those two triangles as they are now, and the two (different) triangles resulting
+  #l-enum[Traversing linearly through all of the edges and checking, for each, whether the
+    quadrilateral created from the two triangles sharing that one edge is convex or not][computing
+    the areas of those two triangles as they are now, and the two (differing) triangles resulting
     from flipping that inner edge to connect the other two (non-adjacent) vertices, and][making the
-    changes persistent if the above condition holds true, thus repeating anew with the remaining
-    edges of the triangulation].
+    changes persistent with one of the above, if it holds that the triangle in question is _less
+    skinny_ (TBD the implementation meaning of this,) thus repeating it with the remaining chords in
+    the triangulation].
 
-  The two roadblocks right now are checking whether an edge is actually shared by two triangles and
-  isn't one of the perimeter edges of the point set, and upon determining that one is, indeed, such
-  an edge, checking which vertices are connected to it, and which two _other_ vertices form the two
-  triangles around the edge.
+  The main roadblocks are checking whether an edge is actually shared by two triangles and isn't one
+  of the perimeter edges of the point set, and upon determining that one is, indeed, such an edge,
+  checking which vertices are connected to it, and which two _other_ vertices make up the triangles
+  formed around the edge in question.
 
   Linear passes would do just fine, and considering the implementation is already suboptimal in its
   ways, this may be the path forward.
 
-  The first issue with the edges should be something that is solved by solving the second issue; If
-  an attempt to determine which triangles are formed from an edge fails to resolve to _two_
-  triangles, this implies that the chord proved to be an "outer" edge and not an "inner" edge. Thus,
-  we will focus on solving the second problem.
+  The first issue with the edges can be solved by addressing first the second issue; If an attempt
+  to determine which triangles are formed from an edge fails to resolve to _two_ triangles, this
+  implies that the chord proved to be an "outer" edge (on the hull's perimeter) and not an "inner"
+  edge (an actual triangulation edge.) Thus, we will focus on solving the second problem.
 
   The algorithm to determine whether an edge is shared by two triangles should first determine which
   two vertices it is made out of. This is fairly simple with the DS chosen to store data on the
   triangulation, as an adjacency matrix makes that lookup an $O(1)$ operation; The edge itself is
   denoted by the index-based vertex representation of one of the vertices in the row with index
-  corresponding to the other vertex. It is in determining which _other_ vertices are connected to
-  each of these while forming a triangle that shares the one edge being iterated over, that there's
-  more complexity involved.
+  corresponding to the other vertex. It is in determining which _other_ vertices form a triangle
+  with each of these, while having the edge between them be shared by two such triangles, that a
+  slightly more complex problem arises.
 
   Resolution would go through computing a partial Floyd-Warshall APSP having as the source vertex
   any one of the two known vertices, and stopping the creation of the resulting distance array as
-  soon as one the total distance to another vertex hits 2. The moment this happens, we can check
-  whether the final destination turned out to be the other vertex that we already had knowledge of,
-  and if that's the case, then we have found one triangle. If this happens twice while running the
+  soon as the total distance to another vertex hits 2. The moment this happens, we can check whether
+  the final destination turned out to be the other vertex that we already had knowledge of, and if
+  that's the case, then we have found one triangle. If this happens twice while running the
   algorithm, we have two triangles and thus the edge is an inner edge. We can also stop the
-  algorithm as soon as we hit this landmark.
+  algorithm as soon as we hit this landmark. Otherwise, if upon completing the routine, only a
+  single triangle has been "detected," then the edge under consideration is an outer edge and thus
+  there's no local optimization possible.
+
+  To better understand whether I should implement this manually by performing linear checks with
+  depth 2 on each of the vertices a given vertex has an edge with, or whether I should implement
+  some known shortest path algorithm, Skiena's chapter 8 should do me good. From reading Section
+  8.3, the way to go may prove to be simpler than expected; The triangulation being an undirected
+  graph, finding paths would only involve performing BFS on the tree starting at some known source
+  vertex. Because additionally we are not constrained to computing a _shortest_ route, the BFS can
+  simply stop running as soon as it hits distance 2. The resulting tree can then be explored or
+  alternatively modeled after a specific "shape;" If there exists a path forming two triangles with
+  the (known) destination vertex, then the tree will have at least two children, each having a
+  single child vertex pointing to the destination vertex.
+
+  This, though, could be simplified by avoiding building a tree, as the same linear cost that BFS
+  would incur could be replaced by a (smaller) linear cost that checked each of the vertices the
+  chosen source vertex would have, backtracking if another linear pass over each of those edges
+  didn't resolve to having an edge connecting the (known) destination vertex. This is fundamentally
+  the same as a BFS but stopping short at a distance 2 from the source vertex.
+
+  Once the algorithm has determined that, indeed, it is working with a quadrilateral, then it should
+  check whether such a polygon is convex or not. For that, an approach was already formulated a few
+  pages ago; The segment formed from joining the only two non-adjacent vertices in the 4-sided
+  polygon should be checked as being within the area of the quadrilateral. An alternative approach
+  would go through computing the intersection between the segment formed between the only two
+  non-adjacent vertices, and the actual edge (segment) under consideration in the triangulation's
+  adjacency matrix.
+
+  Skiena proposes two aproaches to solving the problem; Either #l-enum[solve for a planar sweep pass
+    that accounts for both possible future events and possible points of interest to keep track of
+    in the plane, or][check out O'Rourke's book for exposition-level algorithms that should do in
+    this case].
+
+  Maybe a better routine would handle the overarching goal of determining whether the polygon is
+  convex by first determining the inner areas of the two triangles formed by keeping the edge
+  between the two non-adjacent vertices of the quadrilateral, and adding as the third edge any one
+  of the two other vertices, then checking if the other (outlier) vertex is contained within the
+  area of this triangle. If any one of the two checks yields that one of the outlying vertices is
+  contained within the area of one of the new triangles, then the polygon can be assumed to _not_ be
+  convex; Otherwise, the polygon _is_ convex.
+
+  To do this, I'm going to require computing first the area of each of the resulting triangles,
+  which I already know from Skiena's catalogue, and computing point location to check whether a
+  2-dimensional point is contained within the triangle. This latter task is treated in the catalogue
+  under Section 20.7. The simplest such case of query point detection within some bounded polygon
+  $P$ in 2 dimensions stil requires computing the intersection of a ray going from the query point
+  to the furthest extent of the polygon, which itself is related to the intersection methods
+  discussed in another section of the catalogue.
+
+  Instead, I could compute whether a point belongs to a triangle by first computing the inner area
+  of the triangle in question, and then computing each of the areas of the triangles formed from
+  considering each pair of vertices of the (possibly) overarching triangle and the target query
+  point. If the total sum of each of the three possible triangle areas arising from the three
+  possible vertex pairs in a 2-dimensional simplicial complex is the same (within an $epsilon$) of
+  the originally computed triangle area, then the query point is contained within the area under
+  consideration.
+
+  This would prove to be a simpler, constant time approach, as it's basically computing four
+  triangle areas through the formula in Skiena's catalogue, and checking for equality between two
+  floating point numbers.
+
+  The only thing that remains to be specified in the local maxima algorithm is the check that must
+  be performed between the two possible triangles considered in convex quadrilaterals. So far, I
+  assumed the meaning behind _skinny triangles_ when explained by Skiena, was referring to the area
+  of the bodies. But that may not be the case; It's quite possibly referring to the angles formed by
+  each of the vertices. Either way, the initial implementation will take into account the area of
+  the polygons alone.
+
+  The implementation for the first part of the algorithm, namely the triangulation edge traversal,
+  should follow that only _non_-`NonExistent` edges within each of the rows of the underlying
+  adjacency matrix should be considerd. Then another filtering pass is required; The triangulation
+  is modelled after an undirected graph, so for each edge that is, serially, found to be
+  `Weighted { .. }`, it should immediately discard the corresponding symmetric edge (i.e the edge
+  pointed to by the adjacency matrix with reverse indices.) This second pass, though, would require
+  keeping track of a list of "seen" edges denoted by their indices in the matrix, after which
+  `filter()` would immediately produce `false` for each of the elements whose indices are the result
+  of reversing any one of the indices contained within the list.
+
+  Then, for each ordered pair of vertices and their corresponding adjacency lists, the body of the
+  main loop would consider
 
 #pagebreak()
 
