@@ -2314,7 +2314,67 @@
   of reversing any one of the indices contained within the list.
 
   Then, for each ordered pair of vertices and their corresponding adjacency lists, the body of the
-  main loop would consider
+  main loop would consider whether the first node that is within bounds is part of the triangulation
+  under consideration.
+
+  The pseudocode for the above algorithm would be as follows.
+
+  #pseudocode(title: [Producing a Delauney triangulation from a regular triangulation])[
+    #let (
+      triangulation,
+      null,
+      triangulationat,
+      space,
+    ) = (
+      raw("triangulation"),
+      raw("NULL"),
+      x => {
+        assert.eq(type(x), content)
+        [#raw("triangulation[")#x#raw("]")]
+      },
+      sym.zwj,
+    )
+    + *for* $(s, e)$ *in* $triangulation$
+      + *_inner_: for* $(d, v)$ *in* $e$
+        + *if* $v equiv.not null$ *then*
+          + *let* $(a, b, c, d) <- (s, d, null, null)$
+          - #space
+          + *_adjacent_: for* $(s_"adj", p)$ *in* $triangulationat(s)$
+            + *if* $s_"adj" equiv.not d and d in triangulationat(s_"adj")$
+              *then*
+              + *if* $c equiv.not null$ *then*
+                + $d <- s_"adj"$
+                + *break _adjacent_*
+              + *else*
+                + $c <- s_"adj"$
+          + *if* $c equiv null or d equiv null$ *then*
+            + *continue _inner_*
+          - #space
+          + *let*
+            $A_a <- abs(a_x d_y - a_y d_x + a_y c_x - \ a_x c_y + d_x c_y - c_x d_y) / 2$
+            + *let*
+              $A_a_0 <- abs(a_x b_y - a_y b_x + a_y c_x - \ a_x c_y + b_x c_y - c_x b_y) / 2$
+            + *let*
+              $A_a_1 <- abs(a_x b_y - a_y b_x + a_y d_x - \ a_x d_y + b_x d_y - d_x b_y) / 2$
+            + *let*
+              $A_a_2 <- abs(c_x b_y - c_y b_x + c_y d_x - \ c_x d_y + b_x d_y - d_x b_y) / 2$
+          + *if* $A_a_({0, 1, 2}) equiv A_a$ *then*
+            + *continue _inner_*
+          + *let*
+            $A_b <- abs(d_x b_y - d_y b_x + d_y c_x - d_x c_y + b_x c_y - c_x b_y) / 2$
+            + *let*
+              $A_b_0 <- abs(a_x b_y - a_y b_x + a_y c_x - a_x c_y + b_x c_y - c_x b_y) / 2$
+            + *let*
+              $A_b_1 <- abs(a_x b_y - a_y b_x + a_y d_x - a_x d_y + b_x d_y - d_x b_y) / 2$
+            + *let*
+              $A_b_2 <- abs(a_x d_y - a_y d_x + a_y c_x - a_x c_y + d_x c_y - c_x d_y) / 2$
+          + *if* $A_b_({0, 1, 2}) equiv A_b$ *then*
+            + *continue _inner_*
+          - #space
+          + *let* $(t_0_0, t_0_1) <- ((a, b, c), (a, b, d))$
+            + *let* $(s_0_0, s_0_1) <- (abs(overline(a b)), abs(overline(a c)))$
+          + *let* $(t_1_0, t_1_2) <- ((a, c, d), (b, c, d))$
+  ]
 
 #pagebreak()
 

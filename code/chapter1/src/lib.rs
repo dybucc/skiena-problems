@@ -827,7 +827,7 @@ impl TspMstDfs for GeoAdjacencyMatrix {
             let first_samex = &mut points[0..first_samex_num];
             first_samex.reverse();
 
-            let mut dummy_lower_hull = Vec::with_capacity(lower_hull.len());
+            let mut dummy_lower_hull = Vec::with_capacity(points.len());
             build_hull(
                 Some(&mut triangulation),
                 &mut dummy_lower_hull,
@@ -852,7 +852,7 @@ impl TspMstDfs for GeoAdjacencyMatrix {
             consume_and_triangulate(lower_hull);
         }
 
-        let mut tracking_list: Vec<(usize, usize)> = Vec::with_capacity(triangulation.len());
+        let mut tracking_list = Vec::with_capacity(triangulation.len());
         for (src, edges) in triangulation.iter().enumerate().map(|(src, edges)| {
             (
                 src,
