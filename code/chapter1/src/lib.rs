@@ -870,17 +870,17 @@ impl TspMstDfs for GeoAdjacencyMatrix {
                     .collect::<Vec<_>>(),
             )
         }) {
-            for &(dst, dst_point) in &edges {
+            'edge_loop: for &(dst, dst_point) in &edges {
                 let (p1, p2) = {
-                    let mut input_check = edges.iter().filter(|(src_adjacent, _)| {
+                    let mut d2_adjacent_points = edges.iter().filter(|(src_adjacent, _)| {
                         *src_adjacent != dst
                             && triangulation[*src_adjacent]
                                 .iter()
                                 .enumerate()
-                                .any(|(dst_potential, _)| dst_potential == dst)
+                                .any(|(possibly_dst, _)| possibly_dst == dst)
                     });
 
-                    (input_check.next(), input_check.next())
+                    (d2_adjacent_points.next(), d2_adjacent_points.next())
                 };
 
                 if let Some((_, GeoEdge::Weighted { coord: p1, .. })) = p1
@@ -890,80 +890,43 @@ impl TspMstDfs for GeoAdjacencyMatrix {
                 {
                     static EPS: LazyLock<f64> = LazyLock::new(|| 1e-9);
 
-                    let quadrilateral_area = {
-                        let (a, b, c) = (p1, p_dst, p_src);
-                        let area_1 = (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y + b.x * c.y
-                            - c.x * b.y)
+                    #[inline(always)]
+                    fn compute_triangle_area((a, b, c): (&Point2d, &Point2d, &Point2d)) -> f64 {
+                        (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y + b.x * c.y - c.x * b.y)
                             .abs()
-                            / 2.;
-                        let (a, b, c) = (p2, p_dst, p_src);
-                        let area_2 = (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y + b.x * c.y
-                            - c.x * b.y)
-                            .abs()
-                            / 2.;
+                            / 2.
+                    }
 
-                        area_1 + area_2
-                    };
+                    fn check_point_ownership(
+                        (a, b, c): (&Point2d, &Point2d, &Point2d),
+                        p_to_check: &Point2d,
+                    ) -> bool {
+                        let container_area = compute_triangle_area((a, b, c));
+                        let (area_0, area_1, area_2) = (
+                            {
+                                let (a, b, c) = (a, b, p_to_check);
+                                compute_triangle_area((a, b, c))
+                            },
+                            {
+                                let (a, b, c) = (a, c, p_to_check);
+                                compute_triangle_area((a, b, c))
+                            },
+                            {
+                                let (a, b, c) = (c, b, p_to_check);
+                                compute_triangle_area((a, b, c))
+                            },
+                        );
 
-                    let p1p2psrc_check = {
-                        let (a, b, c) = (p1, p2, p_src);
-                        let area = (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y + b.x * c.y
-                            - c.x * b.y)
-                            .abs()
-                            / 2.;
-                        let p_dst_area = {
-                            let (a, b, c) = (p1, p_src, p_dst);
-                            let mut output = (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y
-                                + b.x * c.y
-                                - c.x * b.y)
-                                .abs()
-                                / 2.;
-                            let (a, b, c) = (p2, p_src, p_dst);
-                            output += (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y + b.x * c.y
-                                - c.x * b.y)
-                                .abs()
-                                / 2.;
-                            let (a, b, c) = (p1, p2, p_dst);
-                            output += (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y + b.x * c.y
-                                - c.x * b.y)
-                                .abs()
-                                / 2.;
+                        container_area - (area_0 + area_1 + area_2) <= *EPS
+                    }
 
-                            output
-                        };
-
-                        (area - p_dst_area).abs() <= *EPS
-                    };
-
-                    let p1p2pdst_check = {
-                        let (a, b, c) = (p1, p2, p_dst);
-                        let area = (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y + b.x * c.y
-                            - c.x * b.y)
-                            .abs()
-                            / 2.;
-                        let p_src_area = {
-                            let (a, b, c) = (p1, p_dst, p_src);
-                            let mut output = (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y
-                                + b.x * c.y
-                                - c.x * b.y)
-                                .abs()
-                                / 2.;
-                            let (a, b, c) = (p2, p_dst, p_src);
-                            output += (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y + b.x * c.y
-                                - c.x * b.y)
-                                .abs()
-                                / 2.;
-                            let (a, b, c) = (p1, p2, p_src);
-                            output += (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y + b.x * c.y
-                                - c.x * b.y)
-                                .abs()
-                                / 2.;
-
-                            output
-                        };
-
-                        (area - p_src_area).abs() <= *EPS
-                    };
+                    // Some vertex in the quadrilateral proved to be a reflex
+                    // vertex (i.e. angle > PI, using O'Rourke's terminology.)
+                    if check_point_ownership((p1, p2, p_src), p_dst)
+                        || check_point_ownership((p1, p2, p_dst), p_src)
+                    {
+                        continue 'edge_loop;
+                    }
                 }
             }
         }

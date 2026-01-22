@@ -1,9 +1,9 @@
 (function() {
-    var implementors = Object.fromEntries([["chapter1",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.92.0/core/cmp/trait.PartialEq.html\" title=\"trait core::cmp::PartialEq\">PartialEq</a> for <a class=\"enum\" href=\"chapter1/enum.Edge.html\" title=\"enum chapter1::Edge\">Edge</a>"]]]]);
+    var implementors = Object.fromEntries([["chapter1",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.92.0/core/cmp/trait.PartialEq.html\" title=\"trait core::cmp::PartialEq\">PartialEq</a> for <a class=\"enum\" href=\"chapter1/enum.Edge.html\" title=\"enum chapter1::Edge\">Edge</a>"],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.92.0/core/cmp/trait.PartialEq.html\" title=\"trait core::cmp::PartialEq\">PartialEq</a> for <a class=\"struct\" href=\"chapter1/struct.Point2d.html\" title=\"struct chapter1::Point2d\">Point2d</a>"]]],["chapter1",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.92.0/core/cmp/trait.PartialEq.html\" title=\"trait core::cmp::PartialEq\">PartialEq</a> for <a class=\"enum\" href=\"chapter1/enum.Edge.html\" title=\"enum chapter1::Edge\">Edge</a>"]]]]);
     if (window.register_implementors) {
         window.register_implementors(implementors);
     } else {
         window.pending_implementors = implementors;
     }
 })()
-//{"start":57,"fragment_lengths":[259]}
+//{"start":57,"fragment_lengths":[519,260]}
