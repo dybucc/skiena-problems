@@ -2376,6 +2376,269 @@
           + *let* $(t_1_0, t_1_2) <- ((a, c, d), (b, c, d))$
   ]
 
+  The unknown could also be expressed as being the length of the three different segments that have
+  different starting points, but the same endpoint. Where those segments to form two triangles, the
+  edge from the point not part of the triangulation's segment to-be-flipped, would be incident to
+  both such triangles. Then the length of that side would be equal to the length of both sides of
+  the two triangles.
+
+  If both triangles share a point, namely the unknown, and the other two points are known, then for
+  some triangles $t_1, t_2$, where $t_1 = {a_1, b_1, c_1}, t_2 = {a_2, b_2, c_2}$, and the unknown
+  is said to be $a_1 equiv a_2$, one could then infer the ordered pair describing the coordinates in
+  Euclidean space of the unknown, from here on out referred to simply as $a$, by computing for the
+  length of each of the tree segments of equivalent length leading from each of the known points to
+  $a$, thus making for a system of two equations with two unknowns, which is well defined.
+
+  Some segment length $S$ is determined as $S = sqrt(S_1^2 + S_2^2)$, where $S_1, S_2$ are the
+  lengths of the two segments each of whose starting point is one of the start/end points of $S$,
+  and whose endpoints are equivalent to each other _and_ form a right angle in their intersection.
+  Thus, to compute each of the segment lengths in the original problem, namely
+
+  $
+    overline(a b_1), overline(a b_2), overline(a c_1), overline(a c_2),
+  $
+
+  one would perform the following computations.
+
+  $
+    overline(a b_1) = sqrt(abs(a_x - b_1_x)^2 + abs(a_y - b_1_y)^2), \
+    overline(a b_2) = sqrt(abs(a_x - b_2_x)^2 + abs(a_y - b_2_y)^2), \
+    overline(a c_1) = sqrt(abs(a_x - c_1_x)^2 + abs(a_y - c_1_y)^2), \
+    overline(a c_2) = sqrt(abs(a_x - c_2_x)^2 + abs(a_y - c_2_y)^2).
+  $
+
+  Each of those lengths is known to be equal, and all variables except $a = (a_x, a_y)$ are also
+  known. Thus, as formulated above, we have a system of two equations with two unknowns.
+
+  Let us start with $overline(a b_1) = overline(a b_2)$.
+
+  $
+    sqrt(abs(a_x - b_1_x)^2 + abs(a_y - b_1_y)^2) & = sqrt(abs(a_x - b_2_x)^2 + abs(a_y - b_2_y)^2) \
+    abs(a_x - b_1_x)^2 + abs(a_y - b_1_y)^2 & = abs(a_x - b_2_x)^2 + abs(a_y - b_2_y)^2 \
+    (a_x - b_1_x)^2 + (a_y - b_1_y)^2 & = (a_x - b_2_x)^2 + (a_y - b_2_y)^2 \
+    (a_(x)^2 + b_(1_x)^2 - 2 a_x b_1_x) + (a_(y)^2 + b_(1_y)^2 - 2 a_y b_1_y) & = (a_(x)^2 + b_(2_x)^2 - 2 a_x b_2_x) + (a_(y)^2 + b_(2_y)^2 - 2 a_y b_2_y) \
+    -2 a_x b_1_x - 2 a_y b_1_y + 2 a_x b_2_x + 2 a_y b_2_y & = b_(2_x)^2 + b_(2_y)^2 - b_(1_x)^2 - b_(1_y)^2.
+  $
+
+  Prior to solving for a specific unknown, let us solve for $overline(a c_1) = overline(a c_2)$.
+
+  $
+    sqrt(abs(a_x - c_1_x)^2 + abs(a_y - c_1_y)^2) & = sqrt(abs(a_x - c_2_x)^2 + abs(a_y - c_2_y)^2) \
+    abs(a_x - c_1_x)^2 + abs(a_y - c_1_y)^2 & = abs(a_x - c_2_x)^2 + abs(a_y - c_2_y)^2 \
+    (a_x - c_1_x)^2 + (a_y - c_1_y)^2 & = (a_x - c_2_x)^2 + (a_y - c_2_y)^2 \
+    (a_(x)^2 + c_(1_x)^2 - 2 a_x c_1_x) + (a_(y)^2 + c_(1_y)^2 - 2 a_y c_1_y) & = (a_(x)^2 + c_(2_x)^2 - 2 a_x c_2_x) + (a_(y)^2 + c_(2_y)^2 - 2 a_y c_2_y) \
+    -2 a_x c_1_x - 2 a_y c_1_y + 2 a_x c_2_x + 2 a_y c_2_y & = c_(2_x)^2 + c_(2_y)^2 - c_(1_x)^2 - c_(1_y)^2.
+  $
+
+  Gathering both resulting equations into a single system,
+
+  $
+    cases(
+      -2 a_x b_1_x - 2 a_y b_1_y + 2 a_x b_2_x + 2 a_y b_2_y & = b_(2_x)^2 + b_(2_y)^2 - b_(1_x)^2 - b_(1_y)^2,
+      -2 a_x c_1_x - 2 a_y c_1_y + 2 a_x c_2_x + 2 a_y c_2_y & = c_(2_x)^2 + c_(2_y)^2 - c_(1_x)^2 - c_(1_y)^2,
+    )
+  $ <p130-system>
+
+  Let us now solve the system in terms of $a_x$.
+
+  $
+    -2 a_x b_1_x + 2 a_x b_2_x & = b_(2_x)^2 + b_(2_y)^2 - b_(1_x)^2 - b_(1_y)^2 + 2 a_y b_1_y - 2 a_y b_2_y \
+    a_(x)(-2 b_1x + 2 b_2_x) & = b_(2_x)^2 + b_(2_y)^2 - b_(1_x)^2 - b_(1_y)^2 + 2 a_y b_1_y - 2 a_y b_2_y \
+    a_x & = (b_(2_x)^2 + b_(2_y)^2 - b_(1_x)^2 - b_(1_y)^2 + 2 a_y b_1_y - 2 a_y b_2_y) / (-2 b_1_x + 2 b_2_x).
+  $ <p130-axdep>
+
+  Which solves for $a_y$ as in the result for $overline(a c_1) = overline(a c_2)$ in @p130-system.
+
+  $
+    -2 a_y c_1_y + 2 a_y c_2_y & = c_(2_x)^2 + c_(2_y)^2 - c_(1_x)^2 - c_(1_y)^2 + 2 a_x c_1_x - 2 a_x c_2_x \
+    a_(y)(-2 c_1_y + 2 c_2_y) & = c_(2_x)^2 + c_(2_y)^2 - c_(1_x)^2 - c_(1_y)^2 + 2 a_x c_1_x - 2 a_x c_2_x \
+    a_y & = (c_(2_x)^2 + c_(2_y)^2 - c_(1_x)^2 - c_(1_y)^2 + 2 a_x c_1_x - 2 a_x c_2_x) /
+    (-2 c_1_y + 2 c_2_y) \
+    & = (c_(2_x)^2 + c_(2_y)^2 - c_(1_x)^2 - c_(1_y)^2) / (-2 c_1_y + 2 c_2_y) +
+    (2 a_x c_1_x) / (-2 c_1_y + 2 c_2_y) - (2 a_x c_2_x) / (-2 c_1_y + 2 c_2_y).
+  $ <p130-lhsconstant>
+
+  Prior to continuing, and for the sake of brevity in the use of constant variables, let us rename
+  the separate constant real in the lhs of @p130-lhsconstant with some $k$.
+
+  $
+    k = (c_(2_x)^2 + c_(2_y)^2 - c_(1_x)^2 - c_(1_y)^2) / (-2 c_1_y + 2 c_2_y).
+  $
+
+  Thus, @p130-lhsconstant would continue as follows.
+
+  $
+    a_y & = k + (2 a_x c_1_x) / (-2 c_1_y + 2 c_2_y) - (2 a_x c_2_x) / (-2 c_1_y + 2 c_2_y) \
+        & = a_(x)((2 c_1_x) / (-2 c_1_y + 2 c_2_y) - (2 c_2_x) / (-2 c_1_y + 2 c_2_y)) + k \
+    a_y & = ((b_(2_x)^2 + b_(2_y)^2 - b_(1_x)^2 - b_(1_y)^2 + 2 a_y b_1_y - 2 a_y b_2_y) / (-2 b_1_x + 2 b_2_x))
+          ((2 c_1_x) / (-2 c_1_y + 2 c_2_y) - (2 c_2_x) / (-2 c_1_y + 2 c_2_y)) + k \
+    a_y & = ((b_(2_x)^2 + b_(2_y)^2 - b_(1_x)^2 - b_(1_y)^2) / (-2 b_1_x + 2 b_2_x) + (2 a_y b_1_y - 2 a_y b_2_y) / (-2 b_1_x + 2 b_2_x))
+          ((2 c_1_x) / (-2 c_1_y + 2 c_2_y) - (2 c_2_x) / (-2 c_1_y + 2 c_2_y)) + k.
+  $ <p130-lhsconstant2>
+
+  Then again, for brevity's sake, let us refer to the first constant term in the expansion of $a_x$
+  within @p130-lhsconstant2 as $l$, and the leftmost, non-$k$ constant term as $q$.
+
+  $
+    l & = (b_(2_x)^2 + b_(2_y)^2 - b_(1_x)^2 - b_(1_y)^2) / (-2 b_1_x + 2 b_2_x), \
+    q & = (2 c_1_x) / (-2 c_1_y + 2 c_2_y) - (2 c_2_x) / (-2 c_1_y + 2 c_2_y).
+  $
+
+  Which would allow us to continue solving @p130-lhsconstant2 as follows.
+
+  $
+    a_y & = q(l + (2 a_y b_1_y - 2 a_y b_2_y) / (-2 b_1_x + 2 b_2_x)) + k \
+    a_y & = q(l + a_(y)(2 b_1_y - 2 b_2_y) / (-2 b_1_x + 2 b_2_x)) + k \
+    a_y & = q l + q a_(y)(2 b_1_y - 2 b_2_y) / (-2 b_1_x + 2 b_2_x) + k \
+    a_y - a_(y)q(2 b_1_y - 2 b_2_y) / (-2 b_1_x + 2 b_2_x) & = q l + k \
+    a_(y)(1 - q(2 b_1_y - 2 b_2_y) / (-2 b_1_x + 2 b_2_x)) & = q l + k \
+    a_y & = (q l + k) / (1 - q (b_1_y - b_2_y) / (-b_1_x + b_2_x)).
+  $
+
+  Solving for $a_x$ in @p130-axdep would then resolve to
+
+  $
+    a_x & = (b_(2_x)^2 + b_(2_y)^2 - b_(1_x)^2 - b_(1_y)^2 + 2 a_y b_1_y - 2 a_y b_2_y) / (-2 b_1_x + 2 b_2_x) \
+    & = (b_(2_x)^2 + b_(2_y)^2 - b_(1_x)^2 - b_(1_y)^2) / (-2 b_1_x + 2 b_2_x) + a_(y)(b_1_y - b_2_y) / (-b_1_x + b_2_x).
+  $ <p130-axalmost>
+
+  For the last time, let us refer to the leftmost constant term as a single varible $s$.
+
+  $
+    s = (b_(2_x)^2 + b_(2_y)^2 - b_(1_x)^2 - b_(1_y)^2) / (-2 b_1_x + 2 b_2_x).
+  $
+
+  Which would solve @p130-axalmost as follows.
+
+  $
+    a_x & = a_(y)(b_1_y - b_2_y) / (-b_1_x + b_2_x) + s \
+    a_x & = ((q l + k) / (1 - q (b_1_y - b_2_y) / (-b_1_x + b_2_x))) (b_1_y - b_2_y) / (-b_1_x + b_2_x) + s.
+  $
+
+  The final solution for point $a = (a_x, a_y)$ may be simpler than the one computed above. On the
+  above formulas, we assumed that both triangles shared the unknown as $a$, but otherwise provided
+  for each of the two $t_1, t_2$, two different points such that
+  $t_1 = (a, b_1, c_1), t_2 = (a, b_2, c_2)$. A more correct assumption would've been to assume as
+  well that $b_1 equiv b_2$, as that is the outlying vertex that does not make up the edge to be
+  flipped in the triangulation.
+
+  Solving anew, because otherwise the expressions for $a = (a_x, a_y)$ divide by 0, we can state
+  that
+
+  $
+    overline(a b) = overline(a c_1) = overline(a c_2).
+  $
+
+  This would expand to
+
+  $
+      overline(a b) & = sqrt(abs(a_x - b_x)^2 + abs(a_y - b_y)^2), \
+    overline(a c_1) & = sqrt(abs(a_x - c_1_x)^2 + abs(a_y - c_1_y)^2) \
+    overline(a c_2) & = sqrt(abs(a_x - c_2_x)^2 + abs(a_y - c_2_y)^2).
+  $
+
+  The equations describing the system could then be
+
+  $
+    cases(
+      overline(a b) & = overline(a c_1) equiv sqrt(abs(a_x - b_x)^2 + abs(a_y - b_y)^2) = sqrt(abs(a_x - c_1_x)^2 + abs(a_y - c_1_y)^2),
+      overline(a b) & = overline(a c_2) equiv sqrt(abs(a_x - b_x)^2 + abs(a_y - b_y)^2) = sqrt(abs(a_x - c_2_x)^2 + abs(a_y - c_2_y)^2).
+    )
+  $
+
+  Solving for $a_x$ on the first equation, it would follow that
+
+  $
+    sqrt(abs(a_x - b_x)^2 + abs(a_y - b_y)^2) & = sqrt(abs(a_x - c_1_x)^2 + abs(a_y - c_1_y)^2) \
+    a_x^2 + b_x^2 - 2 a_x b_x + a_y^2 + b_y^2 - 2 a_y b_y & = a_x^2 + c_(1_x)^2 - 2 a_x c_1_x + a_y^2 + c_(1_y)^2 - 2 a_y c_1_y \
+    -2 a_x b_x + 2 a_x c_1_x & = c_(1_x)^2 + c_(1_y)^2 - b_x^2 - b_y^2 + 2 a_y b_y - 2 a_y c_1_y \
+    2 a_(x)(-b_x + c_1_x) & = c_(1_x)^2 + c_(1_y)^2 - b_x^2 - b_y^2 + 2 a_y b_y - 2 a_y c_1_y \
+    a_(x) & = (c_(1_x)^2 + c_(1_y)^2 - b_x^2 - b_y^2 + 2 a_y b_y - 2 a_y c_1_y) / (2(-b_x + c_1_x)).
+  $ <p130-againinitx>
+
+  Solving for $a_y$ on the second equation,
+
+  $
+    sqrt(abs(a_x - b_x)^2 + abs(a_y - b_y)^2) & = sqrt(abs(a_x - c_2_x)^2 + abs(a_y - c_2_y)^2) \
+    a_x^2 + b_x^2 - 2 a_x b_x + a_y^2 + b_y^2 - 2 a_y b_y & = a_x^2 + c_(2_x)^2 - 2 a_x c_2_x + a_y^2 + c_(2_y)^2 - 2 a_y c_2_y \
+    - 2 a_y b_y + 2 a_y c_2_y & = c_(2_x)^2 - 2 a_x c_2_x + c_(2_y)^2 - b_x^2 + 2 a_x b_x - b_y^2 \
+    2 a_(y)(-b_y + c_2_y) & = c_(2_x)^2 - 2 a_x c_2_x + c_(2_y)^2 - b_x^2 + 2 a_x b_x - b_y^2 \
+    a_y & = (c_(2_x)^2 - 2 a_x c_2_x + c_(2_y)^2 - b_x^2 + 2 a_x b_x - b_y^2) / (2(-b_y + c_2_y)) \
+    & = (c_(2_x)^2 + c_(2_y)^2 - b_x^2 - b_y^2) / (2(-b_y + c_2_y)) + a_(x)(b_x - c_2_x ) / (-b_y + c_2_y).
+  $ <p130-again1>
+
+  Much as in the previous attempt, let us refer to the leftmost constant term as $k$.
+
+  $
+    k = (c_(2_x)^2 + c_(2_y)^2 - b_x^2 - b_y^2) / (2(-b_y + c_2_y)).
+  $
+
+  This would make @p130-again1 solve for
+
+  $
+    a_y & = a_(x)(b_x - c_2_x ) / (-b_y + c_2_y) + k \
+        & = ((c_(1_x)^2 + c_(1_y)^2 - b_x^2 - b_y^2 + 2 a_y b_y - 2 a_y c_1_y) / (2(-b_x + c_1_x)))
+          ((b_x - c_2_x ) / (-b_y + c_2_y)) + k \
+        & = ((c_(1_x)^2 + c_(1_y)^2 - b_x^2 - b_y^2) / (2(-b_x + c_1_x)) +
+            a_(y)(b_y - c_1_y) / (-b_x + c_1_x))
+          ((b_x - c_2_x ) / (-b_y + c_2_y)) + k.
+  $ <p130-again2>
+
+  Now let us refer again to the leftmost constant term in the expansion of $a_x$ as $p$.
+
+  $
+    p = (c_(1_x)^2 + c_(1_y)^2 - b_x^2 - b_y^2) / (2(-b_x + c_1_x)).
+  $
+
+  Which would leave @p130-again2 as follows.
+
+  $
+    a_y & = (p + a_(y)(b_y - c_1_y) / (-b_x + c_1_x)) ((b_x - c_2_x ) / (-b_y + c_2_y)) + k \
+    & = p((b_x - c_2_x) / (-b_y + c_2_y)) +
+    a_(y)((b_y - c_1_y) / (-b_x + c_1_x))((b_x - c_2_x ) / (-b_y + c_2_y))
+    + k \
+    a_y - a_(y)((b_y - c_1_y) / (-b_x + c_1_x))((b_x - c_2_x ) / (-b_y + c_2_y)) & =
+    p((b_x - c_2_x) / (-b_y + c_2_y))+ k \
+    a_(y)(1 - ((b_y - c_1_y) / (-b_x + c_1_x))((b_x - c_2_x ) / (-b_y + c_2_y))) & =
+    p((b_x - c_2_x) / (-b_y + c_2_y))+ k \
+    a_(y) & = (p((b_x - c_2_x) / (-b_y + c_2_y))+ k) /
+    (1 - ((b_y - c_1_y) / (-b_x + c_1_x))((b_x - c_2_x ) / (-b_y + c_2_y))) \
+    & = (((c_(1_x)^2 + c_(1_y)^2 - b_x^2 - b_y^2) / (2(-b_x + c_1_x)))((b_x - c_2_x) /
+      (-b_y + c_2_y)) + (c_(2_x)^2 + c_(2_y)^2 - b_x^2 - b_y^2) / (2(-b_y + c_2_y))) /
+    (1 - ((b_y - c_1_y) / (-b_x + c_1_x))((b_x - c_2_x ) / (-b_y + c_2_y))).
+  $
+
+  Finally, solving for $a_x$ in the tail expression of @p130-againinitx.
+
+  $
+    a_(x) & = (c_(1_x)^2 + c_(1_y)^2 - b_x^2 - b_y^2 + 2 a_y b_y - 2 a_y c_1_y) /
+            (2(-b_x + c_1_x)) \
+          & = (c_(1_x)^2 + c_(1_y)^2 - b_x^2 - b_y^2) / (2(-b_x + c_1_x)) +
+            a_(y)(b_y - c_1_y) / (-b_x + c_1_x) \
+          & = ((((c_(1_x)^2 + c_(1_y)^2 - b_x^2 - b_y^2) / (2(-b_x + c_1_x)))((b_x - c_2_x) /
+                (-b_y + c_2_y)) + (c_(2_x)^2 + c_(2_y)^2 - b_x^2 - b_y^2) / (2(-b_y + c_2_y))) /
+              (1 - ((b_y - c_1_y) / (-b_x + c_1_x))((b_x - c_2_x ) / (-b_y + c_2_y))))
+            (b_y - c_1_y) / (-b_x + c_1_x) +
+            (c_(1_x)^2 + c_(1_y)^2 - b_x^2 - b_y^2) / (2(-b_x + c_1_x)).
+  $
+
+  #{
+    let (
+      a,
+      b,
+      c_1,
+      c_2,
+    ) = (
+      (x: none, y: none),
+      (x: 0, y: 3),
+      (x: 1, y: 1),
+      (x: 5, y: 2),
+    )
+
+    // TODO: check if the derived expressions solve `a.x` and `a.y`
+    a.y = (TODO) / (1 - (b.y - c_1.y) / (-b.x + c_1.x) * (b.x - c_2.x) / (-b.y + c_2.y))
+  }
+
 #pagebreak()
 
 === LeetCode problems
