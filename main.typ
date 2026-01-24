@@ -1,4 +1,4 @@
-#import "@local/typst-template:0.31.0": *
+#import "@local/typst-template:0.33.0": *
 
 #show: template.with(
   title: [DSA],
@@ -6,7 +6,7 @@
     (
       name: "Adam Martinez",
       affiliation: "University of Life",
-      email: "adammartinezoussat@gmail.com",
+      email: "staying@never.land",
     ),
   ),
 )
@@ -965,29 +965,27 @@
   with the bookshelves in the perimeter.
 
   Based on observation, I'd wager the floors are pretty near the shape of a rectangle, which would
-  imply its sides are approximately $150 / 10 = 15 space "m" times 10 space "m"$. I would say a
-  bookshelf takes up about $5 space "m"$ in length, and I believe its width to be of about
-  $40 "cm"$. Based on these estimates, the shorter sides of each floor should have $10 / 5 = 2$
-  bookshelves, while the longer sides should have $15 / 5 = 3$ bookshelves. This would total
-  $3 + 2 = 5 dot 3 = 15$ bookshelves from the perimeter of all floors.
+  imply its sides are approximately $150 / 10 = 15 "m" times 10 "m"$. I would say a bookshelf takes
+  up about $5 "m"$ in length, and I believe its width to be of about $40 "cm"$. Based on these
+  estimates, the shorter sides of each floor should have $10 / 5 = 2$ bookshelves, while the longer
+  sides should have $15 / 5 = 3$ bookshelves. This would total $3 + 2 = 5 dot 3 = 15$ bookshelves
+  from the perimeter of all floors.
 
   Let's compute now an approximate over the total number of bookshelves in the inner area of the
   rectangle. In what I consider to be a standard middle bookshelf layout for a library, each shelf
   is set up horizontally, such that each side of it (considering the longest stride as the _side_;
   Its length) should face the shorter sides of the overarching rectangle. This means that if the
   width of each bookshelf is about $40 "cm"$ and the corridor between bookshelves is of about
-  $3 space "m"$, there must be $(15 space "m") / (3 + 0.4 space "m") approx 4$ bookshelves in the
-  inner area of each floor. This totals $4 dot 3 = 12$ bookshelves in the inner area of the whole
-  library.
+  $3 space "m"$, there must be $(15 "m") / (3 + 0.4 "m") approx 4$ bookshelves in the inner area of
+  each floor. This totals $4 dot 3 = 12$ bookshelves in the inner area of the whole library.
 
   The total number of bookshelves in the library is now at $15 + 12 = 27$ bookshelves. Assumming
-  each bookshelf is about $4 space "m"$ tall considering each floor is about $7 space "m"$ tall, and
-  each shelf's divided into about $40 "cm"$ tall levels, there's space for
-  $(4 space "m") / (0.4 space "m") = 10$ book levels per shelf.
+  each bookshelf is about $4 "m"$ tall considering each floor is about $7 "m"$ tall, and each
+  shelf's divided into about $40 "cm"$ tall levels, there's space for $(4 "m") / (0.4 "m") = 10$
+  book levels per shelf.
 
   If each book is, on average, $5 "cm"$ wide and we considered the length of the shelves to be
-  standing at $5 space "m"$, then each level can hold an estimate of
-  $(5 space "m") / (0.05 space "m") = 100$ books.
+  standing at $5 "m"$, then each level can hold an estimate of $(5 "m") / (0.05 "m") = 100$ books.
 
   Thus each shelf holds $10 "levels" dot 100 space "books"/"level" = 1000$ books. Accounting for
   each of the 27 shelves we computed before, this makes up
@@ -1001,10 +999,10 @@
 / Problem 1-22: \
   This one asks about the amount of words on Skiena's book.
 
-  From looking at one regular (non-problem-full page,) I'd wager the font is a Computer Modern at
-  $12 "pt"$ and the page size is a US Letter. Based on personal experience, I'd estimate there are
-  about 350 to 400 words per page. Considering the first part of the book stands at about 430 pages,
-  as that is the part of the book for which I'm considering this first approximation, there ought be
+  From looking at one regular (non-problem-full page,) I'd wager the font is a 12 pt. Computer
+  Modern and the page size is US Letter. Based on personal experience, I'd estimate there are about
+  350 to 400 words per page. Considering the first part of the book stands at about 430 pages, as
+  that is the part of the book for which I'm considering this first approximation, there ought be
   about $430 dot 375 approx 160 000$ words in the first part of the book.
 
   The second part is actually more text heavy, even if we consider the use of illustrations on the
@@ -1020,7 +1018,10 @@
   Because the problem explicitly states that the arithmetic should be performed on one's own head,
   I'll just list the result I considered.
 
-  In terms of hours, about 250 hours. In terms of days, about 10 days.
+  In terms of hours, about 250 hours. In terms of days, about 10 days. This follows from the fact
+  $(10^6 "s") / (3.6 space approx space 4 times 10^3 space "s" / "h") = 1/4 times 10^3 =
+  4 times 10^(-1) times 10^3 = 4 times 10^2 = 400 "h"$, which actually seems contradicting, given
+  the above result.
 
 / Problem 1-24: \
   I'm expected to compute the number of cities and towns in the whole of the USoA.
@@ -1050,7 +1051,7 @@
   there are about
 
   $
-    100 dot 2 + 90 dot 2 + 80 dot 2 + 70 dot 2 + 60 dot 2 = 800 "cities and towns in the US".
+    100 dot 2 + 90 dot 2 + 80 dot 2 + 70 dot 2 + 60 dot 2 = 800 "cities and towns in the USoA".
   $
 
 / Problem 1-25: \
@@ -1073,9 +1074,8 @@
   of water flowing out of the river at any given time.
 
   In a single day, I'd say it's fair to say this happens almost on a second basis, so there should
-  be about
-  $(1500 space "mi"^3) / (1.5 space "s") times 24 space "h" dot 3.6 times 10^2 space "s" approx 8 times 10^6 space "mi"^3$
-  flowing out of the Mississipi River each day.
+  be about $(1500 space "mi"^3) / (1.5 "s") times 24 "h" dot 3.6 times 10^2 "s" approx
+  8 times 10^6 space "mi"^3$ flowing out of the Mississipi River each day.
 
 / Problem 1-26: \
   Now I'm expected to estimate the amount of Starbucks and McDonald's in my country.
@@ -1162,7 +1162,7 @@
       + $v_"next" <- v$
       + *for* $b$ *in*
         $V_v, "where" G = (V, E) "and" V_v = V inter {c_i in "visited", c in V : c_i != 1}$ *do*
-        + *if* $(v, b) in E, "where" G = (V, E) : d_((v, b)) < d_"min"$ *do*
+        + *if* $(v, b) in E, "where" G = (V, E) : d_((v, b)) < d_"min"$ *then*
           + $d_"min" <- d_((v, b))$
           + $v_"next" <- b$
       + $v <- v_"next"$
@@ -1341,16 +1341,14 @@
   (same) trait method, both outfit with a default implementation in the `trait` block. The call
   chain in question follows that for some trait `E` implemented on a type `T`, where a method `a`
   with a by-value, consuming receiver `self`, is overridden, such overridden method is _not_
-  correctly handled when called after another non-overidden method returning a `&mut self` to the
-  type `T`.
+  correctly handled when called after another non-overidden method returning a `&mut T`.
 
   The most natural way for the issue to arise is by a (non-overridden) call to `by_ref()` on a type
   `T` implementing the `Iterator` trait, followed by an overridden call to some method `a()` taking
   in as a receiver a non-mutable, consuming, `self`. Instead of having the overriden method `a()`
   act on the mutable reference returned by `by_ref()`, thus still changing the iterator's state but
-  not consuming it, the call is performed to the default implementation in `Iterator` of method
-  `a()` (the compiler does not complain and the reference doesn't seem to speak of any issues with
-  this.)
+  not consuming it, the call dispatches the default implementation in `Iterator` of method `a()`
+  (the compiler does not complain and the reference doesn't seem to speak of any issues with this.)
 
   Strangely enough, upon using fully qualified syntax, the compiler _does_ complain about the fact
   that the call to the overridden method `a()` on the trait expects a consuming `self`, and not a
@@ -1382,7 +1380,7 @@
   let _ = t.by_ref().min();
   ```
 
-  A temporary solution on the Rust user's end would be to create a new method on the type `T`'s own
+  A temporary solution on the user's end would be to create a new method on the type `T`'s own
   `impl` block with slightly modified semantics from those of the overridden `a()` method of trait
   `Iterator` (this trait specifically as I further comment on `by_ref()`.) Instead of taking in a
   `self` receiver, it should take in a `&mut self` receiver, as otherwise the compiler seems to
@@ -1390,18 +1388,18 @@
   will still be consumed. As a consequence, `by_ref()` may as well be removed from the iterator call
   chain.
 
-  *Note: _the following comments use the word_ permutation _quite loosely to describe the result of
-  a combinatorial process whereby a set of integer numbers is mapped to an equivalent-length set of
+  *Note: _the following notes use the word_ permutation _quite loosely to describe the result of a
+  combinatorial process whereby a set of integer numbers is mapped to an equivalent-length set of
   Cartesian products where each one of those numbers is the lhs of such operation, and an improper
   subset comprising the complement of the intersection of the prior singleton set with the original
   set makes up the rhs._*
 
   After having finished the implementation of the the two (feasible) TSP heuristics in Section 1.1
   of the book, I can not say which is more efficient based on benchmarks, as I happen to have found
-  what seems like a compiler error in my langauge of choice when implementing the second heuristic.
+  what seems like a compiler error in my language of choice when implementing the second heuristic.
 
-  But purely out of manual, theoretical (and personally primitive) algorithm time complexity
-  analysis, my implementation of the nearest neighbor heuristic seems to run in
+  But purely out of manual, theoretical (and primitive) algorithm time complexity analysis, my
+  implementation of the nearest neighbor heuristic seems to run in
   $Theta(n^3), "where" n "is the number of points to tour through"$. This is due to the fact the
   procedure needs to visit all nodes prior to considering that they have all been visited, which
   already incurs a fixed cost of $n$. Upon checking that some node is, indeed, yet to be visited,
@@ -1437,8 +1435,10 @@
 
   $
     underbrace(sum_(i = 1)^(n - 1), "loop")
-    (overbrace(n, "min"#repr([-])"finding operation") dot
-      underbrace((n dot k), "permutation of Cartesian products")).
+    overbrace(n, #align(center, "min-finding
+operation")) dot
+    underbrace((n dot k), #align(center, "permutation of
+Cartesian products")).
   $ <p130-initialformula>
 
   The actual cost $k$ of a single Cartesian product in the above formula should be $n - 1$ on the
@@ -1452,9 +1452,9 @@
   This would model the $k$-term of @p130-initialformula as follows.
 
   $
-    &k = i dot (n - i) + (n - i) dot n, "such that" \
-    &sum_(i = 1)^(n - 1) n dot (n dot k) =
-    sum_(i = 1)^(n - 1) n dot (n dot (i dot (n - i) + (n - i) dot n)) && = \
+    &k && = i dot (n - i) + (n - i) dot n, space.punct "such that" \
+    &sum_(i = 1)^(n - 1) n dot (n dot k) && =
+    sum_(i = 1)^(n - 1) n dot (n dot (i dot (n - i) + (n - i) dot n)) \
     &&& = sum_(i = 1)^(n - 1) n dot (n dot ((n - i) dot (n + i))) \
     &&& = sum_(i = 1)^(n - 1) n dot (n dot (n^2 - i^2)).
   $ <p130-secondformula>
@@ -1490,16 +1490,16 @@
   in the `tsp()` trait method of `TSPClosestPair`.
 
   The implementation should follow that `Pairs` should have a method of its own, such that provided
-  the index of a node within the bounds the of its underlying `forest` field, it returns a `DFS`
+  the index of a node within the bounds the of its underlying `forest` field, it returns a `Dfs`
   iterator that traverses the tree in which the passed node is found at.
 
-  To more easily compute the `DFS` of the provided tree, it's best if the method on `Pairs` also
+  To more easily compute the `Dfs` of the provided tree, it's best if the method on `Pairs` also
   includes logic to compute a graph structure (not `AdjacencyMatrix` because that's only valid for
-  the symmetric instance of the TSP,) such that `DFS` keeps ownership over that structure, but the
+  the symmetric instance of the TSP,) such that `Dfs` keeps ownership over that structure, but the
   structure itself is made out of references to the `Pairs` iterator, thus tying the lifetime of the
-  whole `DFS` to that of the `Pairs` iterator, which makes sense.
+  whole `Dfs` to that of the `Pairs` iterator, which makes sense.
 
-  The actual traversal is likely going to follow the same idea as the original `DFS`, but will not
+  The actual traversal is likely going to follow the same idea as the original `Dfs`, but will not
   be recursive in nature. Instead, it will approach the problem as what it really is; a traversal
   with a stack-based data structure holding the _discovered_ nodes.
 
@@ -1510,7 +1510,7 @@
   vertices in the graph. This is going to require some preprocessing on the side of the `Pairs`
   builder method.
 
-  Because the structure that will hold the graph that will then be part of `DFS` is a graph DS, the
+  Because the structure that will hold the graph that will then be part of `Dfs` is a graph DS, the
   notion of _root node_ is devoid of meaning, and this logic follows that same idea. Thus the node
   passed to the method on `Pairs` should try to find the root of the tree it belongs to not for
   purposes of prioritizing it in the graph, but rather to allow finding the rest of the nodes in the
@@ -1540,7 +1540,7 @@
   `ancestors()` method is always going to be the root node of the overarching tree. Because the
   vector returned describes the path between the first (root) and last (caller of `ancestors()`)
   nodes, we can conclude that the edges of the graph will be determined by the linear progression of
-  each of the elements in that vector. This way, so long as the vector is longer than a single
+  each of the elements in that vector. This way, so long as the vector contains more than a single
   element (i.e. the requested node in the call to `ancestors()` is not a root node) then a call to
   the `windows()` method on that vector should yield a sliding view into each of the edges in the
   tree.
@@ -1551,9 +1551,9 @@
   be $Omega(n + m), "where" G = (V, E), abs(V) = n, abs(E) = m$. This has been solved by means of
   replacing the underlying DS to be a hashmap instead of a contiguous chunk of memory, each hashmap
   contaning itself another hashset to perform as well $O(1)$ queries into the existence of some key.
-  This should still prove to be correct, as the container an adjacency list is modelled after
+  This should still prove to be correct, as the container the adjacency list is modelled after
   doesn't require there being an order between nodes, nor does it expect to keep an order between
-  the edges each of those nodes has.
+  the edges each of those nodes.
 
   The `dfs()` method to return the `Dfs` iterator may end up having to perform the check I mentioned
   on all nodes being part of a single tree, because I implemented `AdjacencyList::new()` in terms of
@@ -1778,8 +1778,8 @@
   In a sum formula, this would be expressed as
 
   $
-    n dot n + sum_(i = 2)^(n - 1) i dot (n - i) + (n - i) dot n =
-    n^2 + sum_(i = 2)^(n - 1) n i - i^2 + n^2 - n i & = \
+    n dot n + sum_(i = 2)^(n - 1) i dot (n - i) + (n - i) dot n & =
+    n^2 + sum_(i = 2)^(n - 1) n i - i^2 + n^2 - n i \
     & = n^2 + sum_(i = 2)^(n - 1) n^2 - i^2 \
     & = n^2 + n^2 dot sum_(i = 2)^(n - 1) 1 - sum_(i = 2)^(n - 1) i^2 \
     & = n^2 + n^2 dot (sum_(i = 1)^(n - 1) (1) - 1) - sum_(i = 2)^(n - 1) i^2 \
@@ -1812,7 +1812,7 @@
   algorithm's main loop, that we'll comment on later) is always guaranteed to be a root node, and
   thus a call to `find()` on it would resolve immediately with $approx Theta(1)$.
 
-  Because determining which edge (ordered pair) get selected as the lightest edge through the
+  Because determining which edge (ordered pair) gets selected as the lightest edge through the
   `min_fix()` operation is not possible without prior knowledge of the set of points the TSP tour is
   expected to go through, we will analyze the behavior of this operation in terms of an upper
   asymptotic bound, instead of a tight bound as we did with the combination of Cartesian products.
@@ -1824,12 +1824,11 @@
   will become the new parent of node $b$ in the disjoint set.
 
   The worst case scenario here would be for some set of points the robot arm ought go through,
-  namely the closest edge $(a, b)$, to always bound to hold true that $a < b$ in the extended line
-  of $RR$. This would imply that setting up a forest of trees would always force the leaf node of
-  the largest tree to be joined with some other single-vertex tree. The effect of this would be that
-  for such a leaf node $a$ taking the role of the new parent in the UFDS-`unite()` operation, the
-  root node of the tree it would be contained in would be the largest possible tree at any given
-  iteration.
+  namely the closest edge $(a, b)$, to always hold true that $a < b, space a, b in RR$. This would
+  imply that setting up a forest of trees would always force the leaf node of the largest tree to be
+  joined with some other single-vertex tree. The effect of this would be that for such a leaf node
+  $a$ taking the role of the new parent in the UFDS-`unite()` operation, the root node of the tree
+  it would be contained in would be the largest possible tree at any given iteration.
 
   Thus, for some number of iterations $n - 1$, if a single tree is the one tree that always keep
   growing, the resulting height of that tree at any given (0-indexed) iteration $i$ would be $i$
@@ -1842,8 +1841,8 @@
   In such a worst case, the total cost of the `unite()` operation would be
 
   $
-    sum_(i = 1)^(n - 1) i & = sum_(i = 1)^n (i) - n = (n(n + 1)) / 2 - n \
-                          & = (n^2 + n - 2n) / 2 = 1 / 2 (n^2 - n) approx O(n^2).
+    sum_(i = 1)^(n - 1) i = sum_(i = 1)^n (i) - n & = (n(n + 1)) / 2 - n \
+    & = (n^2 + n - 2n) / 2 = 1 / 2 (n^2 - n) approx O(n^2).
   $
 
   The total running cost so far, accounting for both the prior, fixed-cost combination of Cartesian
@@ -1891,7 +1890,7 @@
   as the sequence of points to be visited in the tour. After having read the section on Skiena's
   catalogue, I can say the heuristic I'm going to implement is the MST-finding one, followed by a
   DFS on the resulting tree, which counter to what I said before, considers as the resulting path
-  the set of vertices as they are _discovered_, and not once they are _processed_. This approach
+  the set of vertices as they are _discovered_, and not as they are _processed_. This approach
   should also allow me to reuse the `Dfs` iterator I created for the purposes of solving the closest
   pair heuristic.
 
@@ -1899,7 +1898,7 @@
   performing DFS on the result of the MST. If time allows, research on simulated annealing to
   further enhance the result of the heuristic would also be great.
 
-  To start off, I'll look into both sections of Skiena's book that treat with finding an mst for a
+  To start off, I'll look into both sections of Skiena's book that treat with finding an MST for a
   graph, namely the one on the chapter about graphs and the one receiving its own section on the
   catalogue. The book chapter on graphs covering MSTs does give some pointers to sections of the
   catalogue that include content that may be of interest without strictly being part of the core
@@ -1943,8 +1942,8 @@
   the robot is epxected to work in is 2-dimensional. Still, modelling the problem in terms of the
   simpler approach whereby a convex hull polygon is formed from the sorted $x$-component of the
   target points in Euclidean space likely won't do. This is because Skiena himself makes explicit in
-  the TSP section that solving it as a geometric problem requires specifically using Delauney
-  triangulation, and not merely _a_ method of triangulation.
+  the TSP section that solving it as a geometric problem requires specifically using a Delauney
+  triangulation, and not merely _some_ triangulation.
 
   I'll look now into the chapter on computational geometry to better understand the possibilities I
   have, considering I will not have access to the Internet for some time.
@@ -1960,8 +1959,7 @@
   their $x$-components, and second by their $y$-component. For that, I must define a relation of
   total ordering for the algebraic data type that will represent the 2-dimensional points, such that
   the sorting algorithm performs unstable sorting where elements with differing values of $y$ but
-  equal values of $x$ are further sorted and not just grouped together in their original (or
-  possibly some other) order.
+  equal values of $x$ are further sorted and not just grouped together in some (unstable) order.
 
   The next thing would be to implement the convex hull algorithm in such way so as to allow an
   external closure to add elements onto another container (the target triangulation) whenever some
@@ -1988,7 +1986,7 @@
   those enforced in `AdjacencyMatrix::new()`; Namely that #l-enum[the input matrix should be a
     square matrix][that it should have weighted edges everywhere but in the main diagonal, and][that
     its transpose is equal to the original matrix (which for a square matrix implies that computing
-    the inverse twice (starting with the original matrix) returns the source matrix.)]
+    the inverse twice returns the source matrix.)]
 
   Implementation-wise, checking for the matrix to be square involves having the function make sure
   each of the inner container elements of the overarching container have the same length as the
@@ -2059,9 +2057,9 @@
   reach this point that I've changed my stance on the steps that follow; To form the polygon that
   will determine which of the points may be removed from the hull, one must pick the leftmost point
   (first in the sorted vector,) the rightmost point (last one added in the current iteration,) _and
-  only then_ determine in a (linear cost) pass which point is the bottommost and topmost point in
-  the current convex hull (by comparing their $y$ components.) Once all of those are determined
-  (more on disambiguating between multiple elements qualifiying as any of these later,) then the
+  only then_ determine in a (linear cost) pass which point is the bottommost and topmost in the
+  current convex hull (by comparing their $y$ components.) Once all of those are determined (more on
+  disambiguating between multiple elements qualifiying as any of these later,) then the
   target/delineating polygon may be formed by joining the leftmost vertex with both the bottommost
   and topmost vertices, and the rightmost vertex with the bottommost and topmost vertices.
 
@@ -2141,13 +2139,13 @@
   _twice_ such area more easily evaluates to.
 
   $
-    2 dot A(t) = det(
-      mat(
-        a_x, a_y, 1;
-        b_x, b_y, 1;
-        c_x, c_y, 1;
-      )
-    ) = a_x b_y - a_y b_x + a_y c_x - a_x c_y + b_x c_y - c_x b_y, \
+    2 dot A(t) = mat(
+      a_x, a_y, 1;
+      b_x, b_y, 1;
+      c_x, c_y, 1;
+      delim: "|"
+    )
+    = a_x b_y - a_y b_x + a_y c_x - a_x c_y + b_x c_y - c_x b_y, \
     "for some triangle" A "with sides" (a, b, c).
   $
 
@@ -2160,7 +2158,7 @@
   For the problem at hand, the "right" formula would be
 
   $
-    abs(a_x b_y - a_y b_x + a_y c_x - a_x c_y + b_x c_y - c_x b_y) / 2 #h(1em)
+    abs(a_x b_y - a_y b_x + a_y c_x - a_x c_y + b_x c_y - c_x b_y) / 2 \
     "for some triangle" A "with sides" (a, b, c).
   $
 
@@ -2181,7 +2179,7 @@
   geometry.
 
   It may be that Andrew's algorithm can still get the job done. The default implementation of
-  Andrew's algorithm doesn't work correclty with triangulation, as it produces the right chords when
+  Andrew's algorithm doesn't work correctly with triangulation, as it produces the right chords when
   processing the upper hull, but creates intersecting chords when building the lower hull. This is a
   consequence of having to make an additional assumption over the sorted order of the point set when
   computing the lower hull, which must instead have, between elements of equal $x$-component, a
@@ -2210,13 +2208,13 @@
   The main roadblocks are checking whether an edge is actually shared by two triangles and isn't one
   of the perimeter edges of the point set, and upon determining that one is, indeed, such an edge,
   checking which vertices are connected to it, and which two _other_ vertices make up the triangles
-  formed around the edge in question.
+  to which the edge in question is incident to.
 
   Linear passes would do just fine, and considering the implementation is already suboptimal in its
   ways, this may be the path forward.
 
-  The first issue with the edges can be solved by addressing first the second issue; If an attempt
-  to determine which triangles are formed from an edge fails to resolve to _two_ triangles, this
+  The first issue with the edges can be solved by addressing the second issue; If an attempt to
+  determine which triangles are formed from an edge fails to resolve to _two_ triangles, this
   implies that the chord proved to be an "outer" edge (on the hull's perimeter) and not an "inner"
   edge (an actual triangulation edge.) Thus, we will focus on solving the second problem.
 
@@ -2265,8 +2263,8 @@
 
   Skiena proposes two aproaches to solving the problem; Either #l-enum[solve for a planar sweep pass
     that accounts for both possible future events and possible points of interest to keep track of
-    in the plane, or][check out O'Rourke's book for exposition-level algorithms that should do in
-    this case].
+    in the plane, or][check out O'Rourke's book for exposition-level algorithms that should get the
+    job done just fine in this case].
 
   Maybe a better routine would handle the overarching goal of determining whether the polygon is
   convex by first determining the inner areas of the two triangles formed by keeping the edge
@@ -2317,65 +2315,6 @@
   main loop would consider whether the first node that is within bounds is part of the triangulation
   under consideration.
 
-  The pseudocode for the above algorithm would be as follows.
-
-  #pseudocode(title: [Producing a Delauney triangulation from a regular triangulation])[
-    #let (
-      triangulation,
-      null,
-      triangulationat,
-      space,
-    ) = (
-      raw("triangulation"),
-      raw("NULL"),
-      x => {
-        assert.eq(type(x), content)
-        [#raw("triangulation[")#x#raw("]")]
-      },
-      sym.zwj,
-    )
-    + *for* $(s, e)$ *in* $triangulation$
-      + *_inner_: for* $(d, v)$ *in* $e$
-        + *if* $v equiv.not null$ *then*
-          + *let* $(a, b, c, d) <- (s, d, null, null)$
-          - #space
-          + *_adjacent_: for* $(s_"adj", p)$ *in* $triangulationat(s)$
-            + *if* $s_"adj" equiv.not d and d in triangulationat(s_"adj")$
-              *then*
-              + *if* $c equiv.not null$ *then*
-                + $d <- s_"adj"$
-                + *break _adjacent_*
-              + *else*
-                + $c <- s_"adj"$
-          + *if* $c equiv null or d equiv null$ *then*
-            + *continue _inner_*
-          - #space
-          + *let*
-            $A_a <- abs(a_x d_y - a_y d_x + a_y c_x - \ a_x c_y + d_x c_y - c_x d_y) / 2$
-            + *let*
-              $A_a_0 <- abs(a_x b_y - a_y b_x + a_y c_x - \ a_x c_y + b_x c_y - c_x b_y) / 2$
-            + *let*
-              $A_a_1 <- abs(a_x b_y - a_y b_x + a_y d_x - \ a_x d_y + b_x d_y - d_x b_y) / 2$
-            + *let*
-              $A_a_2 <- abs(c_x b_y - c_y b_x + c_y d_x - \ c_x d_y + b_x d_y - d_x b_y) / 2$
-          + *if* $A_a_({0, 1, 2}) equiv A_a$ *then*
-            + *continue _inner_*
-          + *let*
-            $A_b <- abs(d_x b_y - d_y b_x + d_y c_x - d_x c_y + b_x c_y - c_x b_y) / 2$
-            + *let*
-              $A_b_0 <- abs(a_x b_y - a_y b_x + a_y c_x - a_x c_y + b_x c_y - c_x b_y) / 2$
-            + *let*
-              $A_b_1 <- abs(a_x b_y - a_y b_x + a_y d_x - a_x d_y + b_x d_y - d_x b_y) / 2$
-            + *let*
-              $A_b_2 <- abs(a_x d_y - a_y d_x + a_y c_x - a_x c_y + d_x c_y - c_x d_y) / 2$
-          + *if* $A_b_({0, 1, 2}) equiv A_b$ *then*
-            + *continue _inner_*
-          - #space
-          + *let* $(t_0_0, t_0_1) <- ((a, b, c), (a, b, d))$
-            + *let* $(s_0_0, s_0_1) <- (abs(overline(a b)), abs(overline(a c)))$
-          + *let* $(t_1_0, t_1_2) <- ((a, c, d), (b, c, d))$
-  ]
-
   The unknown could also be expressed as being the length of the three different segments that have
   different starting points, but the same endpoint. Where those segments to form two triangles, the
   edge from the point not part of the triangulation's segment to-be-flipped, would be incident to
@@ -2383,10 +2322,10 @@
   the two triangles.
 
   If both triangles share a point, namely the unknown, and the other two points are known, then for
-  some triangles $t_1, t_2$, where $t_1 = {a_1, b_1, c_1}, t_2 = {a_2, b_2, c_2}$, and the unknown
+  some triangles $t_1, t_2$, where $t_1 = (a_1, b_1, c_1), t_2 = (a_2, b_2, c_2)$, and the unknown
   is said to be $a_1 equiv a_2$, one could then infer the ordered pair describing the coordinates in
   Euclidean space of the unknown, from here on out referred to simply as $a$, by computing for the
-  length of each of the tree segments of equivalent length leading from each of the known points to
+  length of each of the three segments of equivalent length leading from each of the known points to
   $a$, thus making for a system of two equations with two unknowns, which is well defined.
 
   Some segment length $S$ is determined as $S = sqrt(S_1^2 + S_2^2)$, where $S_1, S_2$ are the
@@ -2522,7 +2461,7 @@
   well that $b_1 equiv b_2$, as that is the outlying vertex that does not make up the edge to be
   flipped in the triangulation.
 
-  Solving anew, because otherwise the expressions for $a = (a_x, a_y)$ divide by 0, we can state
+  Solving anew, because otherwise the expressions for $a = (a_x, a_y)$ divides by 0, we can state
   that
 
   $
@@ -2541,8 +2480,10 @@
 
   $
     cases(
-      overline(a b) & = overline(a c_1) equiv sqrt(abs(a_x - b_x)^2 + abs(a_y - b_y)^2) = sqrt(abs(a_x - c_1_x)^2 + abs(a_y - c_1_y)^2),
-      overline(a b) & = overline(a c_2) equiv sqrt(abs(a_x - b_x)^2 + abs(a_y - b_y)^2) = sqrt(abs(a_x - c_2_x)^2 + abs(a_y - c_2_y)^2).
+      overline(a b) & = overline(a c_1) &equiv
+      sqrt(abs(a_x - b_x)^2 + abs(a_y - b_y)^2) = sqrt(abs(a_x - c_1_x)^2 + abs(a_y - c_1_y)^2),
+      overline(a b) & = overline(a c_2) &equiv
+      sqrt(abs(a_x - b_x)^2 + abs(a_y - b_y)^2) = sqrt(abs(a_x - c_2_x)^2 + abs(a_y - c_2_y)^2).
     )
   $
 
@@ -2595,12 +2536,10 @@
   $
     a_y & = (p + a_(y)(b_y - c_1_y) / (-b_x + c_1_x)) ((b_x - c_2_x ) / (-b_y + c_2_y)) + k \
     & = p((b_x - c_2_x) / (-b_y + c_2_y)) +
-    a_(y)((b_y - c_1_y) / (-b_x + c_1_x))((b_x - c_2_x ) / (-b_y + c_2_y))
-    + k \
-    a_y - a_(y)((b_y - c_1_y) / (-b_x + c_1_x))((b_x - c_2_x ) / (-b_y + c_2_y)) & =
-    p((b_x - c_2_x) / (-b_y + c_2_y))+ k \
-    a_(y)(1 - ((b_y - c_1_y) / (-b_x + c_1_x))((b_x - c_2_x ) / (-b_y + c_2_y))) & =
-    p((b_x - c_2_x) / (-b_y + c_2_y))+ k \
+    a_(y)((b_y - c_1_y) / (-b_x + c_1_x))((b_x - c_2_x ) / (-b_y + c_2_y)) +
+    k \
+    p((b_x - c_2_x) / (-b_y + c_2_y)) + k & =
+    a_(y)(1 - ((b_y - c_1_y) / (-b_x + c_1_x))((b_x - c_2_x ) / (-b_y + c_2_y))) \
     a_(y) & = (p((b_x - c_2_x) / (-b_y + c_2_y))+ k) /
     (1 - ((b_y - c_1_y) / (-b_x + c_1_x))((b_x - c_2_x ) / (-b_y + c_2_y))) \
     & = (((c_(1_x)^2 + c_(1_y)^2 - b_x^2 - b_y^2) / (2(-b_x + c_1_x)))((b_x - c_2_x) /
@@ -2612,14 +2551,8 @@
 
   $
     a_(x) & = (c_(1_x)^2 + c_(1_y)^2 - b_x^2 - b_y^2 + 2 a_y b_y - 2 a_y c_1_y) /
-            (2(-b_x + c_1_x)) \
-          & = (c_(1_x)^2 + c_(1_y)^2 - b_x^2 - b_y^2) / (2(-b_x + c_1_x)) +
-            a_(y)(b_y - c_1_y) / (-b_x + c_1_x) \
-          & = ((((c_(1_x)^2 + c_(1_y)^2 - b_x^2 - b_y^2) / (2(-b_x + c_1_x)))((b_x - c_2_x) /
-                (-b_y + c_2_y)) + (c_(2_x)^2 + c_(2_y)^2 - b_x^2 - b_y^2) / (2(-b_y + c_2_y))) /
-              (1 - ((b_y - c_1_y) / (-b_x + c_1_x))((b_x - c_2_x ) / (-b_y + c_2_y))))
-            (b_y - c_1_y) / (-b_x + c_1_x) +
-            (c_(1_x)^2 + c_(1_y)^2 - b_x^2 - b_y^2) / (2(-b_x + c_1_x)).
+    (2(-b_x + c_1_x)) \
+    & = a_(y)((b_y - c_1_y) / (-b_x + c_1_x)) + (c_(1_x)^2 + c_(1_y)^2 - b_x^2 - b_y^2) / (2(-b_x + c_1_x)).
   $
 
   #{
@@ -2630,14 +2563,93 @@
       c_2,
     ) = (
       (x: none, y: none),
-      (x: 0, y: 3),
-      (x: 1, y: 1),
-      (x: 5, y: 2),
+      (x: 3, y: 1),
+      (x: 0, y: 1),
+      (x: 4, y: 2),
     )
 
-    // TODO: check if the derived expressions solve `a.x` and `a.y`
-    a.y = (TODO) / (1 - (b.y - c_1.y) / (-b.x + c_1.x) * (b.x - c_2.x) / (-b.y + c_2.y))
+    a.y = (
+      (
+        (
+          (calc.pow(c_1.x, 2) + calc.pow(c_1.y, 2) - calc.pow(b.x, 2) - calc.pow(b.y, 2))
+            / (2 * (-b.x + c_1.x))
+        )
+          * ((b.x - c_2.x) / (-b.y + c_2.y))
+          + (
+            (calc.pow(c_2.x, 2) + calc.pow(c_2.y, 2) - calc.pow(b.x, 2) - calc.pow(b.y, 2))
+              / (2 * (-b.y + c_2.y))
+          )
+      )
+        / (1 - ((b.y - c_1.y) / (-b.x + c_1.x)) * ((b.x - c_2.x) / (-b.y + c_2.y)))
+    )
+    a.x = (
+      a.y * ((b.y - c_1.y) / (-b.x + c_1.x))
+        + (
+          (calc.pow(c_1.x, 2) + calc.pow(c_1.y, 2) - calc.pow(b.x, 2) - calc.pow(b.y, 2))
+            / (2 * (-b.x + c_1.x))
+        )
+    )
+
+    let a_rad = calc.sqrt(calc.pow(calc.abs(b.x - a.x), 2) + calc.pow(calc.abs(b.y - a.y), 2))
+
+    canvas({
+      import draw: *
+
+      set-style(
+        line: (stroke: black + .5pt),
+        circle: (stroke: black + .5pt),
+      )
+
+      draw.group(
+        {
+          draw.line(
+            (0, -1),
+            (0, 5),
+            name: "y-axis",
+          )
+          draw.line(
+            (-1, 0),
+            (5, 0),
+            name: "x-axis",
+          )
+        },
+        name: "axes",
+      )
+
+      set-style(
+        circle: (
+          radius: 1pt,
+          fill: black,
+        ),
+      )
+
+      draw.circle((b.x, b.y), name: "b")
+      draw.content((), $(#b.x, #b.y)$)
+
+      draw.circle((c_1.x, c_1.y), name: "c1")
+      draw.content((), $(#c_1.x, #c_1.y)$)
+
+      draw.circle((c_2.x, c_2.y), name: "c2")
+      draw.content((), $(#c_2.x, #c_2.y)$)
+
+      draw.circle((a.x, a.y), radius: a_rad, fill: none)
+      draw.circle((a.x, a.y), name: "a")
+      draw.content((), $(#calc.round(a.x, digits: 2), #calc.round(a.y, digits: 2))$)
+
+      set-style(line: (mark: (start: "stealth", end: "stealth", scale: .75, fill: black)))
+
+      draw.line("a", "b", name: "rad1")
+      draw.content("rad1.centroid", $#calc.round(a_rad, digits: 2)$)
+
+      draw.line("a", "c1", name: "rad2")
+      draw.content("rad2.centroid", $#calc.round(a_rad, digits: 2)$)
+
+      draw.line("a", "c2", name: "rad3")
+      draw.content("rad3.centroid", $#calc.round(a_rad, digits: 2)$)
+    })
   }
+
+  And it works.
 
 #pagebreak()
 

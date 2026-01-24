@@ -627,7 +627,7 @@ trait TspMstDfs {
 impl TspNearestNeighbor for AdjacencyMatrix {
     fn tsp(&self) -> Vec<usize> {
         let mut visited = vec![false; self.inner.len()];
-        let mut output = vec![];
+        let mut output = Vec::new();
         let mut current_idx = 0;
 
         while visited.iter().any(|visited| !visited) {
@@ -743,6 +743,7 @@ impl TspMstDfs for GeoAdjacencyMatrix {
             output
         });
 
+        // Follows Graham's algorithm with Andrew's changes.
         fn build_hull<'a>(
             mut triangulation: Option<&mut [Vec<GeoEdge>]>,
             hull: &mut Vec<(usize, &'a Point2d)>,
@@ -780,8 +781,8 @@ impl TspMstDfs for GeoAdjacencyMatrix {
 
         points.sort_unstable_by(
             |(_, Point2d { x: x1, y: y1 }), (_, Point2d { x: x2, y: y2 })| match x1.total_cmp(x2) {
-                order @ (Ordering::Less | Ordering::Greater) => order,
                 Ordering::Equal => y1.total_cmp(y2),
+                other => other,
             },
         );
         build_hull(
@@ -794,12 +795,12 @@ impl TspMstDfs for GeoAdjacencyMatrix {
 
         points.sort_unstable_by(
             |(_, Point2d { x: x1, y: y1 }), (_, Point2d { x: x2, y: y2 })| match x1.total_cmp(x2) {
-                order @ (Ordering::Less | Ordering::Greater) => order,
                 Ordering::Equal => match y1.total_cmp(y2) {
                     Ordering::Less => Ordering::Greater,
                     Ordering::Greater => Ordering::Less,
                     equal => equal,
                 },
+                other => other,
             },
         );
         build_hull(
@@ -815,8 +816,8 @@ impl TspMstDfs for GeoAdjacencyMatrix {
                 |(_, Point2d { x: x1, y: y1 }), (_, Point2d { x: x2, y: y2 })| match x1
                     .total_cmp(x2)
                 {
-                    order @ (Ordering::Less | Ordering::Greater) => order,
                     Ordering::Equal => y1.total_cmp(y2),
+                    other => other,
                 },
             );
 
@@ -860,27 +861,39 @@ impl TspMstDfs for GeoAdjacencyMatrix {
                     .iter()
                     .enumerate()
                     .filter(|&(dst, edge)| {
-                        (!tracking_list.contains(&(dst, src)))
-                            .then(|| {
-                                tracking_list.push((src, dst));
-                            })
-                            .is_some()
-                            && matches!(edge, GeoEdge::Weighted { .. })
+                        matches!(edge, GeoEdge::Weighted { .. })
+                            && (!tracking_list.contains(&(dst, src)))
+                                .then(|| {
+                                    tracking_list.push((src, dst));
+                                })
+                                .is_some()
                     })
                     .collect::<Vec<_>>(),
             )
         }) {
             'edge_loop: for &(dst, dst_point) in &edges {
+                // cf. Lemma 1.3.1 in O'Rourke, 2001.
+                fn compute_triangle_area((a, b, c): (&Point2d, &Point2d, &Point2d)) -> f64 {
+                    ((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)).abs() / 2.
+                }
+
                 let (p1, p2) = {
-                    let mut d2_adjacent_points = edges.iter().filter(|(src_adjacent, _)| {
+                    let mut d1_adjacent_points = edges.iter().filter(|(src_adjacent, _)| {
                         *src_adjacent != dst
-                            && triangulation[*src_adjacent]
-                                .iter()
-                                .enumerate()
-                                .any(|(possibly_dst, _)| possibly_dst == dst)
+                            && (0..triangulation[*src_adjacent].len())
+                                .into_iter()
+                                .any(|possibly_dst| possibly_dst == dst)
+                            && {
+                                let GeoEdge::Weighted(coord, ..) = (&triangulation[dst][src]) else {
+                                    unreachable!("The triangulation should have a weighted edge if `dst` is part of the filtered `edges`.");
+                                };
+
+                                // TODO: finsh this with the appropriate check.
+                                false
+                            }
                     });
 
-                    (d2_adjacent_points.next(), d2_adjacent_points.next())
+                    (d1_adjacent_points.next(), d1_adjacent_points.next())
                 };
 
                 if let Some((_, GeoEdge::Weighted { coord: p1, .. })) = p1
@@ -890,13 +903,6 @@ impl TspMstDfs for GeoAdjacencyMatrix {
                 {
                     static EPS: LazyLock<f64> = LazyLock::new(|| 1e-9);
 
-                    #[inline(always)]
-                    fn compute_triangle_area((a, b, c): (&Point2d, &Point2d, &Point2d)) -> f64 {
-                        (a.x * b.y - a.y * b.x + a.y * c.x - a.x * c.y + b.x * c.y - c.x * b.y)
-                            .abs()
-                            / 2.
-                    }
-
                     fn check_point_ownership(
                         (a, b, c): (&Point2d, &Point2d, &Point2d),
                         p_to_check: &Point2d,
@@ -904,16 +910,16 @@ impl TspMstDfs for GeoAdjacencyMatrix {
                         let container_area = compute_triangle_area((a, b, c));
                         let (area_0, area_1, area_2) = (
                             {
-                                let (a, b, c) = (a, b, p_to_check);
-                                compute_triangle_area((a, b, c))
+                                let t_0 = (a, b, p_to_check);
+                                compute_triangle_area(t_0)
                             },
                             {
-                                let (a, b, c) = (a, c, p_to_check);
-                                compute_triangle_area((a, b, c))
+                                let t_1 = (a, c, p_to_check);
+                                compute_triangle_area(t_1)
                             },
                             {
-                                let (a, b, c) = (c, b, p_to_check);
-                                compute_triangle_area((a, b, c))
+                                let t_2 = (c, b, p_to_check);
+                                compute_triangle_area(t_2)
                             },
                         );
 
@@ -927,16 +933,46 @@ impl TspMstDfs for GeoAdjacencyMatrix {
                     {
                         continue 'edge_loop;
                     }
+
+                    // This follows from the fact that for some three points to
+                    // lie in the same ring, the same segment (radius of the
+                    // ring) must join those points to the unknown. Thus, this
+                    // becomes a problem on finding the endpoint of the segment
+                    // making up the edge incident to the two triangles formed
+                    // from joining the known points as the bases and having the
+                    // unknown as the remaining vertex in each triangle. Such
+                    // edge is a segment whose length will be the same for all
+                    // three segments going from each of the known points to the
+                    // ring's center point (the unknown.)
+                    fn find_ring((a, b, c): (&Point2d, &Point2d, &Point2d)) -> Option<Point2d> {
+                        (-b.x + a.x != 0.
+                            && -b.y + c.y != 0.
+                            && ((b.y - a.y) / (-b.x + a.x)) * ((b.x - c.x) / (-b.y + c.y)) != 1.)
+                            .then(|| {
+                                let (c0, c1, c2, c3) = (
+                                    (a.x.powi(2) + a.y.powi(2) - b.x.powi(2) - b.y.powi(2))
+                                        / (2. * (-b.x + a.x)),
+                                    (b.x - c.x) / (-b.y + c.y),
+                                    (c.x.powi(2) + c.y.powi(2) - b.x.powi(2) - b.y.powi(2))
+                                        / (2. * (-b.y + c.y)),
+                                    (b.y - a.y) / (-b.x + a.x),
+                                );
+                                let y = (c0 * c1 + c2) / (1. - c3 * c1);
+                                let x = y * c3 + c0;
+
+                                Point2d { x, y }
+                            })
+                    }
                 }
             }
         }
 
         Ok(())
     }
-    fn mst(_input: &Self) -> Vec<usize> {
+    fn mst(input: &Self) -> Vec<usize> {
         todo!();
     }
-    fn dfs(_input: &Self) -> Vec<usize> {
+    fn dfs(input: &Self) -> Vec<usize> {
         todo!();
     }
 
@@ -1152,7 +1188,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "the algorithm is a wip"]
+    #[ignore = "The algorithm is a wip."]
     fn tsp_mst_dfs1() -> Result<(), AdjacencyMatrixError> {
         let _input = TspMstDfs::tsp(&geomatrix! {
             (0., 0., 0), (0., 1., 1), (1., 1., 3);
@@ -1165,7 +1201,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "the algorithm is a wip, and the test sample case is not ready yet"]
+    #[ignore = "The algorithm is a wip, and the test sample case is not ready yet."]
     fn tsp_mst_dfs2() -> Result<(), AdjacencyMatrixError> {
         todo!();
 
