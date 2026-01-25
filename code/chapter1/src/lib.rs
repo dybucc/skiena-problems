@@ -14,6 +14,7 @@
 #![allow(unused_macros, reason = "Ibid.")]
 
 use std::{
+    cell::RefCell,
     cmp::Ordering,
     collections::{HashMap, HashSet},
     iter,
@@ -853,115 +854,163 @@ impl TspMstDfs for GeoAdjacencyMatrix {
             consume_and_triangulate(lower_hull);
         }
 
-        let mut tracking_list = Vec::with_capacity(triangulation.len());
+        static EPS: LazyLock<f64> = LazyLock::new(|| 1e-9);
+
+        // See Lemma 1.3.1 in O'Rourke, 2001.
+        fn compute_triangle_area((a, b, c): (&Point2d, &Point2d, &Point2d)) -> f64 {
+            ((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)).abs() / 2.
+        }
+
+        fn check_point_ownership(
+            (a, b, c): (&Point2d, &Point2d, &Point2d),
+            p_to_check: &Point2d,
+        ) -> bool {
+            let container_area = compute_triangle_area((a, b, c));
+            let (area_0, area_1, area_2) = {
+                let (t_0, t_1, t_2) = ((a, b, p_to_check), (a, c, p_to_check), (c, b, p_to_check));
+
+                (
+                    compute_triangle_area(t_0),
+                    compute_triangle_area(t_1),
+                    compute_triangle_area(t_2),
+                )
+            };
+
+            container_area - (area_0 + area_1 + area_2) <= *EPS
+        }
+
+        // This follows from the fact that for some three points to lie in the
+        // same ring, the same segment (radius of the ring) must join those
+        // points to the unknown. Thus, this becomes a problem of finding the
+        // endpoint of the segment making up the edge incident to the two
+        // triangles formed from joining the known points as the bases and
+        // having the unknown as the remaining vertex in each triangle. Such
+        // edge is a segment whose length will be the same for all three
+        // segments going from each of the known points to the ring's center
+        // point (the unknown.)
+        fn find_ring((a, b, c): (&Point2d, &Point2d, &Point2d)) -> Option<Point2d> {
+            // This should be good enough for the purposes of robot tour
+            // optimization.
+            static EPS: LazyLock<f64> = LazyLock::new(|| 1e-3);
+
+            ((-b.x + a.x).abs() > *EPS
+                && (-b.y + c.y).abs() > *EPS
+                && ((b.y - a.y) / (-b.x + a.x)) * ((b.x - c.x) / (-b.y + c.y)) != 1.)
+                .then(|| {
+                    let (c0, c1, c2, c3) = (
+                        (a.x.powi(2) + a.y.powi(2) - b.x.powi(2) - b.y.powi(2))
+                            / (2. * (-b.x + a.x)),
+                        (b.x - c.x) / (-b.y + c.y),
+                        (c.x.powi(2) + c.y.powi(2) - b.x.powi(2) - b.y.powi(2))
+                            / (2. * (-b.y + c.y)),
+                        (b.y - a.y) / (-b.x + a.x),
+                    );
+                    let y = (c0 * c1 + c2) / (1. - c3 * c1);
+                    let x = y * c3 + c0;
+
+                    Point2d { x, y }
+                })
+        }
+
+        let mut tracking_list = Vec::with_capacity(triangulation.len().pow(2));
         for (src, edges) in triangulation.iter().enumerate().map(|(src, edges)| {
             (
                 src,
                 edges
                     .iter()
                     .enumerate()
-                    .filter(|&(dst, edge)| {
-                        matches!(edge, GeoEdge::Weighted { .. })
-                            && (!tracking_list.contains(&(dst, src)))
-                                .then(|| {
-                                    tracking_list.push((src, dst));
-                                })
-                                .is_some()
+                    .filter_map(|(dst, edge)| {
+                        if let GeoEdge::Weighted { coord, .. } = edge {
+                            (!tracking_list.contains(&(dst, src))).then(|| {
+                                tracking_list.push((src, dst));
+
+                                (dst, coord)
+                            })
+                        } else {
+                            None
+                        }
                     })
                     .collect::<Vec<_>>(),
             )
         }) {
             'edge_loop: for &(dst, dst_point) in &edges {
-                // cf. Lemma 1.3.1 in O'Rourke, 2001.
-                fn compute_triangle_area((a, b, c): (&Point2d, &Point2d, &Point2d)) -> f64 {
-                    ((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)).abs() / 2.
-                }
-
                 let (p1, p2) = {
-                    let mut d1_adjacent_points = edges.iter().filter(|(src_adjacent, _)| {
-                        *src_adjacent != dst
-                            && (0..triangulation[*src_adjacent].len())
-                                .into_iter()
-                                .any(|possibly_dst| possibly_dst == dst)
-                            && {
-                                let GeoEdge::Weighted(coord, ..) = (&triangulation[dst][src]) else {
-                                    unreachable!("The triangulation should have a weighted edge if `dst` is part of the filtered `edges`.");
-                                };
+                    let mut d1_adjacent_points =
+                        edges.iter().filter(|(src_adjacent, src_adjacent_point)| {
+                            *src_adjacent != dst
+                                && triangulation[*src_adjacent].iter().enumerate().any(
+                                    |(maybe_dst, maybe_dst_point)| {
+                                        maybe_dst == dst
+                                            && matches!(maybe_dst_point, GeoEdge::Weighted { .. })
+                                    },
+                                )
+                                && {
+                                    let (GeoEdge::Weighted { coord: a, .. }, b, c) =
+                                        (&triangulation[dst][src], *src_adjacent_point, dst_point)
+                                    else {
+                                        unreachable!(
+                                            "The triangulation edge at [dst][src] should have a \
+                                            weighted edge because the filtering prep-work in the \
+                                            outer loop ensures any indices given by `dst` are \
+                                            weighted; Because the triangulation is treated as \
+                                            a directed graph, the reverse index should also be \
+                                            weighted.",
+                                        );
+                                    };
 
-                                // TODO: finsh this with the appropriate check.
-                                false
-                            }
-                    });
+                                    !edges.iter().any(|&(_, potential_miss)| {
+                                        check_point_ownership((a, b, c), potential_miss)
+                                    })
+                                }
+                        });
 
                     (d1_adjacent_points.next(), d1_adjacent_points.next())
                 };
 
-                if let Some((_, GeoEdge::Weighted { coord: p1, .. })) = p1
-                    && let Some((_, GeoEdge::Weighted { coord: p2, .. })) = p2
-                    && let GeoEdge::Weighted { coord: p_dst, .. } = dst_point
+                if let Some(&(ex1, p1)) = p1
+                    && let Some(&(ex2, p2)) = p2
                     && let GeoEdge::Weighted { coord: p_src, .. } = &triangulation[dst][src]
                 {
-                    static EPS: LazyLock<f64> = LazyLock::new(|| 1e-9);
-
-                    fn check_point_ownership(
-                        (a, b, c): (&Point2d, &Point2d, &Point2d),
-                        p_to_check: &Point2d,
-                    ) -> bool {
-                        let container_area = compute_triangle_area((a, b, c));
-                        let (area_0, area_1, area_2) = (
-                            {
-                                let t_0 = (a, b, p_to_check);
-                                compute_triangle_area(t_0)
-                            },
-                            {
-                                let t_1 = (a, c, p_to_check);
-                                compute_triangle_area(t_1)
-                            },
-                            {
-                                let t_2 = (c, b, p_to_check);
-                                compute_triangle_area(t_2)
-                            },
-                        );
-
-                        container_area - (area_0 + area_1 + area_2) <= *EPS
-                    }
+                    let p_dst = dst_point;
 
                     // Some vertex in the quadrilateral proved to be a reflex
-                    // vertex (i.e. angle > PI, using O'Rourke's terminology.)
+                    // vertex (i.e. angle > PI, see Sec. 1.1.2, Subsec.
+                    // Empirical Exploration in O'Rourke, 2001.)
                     if check_point_ownership((p1, p2, p_src), p_dst)
                         || check_point_ownership((p1, p2, p_dst), p_src)
                     {
                         continue 'edge_loop;
                     }
 
-                    // This follows from the fact that for some three points to
-                    // lie in the same ring, the same segment (radius of the
-                    // ring) must join those points to the unknown. Thus, this
-                    // becomes a problem on finding the endpoint of the segment
-                    // making up the edge incident to the two triangles formed
-                    // from joining the known points as the bases and having the
-                    // unknown as the remaining vertex in each triangle. Such
-                    // edge is a segment whose length will be the same for all
-                    // three segments going from each of the known points to the
-                    // ring's center point (the unknown.)
-                    fn find_ring((a, b, c): (&Point2d, &Point2d, &Point2d)) -> Option<Point2d> {
-                        (-b.x + a.x != 0.
-                            && -b.y + c.y != 0.
-                            && ((b.y - a.y) / (-b.x + a.x)) * ((b.x - c.x) / (-b.y + c.y)) != 1.)
-                            .then(|| {
-                                let (c0, c1, c2, c3) = (
-                                    (a.x.powi(2) + a.y.powi(2) - b.x.powi(2) - b.y.powi(2))
-                                        / (2. * (-b.x + a.x)),
-                                    (b.x - c.x) / (-b.y + c.y),
-                                    (c.x.powi(2) + c.y.powi(2) - b.x.powi(2) - b.y.powi(2))
-                                        / (2. * (-b.y + c.y)),
-                                    (b.y - a.y) / (-b.x + a.x),
-                                );
-                                let y = (c0 * c1 + c2) / (1. - c3 * c1);
-                                let x = y * c3 + c0;
+                    // Checking for the local edge yielding an optimal
+                    // triangulation is done by means of computing for a ring
+                    // that crosses three of the quadrilateral's vertices, and
+                    // evaluating whether the remaining vertex lies within the
+                    // inner area of that ring. The correctness of this argument
+                    // follows from Thales' theorem. See de Berg et. al., 2008.
+                    if let Some(ring_center) = find_ring((p_src, p1, p_dst)) {
+                        let (center_to_p2, ring_radius) = (
+                            ((ring_center.x - p2.x).abs().powi(2)
+                                + (ring_center.y - p2.y).abs().powi(2))
+                            .sqrt(),
+                            ((ring_center.x - p1.x).abs().powi(2)
+                                + (ring_center.y - p1.y).abs().powi(2))
+                            .sqrt(),
+                        );
 
-                                Point2d { x, y }
-                            })
+                        if ring_radius - center_to_p2 < (ring_radius - *EPS) {
+                            (
+                                *RefCell::new(&triangulation[src][dst]).borrow_mut(),
+                                *RefCell::new(&triangulation[dst][src]).borrow_mut(),
+                                *RefCell::new(&triangulation[ex1][ex2]).borrow_mut(),
+                                *RefCell::new(&triangulation[ex2][ex1]).borrow_mut(),
+                            ) = (
+                                &GeoEdge::NonExistent,
+                                &GeoEdge::NonExistent,
+                                &self.0[ex1][ex2],
+                                &self.0[ex2][ex1],
+                            );
+                        }
                     }
                 }
             }
