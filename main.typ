@@ -2651,6 +2651,158 @@ Cartesian products")).
 
   And it works.
 
+  Sample triangulation from Skiena, page 631.
+
+  #canvas({
+    import draw: *
+
+    let input-set = (
+      (
+        x: 1.25,
+        y: 2,
+      ),
+      (
+        x: 1.3,
+        y: 5,
+      ),
+      (
+        x: 1.5,
+        y: 3.5,
+      ),
+      (
+        x: 2,
+        y: 3.6,
+      ),
+      (
+        x: 3,
+        y: .75,
+      ),
+      (
+        x: 3.75,
+        y: 3.7,
+      ),
+      (
+        x: 4.25,
+        y: 3,
+      ),
+      (
+        x: 4.3,
+        y: 1.7,
+      ),
+      (
+        x: 4.5,
+        y: 5,
+      ),
+      (
+        x: 5.8,
+        y: 3.45,
+      ),
+      (
+        x: 6,
+        y: 1,
+      ),
+      (
+        x: 6.2,
+        y: 4.7,
+      ),
+      (
+        x: 7,
+        y: 3.45,
+      ),
+    )
+
+    set-style(
+      circle: (
+        radius: 1pt,
+        fill: black,
+        stroke: .5pt + black,
+      ),
+      line: (
+        fill: black,
+        stroke: .5pt + black,
+      ),
+    )
+
+    for (i, (x, y)) in input-set.enumerate() {
+      circle(
+        (x, y),
+        name: str(i),
+      )
+    }
+
+    for i in array.range(0, input-set.len() - 1) {
+      line(
+        str(i),
+        str(i + 1),
+      )
+    }
+
+    line(
+      "0",
+      "2",
+    )
+    line(
+      "1",
+      "3",
+    )
+    line(
+      "1",
+      "5",
+    )
+    line(
+      "3",
+      "5",
+    )
+    line(
+      "0",
+      "4",
+    )
+    line(
+      "4",
+      "6",
+    )
+    line(
+      "4",
+      "7",
+    )
+    line(
+      "4",
+      "10",
+    )
+    line(
+      "5",
+      "8",
+    )
+    line(
+      "6",
+      "8",
+    )
+    line(
+      "1",
+      "8",
+    )
+    line(
+      "8",
+      "11",
+    )
+    line(
+      "7",
+      "9",
+    )
+    line(
+      "7",
+      "10",
+    )
+    line(
+      "9",
+      "11",
+    )
+    line(
+      "10",
+      "12",
+    )
+  })
+
 #pagebreak()
 
 === LeetCode problems

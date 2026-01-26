@@ -141,7 +141,8 @@ enum AdjacencyMatrixErrorType {
     IncompleteGraph(String),
     DirectedGraph(String),
     SelfLoops(String),
-    NonMatchingCoordinates(String),
+    MultipleEqualPoints(String),
+    UnequalSamePoints(String),
 }
 
 macro_rules! matrix {
@@ -187,7 +188,7 @@ its overarching enum type:
     - `IncompleteGraph`
     - `DirectedGraph`
     - `SelfLoops`
-    - `NonMatchingCoordinates`
+    - `MultipleEqualPoints`
 - `PairsErrorType`:
     - `IndexOutOfBounds`"#
         )
@@ -213,10 +214,15 @@ its overarching enum type:
             "matrix contains self-loops; this is not a simple graph",
         ))
     }};
-    (NonMatchingCoordinates) => {{
-        AdjacencyMatrixErrorType::NonMatchingCoordinates(String::from(
-            "matrix contains non-matching coordinates on symmetric nodes; check the `geomatrix!` \
-            macro call for inconsistencies between values above and below the main diagonal",
+    (MultipleEqualPoints) => {{
+        AdjacencyMatrixErrorType::MultipleEqualPoints(String::from(
+            "matrix contains multple vertices with the same coordinates; that's unsupported",
+        ))
+    }};
+    (UnequalSamePoints) => {{
+        AdjacencyMatrixErrorType::UnequalSamePoints(String::from(
+            "matrix contains points in the same column that are not equal; points in the same \
+            column indicate an edge from any row (index) vertex to that point",
         ))
     }};
     (IndexOutOfBounds) => {{ PairsErrorType::IndexOutOfBounds(String::from("ufds doesn't contain such index element")) }};
@@ -527,40 +533,40 @@ impl Iterator for Dfs {
 impl GeoAdjacencyMatrix {
     fn new(inner: &[Vec<GeoEdge>]) -> Result<Self, AdjacencyMatrixError> {
         ensure_or!(inner.len() > 1, NonSquareMatrix)?;
-        for (idx, vertex) in inner.iter().enumerate() {
-            ensure_or!(vertex.len() == inner.len(), NonSquareMatrix)?;
+        for (vertex, edges) in inner.iter().enumerate() {
+            ensure_or!(edges.len() == inner.len(), NonSquareMatrix)?;
 
-            let row_vec: Vec<_> = vertex
+            let row_vec: Vec<_> = edges
                 .iter()
                 .enumerate()
-                .filter(|(_, edge)| matches!(edge, GeoEdge::Weighted { .. }))
+                .filter_map(|(vertex, edge)| {
+                    if let GeoEdge::Weighted { weight, coord } = edge {
+                        Some((vertex, (weight, coord)))
+                    } else {
+                        None
+                    }
+                })
                 .collect();
 
             ensure_or!(
-                row_vec.iter().all(|&(inner_idx, _)| inner_idx != idx),
+                row_vec.iter().all(|&(inner_idx, _)| inner_idx != vertex),
                 SelfLoops,
             )?;
-            ensure_or!(row_vec.len() == vertex.len() - 1, IncompleteGraph)?;
+            ensure_or!(row_vec.len() == edges.len() - 1, IncompleteGraph)?;
 
             ensure_or!(
-                row_vec.iter().all(|&(inner_idx, edge)| {
-                    let GeoEdge::Weighted { weight, .. } = *edge else {
-                        unreachable!(
-                            "any `NonExistent` node under consideration has been filtered out so \
-                            this execution branch should not be possible",
-                        );
-                    };
+                row_vec.iter().all(|&(inner_idx, (&weight, _))| {
                     let GeoEdge::Weighted {
                         weight: symmetric_weight,
                         ..
-                    } = inner[inner_idx][idx]
+                    } = inner[inner_idx][vertex]
                     else {
                         unimplemented!(
-                            "this should be caught when traversing the next row as the symmetric \
+                            "This should be caught when traversing the next row as the symmetric \
                             node is always forward in the input array, but the graph checking \
                             logic relies on traversing each row serially so at this point it is \
                             not yet knonw that the next row would've thrown an \
-                            `AdjacencyErrorType::IncompleteGraph`",
+                            `AdjacencyErrorType::IncompleteGraph`.",
                         );
                     };
 
@@ -569,38 +575,48 @@ impl GeoAdjacencyMatrix {
                 DirectedGraph,
             )?;
 
-            // Even though the running conditions for the following iterator
-            // chain are the same as those of the above sequence, this is
-            // required to be separate because the type of error thrown is
-            // different (and this is not meant to be used as a real library, so
-            // no greater effort is put into designing efficient routines for
-            // failure propagation.)
             ensure_or!(
-                row_vec.iter().all(|&(inner_idx, edge)| {
-                    let GeoEdge::Weighted { coord, .. } = edge else {
-                        unreachable!(
-                            "any `NonExistent` node under consideration has been filtered out so \
-                            this should not be possible",
-                        );
-                    };
-                    let GeoEdge::Weighted {
-                        coord: ref symmetric_coord,
-                        ..
-                    } = inner[inner_idx][idx]
-                    else {
-                        unimplemented!(
-                            "this should be caught when traversing the next row as the symmetric \
-                            node is always forward in the input array, but the graph checking \
-                            logic relies on traversing each row serially so at this point it is \
-                            not yet known that the next row would've thrown an \
-                            `AdjacencyErrorType::IncompleteGraph`",
-                        );
-                    };
+                row_vec
+                    .iter()
+                    .fold(Vec::new(), |accum, &(_, (_, point))| {
+                        if !accum.contains(&point) {
+                            let mut accum = accum;
+                            accum.push(point);
 
-                    coord == symmetric_coord
-                }),
-                NonMatchingCoordinates,
+                            return accum;
+                        }
+
+                        accum
+                    })
+                    .len()
+                    == row_vec.len(),
+                MultipleEqualPoints
             )?;
+
+            // Square matrices with dimensionality 2 don't have any other
+            // elements in the same column that are not `GeoEdge::NonExistent`.
+            if vertex == 0 && inner.len() > 2 {
+                ensure_or!(
+                    row_vec.iter().all(|&(vertex, (_, point))| {
+                        let (mut idx_state, mut checks) = (1, Vec::with_capacity(inner.len()));
+
+                        while let Some(inner) = inner.get(vertex + idx_state) {
+                            idx_state += 1;
+                            if let GeoEdge::Weighted { coord, .. } = &inner[vertex] {
+                                checks.push(coord == point);
+                            }
+                        }
+
+                        checks.iter().fold(
+                            true,
+                            |accum, check| {
+                                if accum && *check { accum } else { false }
+                            },
+                        )
+                    }),
+                    UnequalSamePoints
+                )?;
+            }
         }
 
         Ok(Self(inner.to_owned()))
@@ -618,7 +634,7 @@ trait TspClosestPair {
 }
 
 trait TspMstDfs {
-    fn triangulate(&mut self) -> Result<(), AdjacencyMatrixError>;
+    fn triangulate(&mut self);
     fn mst(input: &Self) -> Vec<usize>;
     fn dfs(input: &Self) -> Vec<usize>;
 
@@ -710,7 +726,13 @@ impl TspClosestPair for AdjacencyMatrix {
 }
 
 impl TspMstDfs for GeoAdjacencyMatrix {
-    fn triangulate(&mut self) -> Result<(), AdjacencyMatrixError> {
+    fn triangulate(&mut self) {
+        #![allow(
+            unreachable_code,
+            unused,
+            reason = "Testing is taking place in separate steps."
+        )]
+
         let mut points: Vec<_> = self
             .0
             .iter()
@@ -794,6 +816,8 @@ impl TspMstDfs for GeoAdjacencyMatrix {
             &self.0,
         );
 
+        panic!("Reached end of `upper_hull` construction: {upper_hull:#?}.");
+
         points.sort_unstable_by(
             |(_, Point2d { x: x1, y: y1 }), (_, Point2d { x: x2, y: y2 })| match x1.total_cmp(x2) {
                 Ordering::Equal => match y1.total_cmp(y2) {
@@ -857,8 +881,15 @@ impl TspMstDfs for GeoAdjacencyMatrix {
         static EPS: LazyLock<f64> = LazyLock::new(|| 1e-9);
 
         // See Lemma 1.3.1 in O'Rourke, 2001.
-        fn compute_triangle_area((a, b, c): (&Point2d, &Point2d, &Point2d)) -> f64 {
+        const fn compute_triangle_area((a, b, c): (&Point2d, &Point2d, &Point2d)) -> f64 {
             ((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)).abs() / 2.
+        }
+
+        fn compute_segment_length(
+            Point2d { x: x1, y: y1 }: &Point2d,
+            Point2d { x: x2, y: y2 }: &Point2d,
+        ) -> f64 {
+            ((x1 - x2).abs().powi(2) + (y1 - y2).abs().powi(2)).sqrt()
         }
 
         fn check_point_ownership(
@@ -935,44 +966,66 @@ impl TspMstDfs for GeoAdjacencyMatrix {
         }) {
             'edge_loop: for &(dst, dst_point) in &edges {
                 let (p1, p2) = {
-                    let mut d1_adjacent_points =
-                        edges.iter().filter(|(src_adjacent, src_adjacent_point)| {
-                            *src_adjacent != dst
-                                && triangulation[*src_adjacent].iter().enumerate().any(
-                                    |(maybe_dst, maybe_dst_point)| {
-                                        maybe_dst == dst
-                                            && matches!(maybe_dst_point, GeoEdge::Weighted { .. })
-                                    },
-                                )
-                                && {
-                                    let (GeoEdge::Weighted { coord: a, .. }, b, c) =
-                                        (&triangulation[dst][src], *src_adjacent_point, dst_point)
-                                    else {
-                                        unreachable!(
-                                            "The triangulation edge at [dst][src] should have a \
-                                            weighted edge because the filtering prep-work in the \
-                                            outer loop ensures any indices given by `dst` are \
-                                            weighted; Because the triangulation is treated as \
-                                            a directed graph, the reverse index should also be \
-                                            weighted.",
-                                        );
-                                    };
+                    let mut d1_adjacent_points = triangulation[src]
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(src_adjacent, src_adjacent_edge)| {
+                            if let GeoEdge::Weighted { coord, .. } = src_adjacent_edge
+                                && src_adjacent != dst
+                            {
+                                Some((src_adjacent, coord))
+                            } else {
+                                None
+                            }
+                        })
+                        .filter(|&(src_adjacent, src_adjacent_point)| {
+                            triangulation[src_adjacent].iter().enumerate().any(
+                                |(potential_dst, potential_dst_edge)| {
+                                    potential_dst == dst
+                                        && matches!(potential_dst_edge, GeoEdge::Weighted { .. })
+                                },
+                            ) && {
+                                let (a, GeoEdge::Weighted { coord: b, .. }, c) =
+                                    (dst_point, &triangulation[dst][src], src_adjacent_point)
+                                else {
+                                    unreachable!(
+                                        "This destructuring pattern should not be refutable, \
+                                        because edge `src`->`dst` exists, and thus edge \
+                                        `dst`->`src` must exist; The triangulation is processed in \
+                                        terms of a directed graph."
+                                    );
+                                };
 
-                                    !edges.iter().any(|&(_, potential_miss)| {
+                                !triangulation[src]
+                                    .iter()
+                                    .enumerate()
+                                    .filter_map(|(other_src_adjacent, other_src_adjacent_edge)| {
+                                        if let GeoEdge::Weighted { coord, .. } =
+                                            other_src_adjacent_edge
+                                            && other_src_adjacent != dst
+                                            && other_src_adjacent != src_adjacent
+                                        {
+                                            Some(coord)
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .any(|potential_miss| {
                                         check_point_ownership((a, b, c), potential_miss)
                                     })
-                                }
+                            }
                         });
+
+                    assert_eq!(d1_adjacent_points.clone().count(), 2);
 
                     (d1_adjacent_points.next(), d1_adjacent_points.next())
                 };
 
-                if let Some(&(ex1, p1)) = p1
-                    && let Some(&(ex2, p2)) = p2
+                if let Some((ex1, p1)) = p1
+                    && let Some((ex2, p2)) = p2
+                    && let p_dst = dst_point
                     && let GeoEdge::Weighted { coord: p_src, .. } = &triangulation[dst][src]
                 {
-                    let p_dst = dst_point;
-
                     // Some vertex in the quadrilateral proved to be a reflex
                     // vertex (i.e. angle > PI, see Sec. 1.1.2, Subsec.
                     // Empirical Exploration in O'Rourke, 2001.)
@@ -990,12 +1043,8 @@ impl TspMstDfs for GeoAdjacencyMatrix {
                     // follows from Thales' theorem. See de Berg et. al., 2008.
                     if let Some(ring_center) = find_ring((p_src, p1, p_dst)) {
                         let (center_to_p2, ring_radius) = (
-                            ((ring_center.x - p2.x).abs().powi(2)
-                                + (ring_center.y - p2.y).abs().powi(2))
-                            .sqrt(),
-                            ((ring_center.x - p1.x).abs().powi(2)
-                                + (ring_center.y - p1.y).abs().powi(2))
-                            .sqrt(),
+                            compute_segment_length(&ring_center, p2),
+                            compute_segment_length(&ring_center, p1),
                         );
 
                         if ring_radius - center_to_p2 < (ring_radius - *EPS) {
@@ -1015,8 +1064,6 @@ impl TspMstDfs for GeoAdjacencyMatrix {
                 }
             }
         }
-
-        Ok(())
     }
     fn mst(input: &Self) -> Vec<usize> {
         todo!();
@@ -1051,10 +1098,10 @@ mod tests {
         assert!(
             geomatrix! {
                 (0., 0., 0), (1., 1., 2);
-                (1., 1., 2), (0., 0., 0);
+                (0., 0., 2), (0., 0., 0);
             }
             .is_ok(),
-            "should've been an ok graph with 2 nodes layed out like the corners defining a \
+            "should've been an ok graph with 2 nodes layed out like the defining vertices of a \
             rectangle",
         )
     }
@@ -1066,7 +1113,10 @@ mod tests {
                 0, 2;
                 3, 0;
             }
-            .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::DirectedGraph(_))),
+            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+                err,
+                AdjacencyMatrixErrorType::DirectedGraph(_)
+            )),
             "should've thrown an error about the graph not being undirected",
         );
     }
@@ -1076,9 +1126,12 @@ mod tests {
         assert!(
             geomatrix! {
                 (0., 0., 0), (1., 1., 2);
-                (1., 1., 3), (0., 0., 0);
+                (0., 0., 3), (0., 0., 0);
             }
-            .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::DirectedGraph(_))),
+            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+                err,
+                AdjacencyMatrixErrorType::DirectedGraph(_)
+            )),
             "should've thrown an error about the graph not being undirected",
         );
     }
@@ -1090,7 +1143,10 @@ mod tests {
                 0, 2, 3;
                 0, 2;
             }
-            .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::NonSquareMatrix(_))),
+            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+                err,
+                AdjacencyMatrixErrorType::NonSquareMatrix(_)
+            )),
             "should've thrown an error about the matrix not being square, or a matrix for that \
             matter",
         );
@@ -1103,7 +1159,10 @@ mod tests {
                 (0., 0., 0), (0., 0., 2), (0., 0., 3);
                 (0., 0., 0), (0., 0., 2);
             }
-            .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::NonSquareMatrix(_))),
+            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+                err,
+                AdjacencyMatrixErrorType::NonSquareMatrix(_)
+            )),
             "should've thrown an error about the matrix not being square, or a matrix for that \
             matter",
         );
@@ -1116,7 +1175,10 @@ mod tests {
                 1, 2;
                 2, 1;
             }
-            .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::SelfLoops(_))),
+            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+                err,
+                AdjacencyMatrixErrorType::SelfLoops(_)
+            )),
             "should've thrown an error about the graph having self-loops (i.e. the main diagonal \
             is not made out of zeroes)",
         );
@@ -1126,10 +1188,13 @@ mod tests {
     fn basic_geometric_nonsimple_graph() {
         assert!(
             geomatrix! {
-                (0., 0., 1), (0., 0., 2);
-                (0., 0., 2), (0., 0., 1);
+                (0., 0., 1), (1., 0., 2);
+                (0., 0., 2), (1., 0., 1);
             }
-            .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::SelfLoops(_))),
+            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+                err,
+                AdjacencyMatrixErrorType::SelfLoops(_)
+            )),
             "should've thrown an error about the graph having self-loops (i.e. the main diagonal \
             is not made out of zeroes)",
         );
@@ -1142,7 +1207,10 @@ mod tests {
                 0, 0;
                 2, 0;
             }
-            .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::IncompleteGraph(_))),
+            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+                err,
+                AdjacencyMatrixErrorType::IncompleteGraph(_)
+            )),
             "should've thrown an error about the graph not having as many edges as a complete, \
             simple graph is expected to have (i.e. the matrix has zeroes outside the main \
             diagonal)",
@@ -1156,7 +1224,10 @@ mod tests {
                 (0., 0., 0), (0., 0., 0);
                 (0., 0., 2), (0., 0., 0);
             }
-            .is_err_and(|err| matches!(err.inner, AdjacencyMatrixErrorType::IncompleteGraph(_))),
+            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+                err,
+                AdjacencyMatrixErrorType::IncompleteGraph(_)
+            )),
             "should've thrown an error about the graph not having as many edges as a complete, \
             simple graph is expected to have (i.e. the matrix has zeroes outside the main \
             diagonal)",
@@ -1164,19 +1235,36 @@ mod tests {
     }
 
     #[test]
-    fn basic_geometric_nonmatching_coordinates_graph() {
+    fn basic_geometric_same_row_points_graph() {
         assert!(
             geomatrix! {
-                (0., 0., 0), (0., 1., 2);
-                (1., 0., 2), (0., 0., 0);
+                (0., 0., 0), (1., 0., 1), (1., 0., 1);
+                (0., 1., 1), (0., 0., 0), (2., 0., 1);
+                (0., 1., 1), (1., 0., 1), (0., 0., 0);
             }
-            .is_err_and(|err| matches!(
-                err.inner,
-                AdjacencyMatrixErrorType::NonMatchingCoordinates(_)
+            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+                err,
+                AdjacencyMatrixErrorType::MultipleEqualPoints(_)
             )),
-            "should've thrown an error about the graph not having matching coordinates on \
-            symmetric vertices (this is not required to check for an undirected graph because the \
-            coordinates only serve as satellite data during construction of the adjacency matrix)",
+            "should've thrown an error about the graph having multiple vertices in the same row \
+            with the same coordinates in euclidean space",
+        )
+    }
+
+    #[test]
+    fn basic_geometric_same_col_points_graph() {
+        assert!(
+            geomatrix! {
+                (0., 0., 0), (1., 0., 1), (0., 1., 1);
+                (0., 0., 1), (0., 0., 0), (0., 2., 1);
+                (1., 0., 1), (0., 1., 1), (0., 0., 0);
+            }
+            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+                err,
+                AdjacencyMatrixErrorType::UnequalSamePoints(_)
+            )),
+            "should've thrown an error about the graph having multiple vertices in the same column \
+            that are not equal",
         )
     }
 
@@ -1237,20 +1325,39 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "The algorithm is a wip."]
+    fn triangulation1() -> Result<(), AdjacencyMatrixError> {
+        geomatrix! {
+            (0., 0., 0), (1.3, 5., 1), (1.5, 3.5, 3), (2., 3.6, 0), (3., 0.75, 1), (3.75, 3.7, 3), (4.25, 3., 0), (4.3, 1.7, 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
+            (0., 0., 0), (0., 0., 0), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
+            (0., 0., 0), (0., 1., 1), (0., 0., 0), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
+            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
+            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 0., 0), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
+            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (0., 0., 0), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
+            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
+            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 0., 0), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
+            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (0., 0., 0), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
+            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
+            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 0., 0), (1., 1., 3), (1., 1., 3);
+            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (0., 0., 0), (1., 1., 3);
+            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0);
+        }?
+        .triangulate();
+
+        Ok(())
+    }
+
+    #[test]
+    #[ignore = "The algorithm is a WIP, and the test sample case is not ready yet."]
+    #[allow(unreachable_code, reason = "Ibid.")]
     fn tsp_mst_dfs1() -> Result<(), AdjacencyMatrixError> {
-        let _input = TspMstDfs::tsp(&geomatrix! {
-            (0., 0., 0), (0., 1., 1), (1., 1., 3);
-            (0., 1., 1), (0., 0., 0), (0., 2., 4);
-            (1., 1., 3), (0., 2., 4), (0., 0., 0);
-        }?);
         todo!();
 
         Ok(())
     }
 
     #[test]
-    #[ignore = "The algorithm is a wip, and the test sample case is not ready yet."]
+    #[ignore = "The algorithm is a WIP, and the test sample case is not ready yet."]
+    #[allow(unreachable_code, reason = "Ibid.")]
     fn tsp_mst_dfs2() -> Result<(), AdjacencyMatrixError> {
         todo!();
 
