@@ -7,11 +7,11 @@
 //! The goal is to simply group under a single umbrella the methods required to
 //! implement a certain algorithm for a specific instance of a specific problem.
 
-#![allow(
+#![expect(
     dead_code,
     reason = "All of the reportedly unused items are actually used."
 )]
-#![allow(unused_macros, reason = "Ibid.")]
+#![expect(unused_macros, reason = "Ibid.")]
 
 use std::{
     cell::RefCell,
@@ -92,18 +92,18 @@ impl AdjacencyList {
 }
 
 #[derive(Debug)]
-struct GeoAdjacencyMatrix(Vec<Vec<GeoEdge>>);
+pub struct GeoAdjacencyMatrix(Vec<Vec<GeoEdge>>);
 
 #[derive(Debug, Clone)]
-enum GeoEdge {
+pub enum GeoEdge {
     NonExistent,
     Weighted { weight: usize, coord: Point2d },
 }
 
-#[derive(Debug, Clone, PartialEq)]
-struct Point2d {
-    x: f64,
-    y: f64,
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Point2d {
+    pub x: f64,
+    pub y: f64,
 }
 
 #[derive(Debug)]
@@ -620,6 +620,76 @@ impl GeoAdjacencyMatrix {
         }
 
         Ok(Self(inner.to_owned()))
+    }
+
+    fn from_point_set(points: Vec<Point2d>, lines: Vec<(usize, usize)>) -> Self {
+        #[derive(Clone, Copy)]
+        enum TmpGeoEdge {
+            NonExistent,
+            Weighted {
+                weight: Option<usize>,
+                coord: Point2d,
+            },
+        }
+
+        let mut output = Vec::with_capacity(points.len());
+        output.resize_with(points.len(), || {
+            let mut output = Vec::with_capacity(points.len());
+            output.resize(points.len(), TmpGeoEdge::NonExistent);
+
+            output
+        });
+
+        {
+            let output = &raw mut output;
+
+            fn propagate_col(
+                row: usize,
+                col: usize,
+                edge: &mut TmpGeoEdge,
+                points: &[Point2d],
+                output: &*mut Vec<Vec<TmpGeoEdge>>,
+            ) {
+                *edge = TmpGeoEdge::Weighted {
+                    weight: None,
+                    coord: points[col],
+                };
+
+                let mut idx_state = 1;
+                while let Some(row_vector) = (unsafe { &mut **output }).get_mut(row + idx_state) {
+                    if col != row + idx_state {
+                        row_vector[col] = TmpGeoEdge::Weighted {
+                            weight: None,
+                            coord: points[col],
+                        };
+                    }
+
+                    idx_state += 1;
+                }
+            }
+
+            // SAFETY: mutable references to the pointer are only used in disjoint
+            // vectors, and most importantly, they're used serially *after* using a
+            // mutable reference not gated by a raw pointer. Also; all vectors have
+            // plenty of space to avoid mid-way allocations.
+            (unsafe { &mut *output })
+                .iter_mut()
+                .take(2)
+                .enumerate()
+                .for_each(|(row, elem)| {
+                    if row == 0 {
+                        elem.iter_mut().enumerate().skip(1).for_each(|(col, edge)| {
+                            propagate_col(row, col, edge, &points, &output);
+                        });
+                    } else {
+                        elem.iter_mut().enumerate().take(1).for_each(|(col, edge)| {
+                            propagate_col(row, col, edge, &points, &output);
+                        });
+                    }
+                });
+        }
+
+        Self(Vec::new())
     }
 }
 

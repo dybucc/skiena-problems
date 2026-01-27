@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["AdjacencyMatrixErrorType","Edge","GeoEdge","PairsErrorType"],"macro":["build_error","ensure_or","geomatrix","matrix"],"struct":["AdjacencyList","AdjacencyMatrix","AdjacencyMatrixError","Dfs","GeoAdjacencyMatrix","Pairs","PairsError","Point2d"],"trait":["TspClosestPair","TspMstDfs","TspNearestNeighbor"]};
+window.SIDEBAR_ITEMS = {"enum":["GeoEdge"],"struct":["Point2d"]};
