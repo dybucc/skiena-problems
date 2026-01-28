@@ -7,11 +7,7 @@
 //! The goal is to simply group under a single umbrella the methods required to
 //! implement a certain algorithm for a specific instance of a specific problem.
 
-#![expect(
-    dead_code,
-    reason = "All of the reportedly unused items are actually used."
-)]
-#![expect(unused_macros, reason = "Ibid.")]
+#![allow(dead_code, reason = "The reported items are used.")]
 
 use std::{
     cell::RefCell,
@@ -22,43 +18,43 @@ use std::{
 };
 
 #[derive(Debug)]
-struct AdjacencyMatrix {
+pub struct AdjacencyMatrix {
     inner: Vec<Vec<Edge>>,
 }
 
 #[derive(Debug)]
-struct Pairs<'a> {
+pub struct Pairs<'a> {
     /// Holds the parent of each node (where the node itself is the index).
-    forest: Vec<usize>,
+    pub forest: Vec<usize>,
     /// Holds the node in the lhs of the current Cartesian product.
-    current_node: Option<usize>,
+    pub current_node: Option<usize>,
     /// Holds the nodes in the same tree as [`current_node`].
     ///
     /// [`current_node`]: Pairs::current_node
-    current_tree: Option<Vec<usize>>,
+    pub current_tree: Option<Vec<usize>>,
     /// Holds the Cartesian product of [`current_node`] with all nodes that are
     /// **not** part of [`current_tree`].
     ///
     /// [`current_node`]: Pairs::current_node
     /// [`current_tree`]: Pairs::current_tree
-    current_product: Vec<(usize, usize)>,
+    pub current_product: Vec<(usize, usize)>,
     /// Holds the index of the pair currently being iterated over in the
     /// [`current_product`] field.
     ///
     /// [`current_product`]: Pairs::current_product
-    current_iter: Option<usize>,
+    pub current_iter: Option<usize>,
     /// Source graph to refer to when performing graph-level logic on the edges
     /// denoted by [`current_product`].
     ///
     /// [`current_product`]: Pairs::current_product
-    src: &'a AdjacencyMatrix,
+    pub src: &'a AdjacencyMatrix,
 }
 
 #[derive(Debug)]
-struct AdjacencyList(HashMap<usize, HashSet<usize>>);
+pub struct AdjacencyList(HashMap<usize, HashSet<usize>>);
 
 impl AdjacencyList {
-    fn from_pairs(pairs: &Pairs) -> Self {
+    pub fn from_pairs(pairs: &Pairs) -> Self {
         let mut output = Self(HashMap::with_capacity(pairs.forest.len()));
         for ancestors in (0..pairs.forest.len()).filter_map(|node| {
             let ancestors = pairs
@@ -94,7 +90,7 @@ impl AdjacencyList {
 #[derive(Debug)]
 pub struct GeoAdjacencyMatrix(Vec<Vec<GeoEdge>>);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum GeoEdge {
     NonExistent,
     Weighted { weight: usize, coord: Point2d },
@@ -107,36 +103,36 @@ pub struct Point2d {
 }
 
 #[derive(Debug)]
-struct Dfs {
-    graph: AdjacencyList,
-    stack: Vec<usize>,
-    discovered: Vec<bool>,
-    current_iter: Option<usize>,
+pub struct Dfs {
+    pub graph: AdjacencyList,
+    pub stack: Vec<usize>,
+    pub discovered: Vec<bool>,
+    pub current_iter: Option<usize>,
 }
 
 #[derive(Debug)]
-struct PairsError {
-    inner: PairsErrorType,
+pub struct PairsError {
+    pub inner: PairsErrorType,
 }
 
 #[derive(Debug)]
-enum PairsErrorType {
+pub enum PairsErrorType {
     IndexOutOfBounds(String),
 }
 
 #[derive(Clone, PartialEq, Debug)]
-enum Edge {
+pub enum Edge {
     NonExistent,
     Weighted(usize),
 }
 
 #[derive(Debug)]
-struct AdjacencyMatrixError {
+pub struct AdjacencyMatrixError {
     inner: AdjacencyMatrixErrorType,
 }
 
 #[derive(Debug)]
-enum AdjacencyMatrixErrorType {
+pub enum AdjacencyMatrixErrorType {
     NonSquareMatrix(String),
     IncompleteGraph(String),
     DirectedGraph(String),
@@ -145,6 +141,7 @@ enum AdjacencyMatrixErrorType {
     UnequalSamePoints(String),
 }
 
+#[macro_export]
 macro_rules! matrix {
     ($($($weight:literal),+);+ $(;)?) => {
         AdjacencyMatrix::new(&[$(vec![$({
@@ -160,6 +157,7 @@ macro_rules! matrix {
     };
 }
 
+#[macro_export]
 macro_rules! geomatrix {
     ($($(($x:literal, $y:literal, $weight:literal)),+);+ $(;)?) => {{
         GeoAdjacencyMatrix::new(&[$(vec![$({
@@ -178,6 +176,7 @@ macro_rules! geomatrix {
     }};
 }
 
+#[macro_export]
 macro_rules! build_error {
     () => {{
         compile_error!(
@@ -228,8 +227,13 @@ its overarching enum type:
     (IndexOutOfBounds) => {{ PairsErrorType::IndexOutOfBounds(String::from("ufds doesn't contain such index element")) }};
 }
 
+#[macro_export]
 macro_rules! ensure_or {
     ($check:expr, $error:tt$(,)?) => {{ $check.then_some(()).ok_or_else(|| build_error!($error)) }};
+}
+
+pub fn seglen(Point2d { x: x1, y: y1 }: &Point2d, Point2d { x: x2, y: y2 }: &Point2d) -> f64 {
+    ((x1 - x2).abs().powi(2) + (y1 - y2).abs().powi(2)).sqrt()
 }
 
 impl From<AdjacencyMatrixErrorType> for AdjacencyMatrixError {
@@ -245,7 +249,7 @@ impl From<PairsErrorType> for PairsError {
 }
 
 impl AdjacencyMatrix {
-    fn new(input: &[Vec<Edge>]) -> Result<Self, AdjacencyMatrixError> {
+    pub fn new(input: &[Vec<Edge>]) -> Result<Self, AdjacencyMatrixError> {
         ensure_or!(input.len() > 1, NonSquareMatrix)?;
         for (idx, vertex) in input.iter().enumerate() {
             ensure_or!(vertex.len() == input.len(), NonSquareMatrix)?;
@@ -284,7 +288,7 @@ impl AdjacencyMatrix {
 }
 
 impl<'a> Pairs<'a> {
-    fn new(src: &'a AdjacencyMatrix) -> Self {
+    pub fn new(src: &'a AdjacencyMatrix) -> Self {
         Self {
             forest: (0..src.inner.len()).collect(),
             current_node: None,
@@ -297,7 +301,7 @@ impl<'a> Pairs<'a> {
 }
 
 impl Pairs<'_> {
-    fn unite(&mut self, this: usize, other: usize) -> Result<(), PairsError> {
+    pub fn unite(&mut self, this: usize, other: usize) -> Result<(), PairsError> {
         if !self.same(this, other)? {
             self.forest[other] = this;
         }
@@ -310,7 +314,7 @@ impl Pairs<'_> {
     /// Returns the same node if the node makes up a single-vertex tree.
     /// Otherwise, returns the root node by following the parent relationship in
     /// the same tree.
-    fn find(&self, this: usize) -> Result<usize, PairsError> {
+    pub fn find(&self, this: usize) -> Result<usize, PairsError> {
         ensure_or!(this < self.forest.len(), IndexOutOfBounds)?;
         match self.forest[this] {
             val if val == this => Ok(this),
@@ -318,7 +322,7 @@ impl Pairs<'_> {
         }
     }
 
-    fn same(&self, this: usize, other: usize) -> Result<bool, PairsError> {
+    pub fn same(&self, this: usize, other: usize) -> Result<bool, PairsError> {
         let (this, other) = (self.find(this)?, self.find(other)?);
 
         Ok(this == other)
@@ -326,7 +330,7 @@ impl Pairs<'_> {
 }
 
 impl Pairs<'_> {
-    fn ancestors(&self, this: usize) -> Result<Vec<usize>, PairsError> {
+    pub fn ancestors(&self, this: usize) -> Result<Vec<usize>, PairsError> {
         let (this_root, mut parent, mut ancestors) = (self.find(this)?, this, vec![this]);
 
         while parent != this_root {
@@ -339,7 +343,7 @@ impl Pairs<'_> {
         Ok(ancestors)
     }
 
-    fn build_tree_from(&mut self, this: usize) -> Result<(), PairsError> {
+    pub fn build_tree_from(&mut self, this: usize) -> Result<(), PairsError> {
         ensure_or!(this < self.forest.len(), IndexOutOfBounds)?;
         self.current_tree = Some(
             iter::repeat_n(this, self.forest.len())
@@ -359,7 +363,7 @@ impl Pairs<'_> {
         Ok(())
     }
 
-    fn cartesian_product(&mut self) -> Result<(), PairsError> {
+    pub fn cartesian_product(&mut self) -> Result<(), PairsError> {
         static ERROR_MSG: LazyLock<&str> =
             LazyLock::new(|| "this method should not be called outside iterator chains");
 
@@ -378,7 +382,7 @@ impl Pairs<'_> {
     // NOTE: this exists as a replacement for the `min()` override of
     //       `Iterator`, as that doesn't seem to resolve to the overridden
     //       implementation when used in `tsp()` of `TspClosestPair`.
-    fn min_fix(&mut self) -> Option<<Self as Iterator>::Item> {
+    pub fn min_fix(&mut self) -> Option<<Self as Iterator>::Item> {
         self.min_by_key(|&(node1, node2)| {
             let Edge::Weighted(weight) = self.src.inner[node1][node2] else {
                 unreachable!(
@@ -390,12 +394,13 @@ impl Pairs<'_> {
         })
     }
 
-    fn dfs(&self) -> Dfs {
+    pub fn dfs(&self) -> Dfs {
         let mut root = self
             .forest
             .iter()
             .enumerate()
             .filter_map(|(node, &parent)| (node == parent).then_some(node));
+
         assert_eq!(
             root.clone().count(),
             1,
@@ -531,7 +536,7 @@ impl Iterator for Dfs {
 }
 
 impl GeoAdjacencyMatrix {
-    fn new(inner: &[Vec<GeoEdge>]) -> Result<Self, AdjacencyMatrixError> {
+    pub fn new(inner: &[Vec<GeoEdge>]) -> Result<Self, AdjacencyMatrixError> {
         ensure_or!(inner.len() > 1, NonSquareMatrix)?;
         for (vertex, edges) in inner.iter().enumerate() {
             ensure_or!(edges.len() == inner.len(), NonSquareMatrix)?;
@@ -622,20 +627,17 @@ impl GeoAdjacencyMatrix {
         Ok(Self(inner.to_owned()))
     }
 
-    fn from_point_set(points: Vec<Point2d>, lines: Vec<(usize, usize)>) -> Self {
+    pub fn from_point_set(points: Vec<Point2d>) -> Self {
         #[derive(Clone, Copy)]
-        enum TmpGeoEdge {
+        enum IRGeoEdge {
             NonExistent,
-            Weighted {
-                weight: Option<usize>,
-                coord: Point2d,
-            },
+            Weighted(Point2d),
         }
 
         let mut output = Vec::with_capacity(points.len());
         output.resize_with(points.len(), || {
             let mut output = Vec::with_capacity(points.len());
-            output.resize(points.len(), TmpGeoEdge::NonExistent);
+            output.resize(points.len(), IRGeoEdge::NonExistent);
 
             output
         });
@@ -646,32 +648,27 @@ impl GeoAdjacencyMatrix {
             fn propagate_col(
                 row: usize,
                 col: usize,
-                edge: &mut TmpGeoEdge,
+                edge: &mut IRGeoEdge,
                 points: &[Point2d],
-                output: &*mut Vec<Vec<TmpGeoEdge>>,
+                output: &*mut Vec<Vec<IRGeoEdge>>,
             ) {
-                *edge = TmpGeoEdge::Weighted {
-                    weight: None,
-                    coord: points[col],
-                };
+                *edge = IRGeoEdge::Weighted(points[col]);
 
                 let mut idx_state = 1;
                 while let Some(row_vector) = (unsafe { &mut **output }).get_mut(row + idx_state) {
                     if col != row + idx_state {
-                        row_vector[col] = TmpGeoEdge::Weighted {
-                            weight: None,
-                            coord: points[col],
-                        };
+                        row_vector[col] = IRGeoEdge::Weighted(points[col]);
                     }
 
                     idx_state += 1;
                 }
             }
 
-            // SAFETY: mutable references to the pointer are only used in disjoint
-            // vectors, and most importantly, they're used serially *after* using a
-            // mutable reference not gated by a raw pointer. Also; all vectors have
-            // plenty of space to avoid mid-way allocations.
+            // SAFETY: mutable references to the pointer are only used in
+            // disjoint vectors, and most importantly, they're used serially
+            // *after* using a mutable reference not gated by a raw pointer.
+            // Also; all vectors involved have plenty of space to avoid mid-way
+            // allocations.
             (unsafe { &mut *output })
                 .iter_mut()
                 .take(2)
@@ -681,29 +678,83 @@ impl GeoAdjacencyMatrix {
                         elem.iter_mut().enumerate().skip(1).for_each(|(col, edge)| {
                             propagate_col(row, col, edge, &points, &output);
                         });
-                    } else {
-                        elem.iter_mut().enumerate().take(1).for_each(|(col, edge)| {
-                            propagate_col(row, col, edge, &points, &output);
-                        });
+
+                        return;
                     }
+
+                    elem.iter_mut().enumerate().take(1).for_each(|(col, edge)| {
+                        propagate_col(row, col, edge, &points, &output);
+                    });
                 });
         }
 
-        Self(Vec::new())
+        // This finds the largest distance between any one point and any other,
+        // different point, in the input set.
+        let largest_distance = points
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, point)| {
+                let target = points
+                    .iter()
+                    .skip(idx + 1)
+                    .map(|other_point| seglen(point, other_point))
+                    .max_by(|a, b| a.total_cmp(b))
+                    .unwrap_or_default(); // We've either hit the end or not.
+
+                (target != 0.).then_some(target)
+            })
+            .max_by(|a, b| a.total_cmp(b))
+            .expect(
+                "The point set should have at least four points to make things interesting, though \
+                two is the bare minimum to make for a non-singleton set.",
+            );
+
+        Self(
+            output
+                .iter()
+                .enumerate()
+                .map(|(row, row_vector)| {
+                    row_vector
+                        .iter()
+                        .enumerate()
+                        .map(|(col, vertex)| match vertex {
+                            IRGeoEdge::NonExistent => GeoEdge::NonExistent,
+                            IRGeoEdge::Weighted(coord) => GeoEdge::Weighted {
+                                // The weight is computed as a ratio of the
+                                // largest distance found above.
+                                weight: ((seglen(&points[row], &points[col]) * 100.)
+                                    / largest_distance)
+                                    .floor() as usize,
+                                coord: *coord,
+                            },
+                        })
+                        .collect()
+                })
+                .collect(),
+        )
     }
 }
 
-trait TspNearestNeighbor {
+impl PartialEq for GeoAdjacencyMatrix {
+    fn eq(&self, other: &Self) -> bool {
+        self.0
+            .iter()
+            .enumerate()
+            .all(|(idx, row)| row.iter().eq(other.0[idx].iter()))
+    }
+}
+
+pub trait TspNearestNeighbor {
     fn tsp(&self) -> Vec<usize>;
 }
 
-trait TspClosestPair {
+pub trait TspClosestPair {
     fn pairs(&self) -> Pairs<'_>;
 
     fn tsp(&self) -> Vec<usize>;
 }
 
-trait TspMstDfs {
+pub trait TspMstDfs {
     fn triangulate(&mut self);
     fn mst(input: &Self) -> Vec<usize>;
     fn dfs(input: &Self) -> Vec<usize>;
@@ -797,11 +848,7 @@ impl TspClosestPair for AdjacencyMatrix {
 
 impl TspMstDfs for GeoAdjacencyMatrix {
     fn triangulate(&mut self) {
-        #![allow(
-            unreachable_code,
-            unused,
-            reason = "Testing is taking place in separate steps."
-        )]
+        #![expect(unused, reason = "Testing is taking place in separate steps.")]
 
         let mut points: Vec<_> = self
             .0
@@ -886,7 +933,7 @@ impl TspMstDfs for GeoAdjacencyMatrix {
             &self.0,
         );
 
-        panic!("Reached end of `upper_hull` construction: {upper_hull:#?}.");
+        panic!("Reached end of `upper_hull` construction:\n{upper_hull:#?}.");
 
         points.sort_unstable_by(
             |(_, Point2d { x: x1, y: y1 }), (_, Point2d { x: x2, y: y2 })| match x1.total_cmp(x2) {
@@ -953,13 +1000,6 @@ impl TspMstDfs for GeoAdjacencyMatrix {
         // See Lemma 1.3.1 in O'Rourke, 2001.
         const fn compute_triangle_area((a, b, c): (&Point2d, &Point2d, &Point2d)) -> f64 {
             ((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)).abs() / 2.
-        }
-
-        fn compute_segment_length(
-            Point2d { x: x1, y: y1 }: &Point2d,
-            Point2d { x: x2, y: y2 }: &Point2d,
-        ) -> f64 {
-            ((x1 - x2).abs().powi(2) + (y1 - y2).abs().powi(2)).sqrt()
         }
 
         fn check_point_ownership(
@@ -1110,12 +1150,11 @@ impl TspMstDfs for GeoAdjacencyMatrix {
                     // that crosses three of the quadrilateral's vertices, and
                     // evaluating whether the remaining vertex lies within the
                     // inner area of that ring. The correctness of this argument
-                    // follows from Thales' theorem. See de Berg et. al., 2008.
+                    // follows from Thales' theorem. See Section 9.1.2 in de
+                    // Berg et. al., 2008.
                     if let Some(ring_center) = find_ring((p_src, p1, p_dst)) {
-                        let (center_to_p2, ring_radius) = (
-                            compute_segment_length(&ring_center, p2),
-                            compute_segment_length(&ring_center, p1),
-                        );
+                        let (center_to_p2, ring_radius) =
+                            (seglen(&ring_center, p2), seglen(&ring_center, p1));
 
                         if ring_radius - center_to_p2 < (ring_radius - *EPS) {
                             (
@@ -1149,6 +1188,8 @@ impl TspMstDfs for GeoAdjacencyMatrix {
 
 #[cfg(test)]
 mod tests {
+    use macros::points;
+
     use super::*;
 
     #[test]
@@ -1395,25 +1436,98 @@ mod tests {
     }
 
     #[test]
-    fn triangulation1() -> Result<(), AdjacencyMatrixError> {
-        geomatrix! {
-            (0., 0., 0), (1.3, 5., 1), (1.5, 3.5, 3), (2., 3.6, 0), (3., 0.75, 1), (3.75, 3.7, 3), (4.25, 3., 0), (4.3, 1.7, 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
-            (0., 0., 0), (0., 0., 0), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
-            (0., 0., 0), (0., 1., 1), (0., 0., 0), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
-            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
-            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 0., 0), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
-            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (0., 0., 0), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
-            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
-            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 0., 0), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
-            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (0., 0., 0), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
-            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (1., 1., 3);
-            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 0., 0), (1., 1., 3), (1., 1., 3);
-            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (0., 0., 0), (1., 1., 3);
-            (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0), (0., 1., 1), (1., 1., 3), (0., 0., 0);
-        }?
-        .triangulate();
+    fn points_macro1() -> Result<(), AdjacencyMatrixError> {
+        assert_eq!(
+            points! {
+                (x: 1.25, y: 2),
+                (x: 1.3, y: 5),
+                (x: 1.5, y: 3.5)
+            },
+            geomatrix! {
+                (0.,   0., 0),   (1.3, 5., 100), (1.5, 3.5, 50);
+                (1.25, 2., 100), (0.,  0., 0),   (1.5, 3.5, 50);
+                (1.25, 2., 50),  (1.3, 5., 50),  (0.,  0., 0);
+            }?
+        );
 
         Ok(())
+    }
+
+    #[test]
+    fn points_macro2() -> Result<(), AdjacencyMatrixError> {
+        assert_eq!(
+            points! {
+                (x: 0, y: 0),
+                (x: 1.3, y: 5),
+                (x: 1.5, y: 3.5)
+            },
+            geomatrix! {
+                (0., 0., 0),   (1.3, 5., 100), (1.5, 3.5, 73);
+                (0., 0., 100), (0.,  0., 0),   (1.5, 3.5, 29);
+                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0);
+            }?
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn points_macro3() -> Result<(), AdjacencyMatrixError> {
+        assert_eq!(
+            points! {
+                (x: 1.25, y: 2),
+                (x: 1.3, y: 5),
+                (x: 1.5, y: 3.5),
+                (x: 2, y: 3.6),
+                (x: 3, y: 0.75),
+                (x: 3.75, y: 3.7),
+                (x: 4.25, y: 3),
+                (x: 4.3, y: 1.7),
+                (x: 4.5, y: 5),
+                (x: 5.8, y: 3.45),
+                (x: 6, y: 1),
+                (x: 6.2, y: 4.7),
+                (x: 7, y: 3.45)
+            },
+            geomatrix! {
+                (0., 0., 0),   (1.3, 5., 100), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
+                (0., 0., 100), (0.,  0., 0),   (1.5, 3.5, 29), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
+                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
+                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
+                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
+                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
+                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
+                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
+                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
+                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
+                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73);
+                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (0.,  0., 0), (1.5, 3.5, 73);
+                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (0.,  0., 0);
+            }?
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
+    fn triangulation1() {
+        points! {
+            (x: 1.25, y: 2),
+            (x: 1.3, y: 5),
+            (x: 1.5, y: 3.5),
+            (x: 2, y: 3.6),
+            (x: 3, y: 0.75),
+            (x: 3.75, y: 3.7),
+            (x: 4.25, y: 3),
+            (x: 4.3, y: 1.7),
+            (x: 4.5, y: 5),
+            (x: 5.8, y: 3.45),
+            (x: 6, y: 1),
+            (x: 6.2, y: 4.7),
+            (x: 7, y: 3.45)
+        }
+        .triangulate();
     }
 
     #[test]

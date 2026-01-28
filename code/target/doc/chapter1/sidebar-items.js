@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["GeoEdge"],"struct":["Point2d"]};

@@ -1,1 +1,0 @@
-std::ops::ControlFlow<std::result::Result<std::convert::Infallible, AdjacencyMatrixErrorType>>

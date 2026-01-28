@@ -1,1 +1,0 @@
-std::iter::Chain<std::iter::Map<std::slice::Iter<'_, (usize, usize)>, {closure@chapter1/src/lib.rs:423:18: 423:34}>, std::iter::Once<std::vec::Vec<(usize, usize)>>>
