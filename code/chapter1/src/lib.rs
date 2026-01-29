@@ -7,7 +7,7 @@
 //! The goal is to simply group under a single umbrella the methods required to
 //! implement a certain algorithm for a specific instance of a specific problem.
 
-#![allow(dead_code, reason = "The reported items are used.")]
+#![allow(dead_code, reason = "The reportedly unused items are used.")]
 
 use std::{
     cell::RefCell,
@@ -232,7 +232,7 @@ macro_rules! ensure_or {
     ($check:expr, $error:tt$(,)?) => {{ $check.then_some(()).ok_or_else(|| build_error!($error)) }};
 }
 
-pub fn seglen(Point2d { x: x1, y: y1 }: &Point2d, Point2d { x: x2, y: y2 }: &Point2d) -> f64 {
+pub fn seglen(Point2d { x: x1, y: y1 }: Point2d, Point2d { x: x2, y: y2 }: Point2d) -> f64 {
     ((x1 - x2).abs().powi(2) + (y1 - y2).abs().powi(2)).sqrt()
 }
 
@@ -627,7 +627,7 @@ impl GeoAdjacencyMatrix {
         Ok(Self(inner.to_owned()))
     }
 
-    pub fn from_point_set(points: Vec<Point2d>) -> Self {
+    pub fn from_point_set(points: Vec<Point2d>) -> (Vec<Point2d>, Self) {
         #[derive(Clone, Copy)]
         enum IRGeoEdge {
             NonExistent,
@@ -642,51 +642,15 @@ impl GeoAdjacencyMatrix {
             output
         });
 
-        {
-            let output = &raw mut output;
-
-            fn propagate_col(
-                row: usize,
-                col: usize,
-                edge: &mut IRGeoEdge,
-                points: &[Point2d],
-                output: &*mut Vec<Vec<IRGeoEdge>>,
-            ) {
-                *edge = IRGeoEdge::Weighted(points[col]);
-
-                let mut idx_state = 1;
-                while let Some(row_vector) = (unsafe { &mut **output }).get_mut(row + idx_state) {
-                    if col != row + idx_state {
-                        row_vector[col] = IRGeoEdge::Weighted(points[col]);
-                    }
-
-                    idx_state += 1;
+        output.iter_mut().enumerate().for_each(|(row, row_vec)| {
+            row_vec.iter_mut().enumerate().for_each(|(col, edge)| {
+                if col == row {
+                    *edge = IRGeoEdge::NonExistent;
+                } else {
+                    *edge = IRGeoEdge::Weighted(points[col]);
                 }
-            }
-
-            // SAFETY: mutable references to the pointer are only used in
-            // disjoint vectors, and most importantly, they're used serially
-            // *after* using a mutable reference not gated by a raw pointer.
-            // Also; all vectors involved have plenty of space to avoid mid-way
-            // allocations.
-            (unsafe { &mut *output })
-                .iter_mut()
-                .take(2)
-                .enumerate()
-                .for_each(|(row, elem)| {
-                    if row == 0 {
-                        elem.iter_mut().enumerate().skip(1).for_each(|(col, edge)| {
-                            propagate_col(row, col, edge, &points, &output);
-                        });
-
-                        return;
-                    }
-
-                    elem.iter_mut().enumerate().take(1).for_each(|(col, edge)| {
-                        propagate_col(row, col, edge, &points, &output);
-                    });
-                });
-        }
+            });
+        });
 
         // This finds the largest distance between any one point and any other,
         // different point, in the input set.
@@ -697,7 +661,7 @@ impl GeoAdjacencyMatrix {
                 let target = points
                     .iter()
                     .skip(idx + 1)
-                    .map(|other_point| seglen(point, other_point))
+                    .map(|other_point| seglen(*point, *other_point))
                     .max_by(|a, b| a.total_cmp(b))
                     .unwrap_or_default(); // We've either hit the end or not.
 
@@ -708,8 +672,7 @@ impl GeoAdjacencyMatrix {
                 "The point set should have at least four points to make things interesting, though \
                 two is the bare minimum to make for a non-singleton set.",
             );
-
-        Self(
+        let output = Self(
             output
                 .iter()
                 .enumerate()
@@ -722,7 +685,7 @@ impl GeoAdjacencyMatrix {
                             IRGeoEdge::Weighted(coord) => GeoEdge::Weighted {
                                 // The weight is computed as a ratio of the
                                 // largest distance found above.
-                                weight: ((seglen(&points[row], &points[col]) * 100.)
+                                weight: ((seglen(points[row], points[col]) * 100.)
                                     / largest_distance)
                                     .floor() as usize,
                                 coord: *coord,
@@ -731,7 +694,9 @@ impl GeoAdjacencyMatrix {
                         .collect()
                 })
                 .collect(),
-        )
+        );
+
+        (points, output)
     }
 }
 
@@ -754,8 +719,8 @@ pub trait TspClosestPair {
     fn tsp(&self) -> Vec<usize>;
 }
 
-pub trait TspMstDfs {
-    fn triangulate(&mut self);
+pub trait TspTriMstDfs {
+    fn triangulate(&mut self, points: Vec<Point2d>);
     fn mst(input: &Self) -> Vec<usize>;
     fn dfs(input: &Self) -> Vec<usize>;
 
@@ -846,30 +811,11 @@ impl TspClosestPair for AdjacencyMatrix {
     }
 }
 
-impl TspMstDfs for GeoAdjacencyMatrix {
-    fn triangulate(&mut self) {
+impl TspTriMstDfs for GeoAdjacencyMatrix {
+    fn triangulate(&mut self, points: Vec<Point2d>) {
         #![expect(unused, reason = "Testing is taking place in separate steps.")]
 
-        let mut points: Vec<_> = self
-            .0
-            .iter()
-            .take(2)
-            .enumerate()
-            .flat_map(|(vertex, edges)| {
-                edges
-                    .iter()
-                    .take(if vertex == 0 { edges.len() } else { 1 })
-                    .enumerate()
-                    .filter_map(|(vertex, edge)| {
-                        if let GeoEdge::Weighted { coord, .. } = edge {
-                            Some((vertex, coord))
-                        } else {
-                            None
-                        }
-                    })
-            })
-            .collect();
-
+        let mut points: Vec<_> = points.into_iter().enumerate().collect();
         let (mut upper_hull, mut lower_hull, mut triangulation) = (
             Vec::with_capacity(points.len().div_ceil(2)),
             Vec::with_capacity(points.len().div_ceil(2)),
@@ -883,36 +829,51 @@ impl TspMstDfs for GeoAdjacencyMatrix {
             output
         });
 
-        // Follows Graham's algorithm with Andrew's changes.
-        fn build_hull<'a>(
+        // Follows Andrew's algorithm.
+        fn build_hull(
             mut triangulation: Option<&mut [Vec<GeoEdge>]>,
-            hull: &mut Vec<(usize, &'a Point2d)>,
+            hull: &mut Vec<(usize, Point2d)>,
             compare: impl Fn(f64, f64) -> bool,
-            points: &[(usize, &'a Point2d)],
+            points: &[(usize, Point2d)],
             edge_src: &[Vec<GeoEdge>],
         ) {
-            for &(vertex, point) in points {
-                while hull.len() > 2
-                    && let Some((rm, _)) = hull.pop_if(|(_, last)| compare(last.y, point.y))
-                    && let Some(ref mut triangulation) = triangulation
-                {
-                    let (&(prev, _), post) = (
-                        hull.last()
-                            .expect("The hull should have at least two points here."),
-                        vertex,
-                    );
+            for (niter, &(vertex, point)) in points.iter().enumerate() {
+                while niter > 2
+                    && hull.len() > 1
+                    && let Some((rm, _)) = {
+                        let (_, prev_last) = hull[hull.len() - 2];
 
-                    (
-                        triangulation[prev][rm],
-                        triangulation[post][rm],
-                        triangulation[rm][prev],
-                        triangulation[rm][post],
-                    ) = (
-                        edge_src[prev][rm].clone(),
-                        edge_src[post][rm].clone(),
-                        edge_src[rm][prev].clone(),
-                        edge_src[rm][post].clone(),
-                    );
+                        hull.pop_if(|(_, last)| {
+                            compare(
+                                if point.y - last.y < *EPS {
+                                    prev_last.y
+                                } else {
+                                    last.y
+                                },
+                                point.y,
+                            )
+                        })
+                    }
+                {
+                    if let Some(ref mut triangulation) = triangulation {
+                        let (&(prev, _), post) = (
+                            hull.last()
+                                .expect("The hull should have at least two points here."),
+                            vertex,
+                        );
+
+                        (
+                            triangulation[prev][rm],
+                            triangulation[post][rm],
+                            triangulation[rm][prev],
+                            triangulation[rm][post],
+                        ) = (
+                            edge_src[prev][rm].clone(),
+                            edge_src[post][rm].clone(),
+                            edge_src[rm][prev].clone(),
+                            edge_src[rm][post].clone(),
+                        );
+                    }
                 }
 
                 hull.push((vertex, point));
@@ -933,8 +894,6 @@ impl TspMstDfs for GeoAdjacencyMatrix {
             &self.0,
         );
 
-        panic!("Reached end of `upper_hull` construction:\n{upper_hull:#?}.");
-
         points.sort_unstable_by(
             |(_, Point2d { x: x1, y: y1 }), (_, Point2d { x: x2, y: y2 })| match x1.total_cmp(x2) {
                 Ordering::Equal => match y1.total_cmp(y2) {
@@ -945,12 +904,29 @@ impl TspMstDfs for GeoAdjacencyMatrix {
                 other => other,
             },
         );
+
+        let first_same_x_n = points
+            .iter()
+            .filter(|&(_, Point2d { x, .. })| *x == points[0].1.x)
+            .count();
+        let first_same_x = &mut points[0..first_same_x_n];
+        first_same_x.reverse();
+
         build_hull(
             None,
             &mut lower_hull,
             |last, point| last >= point,
             &points,
             &self.0,
+        );
+
+        panic!(
+            "Reached end of `upper_hull` construction:\
+            \n{upper_hull:#?}\
+            \nReached end of `lower_hull` construction:\
+            \n{lower_hull:#?}\
+            \nFinal state of the point set:\
+            \n{points:#?}",
         );
 
         {
@@ -965,12 +941,12 @@ impl TspMstDfs for GeoAdjacencyMatrix {
 
             let first_samex_num = points
                 .iter()
-                .take_while(|&&(_, &Point2d { x, .. })| x == points[0].1.x)
+                .take_while(|&&(_, Point2d { x, .. })| x == points[0].1.x)
                 .count();
             let first_samex = &mut points[0..first_samex_num];
             first_samex.reverse();
 
-            let mut dummy_lower_hull = Vec::with_capacity(points.len());
+            let mut dummy_lower_hull = Vec::with_capacity(points.len().div_ceil(2));
             build_hull(
                 Some(&mut triangulation),
                 &mut dummy_lower_hull,
@@ -981,7 +957,7 @@ impl TspMstDfs for GeoAdjacencyMatrix {
         }
 
         {
-            let mut consume_and_triangulate = |collection: Vec<(usize, &Point2d)>| {
+            let mut consume_and_triangulate = |collection: Vec<(usize, Point2d)>| {
                 collection
                     .windows(2)
                     .map(|inner| (inner[0].0, inner[1].0))
@@ -998,13 +974,13 @@ impl TspMstDfs for GeoAdjacencyMatrix {
         static EPS: LazyLock<f64> = LazyLock::new(|| 1e-9);
 
         // See Lemma 1.3.1 in O'Rourke, 2001.
-        const fn compute_triangle_area((a, b, c): (&Point2d, &Point2d, &Point2d)) -> f64 {
+        const fn compute_triangle_area((a, b, c): (Point2d, Point2d, Point2d)) -> f64 {
             ((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)).abs() / 2.
         }
 
         fn check_point_ownership(
-            (a, b, c): (&Point2d, &Point2d, &Point2d),
-            p_to_check: &Point2d,
+            (a, b, c): (Point2d, Point2d, Point2d),
+            p_to_check: Point2d,
         ) -> bool {
             let container_area = compute_triangle_area((a, b, c));
             let (area_0, area_1, area_2) = {
@@ -1029,14 +1005,14 @@ impl TspMstDfs for GeoAdjacencyMatrix {
         // edge is a segment whose length will be the same for all three
         // segments going from each of the known points to the ring's center
         // point (the unknown.)
-        fn find_ring((a, b, c): (&Point2d, &Point2d, &Point2d)) -> Option<Point2d> {
+        fn find_ring((a, b, c): (Point2d, Point2d, Point2d)) -> Option<Point2d> {
             // This should be good enough for the purposes of robot tour
             // optimization.
             static EPS: LazyLock<f64> = LazyLock::new(|| 1e-3);
 
             ((-b.x + a.x).abs() > *EPS
                 && (-b.y + c.y).abs() > *EPS
-                && ((b.y - a.y) / (-b.x + a.x)) * ((b.x - c.x) / (-b.y + c.y)) != 1.)
+                && ((b.y - a.y) / (-b.x + a.x)) * ((b.x - c.x) / (-b.y + c.y)) != 1. + *EPS)
                 .then(|| {
                     let (c0, c1, c2, c3) = (
                         (a.x.powi(2) + a.y.powi(2) - b.x.powi(2) - b.y.powi(2))
@@ -1074,7 +1050,7 @@ impl TspMstDfs for GeoAdjacencyMatrix {
                     .collect::<Vec<_>>(),
             )
         }) {
-            'edge_loop: for &(dst, dst_point) in &edges {
+            'edge_loop: for &(dst, &dst_point) in &edges {
                 let (p1, p2) = {
                     let mut d1_adjacent_points = triangulation[src]
                         .iter()
@@ -1088,14 +1064,14 @@ impl TspMstDfs for GeoAdjacencyMatrix {
                                 None
                             }
                         })
-                        .filter(|&(src_adjacent, src_adjacent_point)| {
+                        .filter(|&(src_adjacent, &src_adjacent_point)| {
                             triangulation[src_adjacent].iter().enumerate().any(
                                 |(potential_dst, potential_dst_edge)| {
                                     potential_dst == dst
                                         && matches!(potential_dst_edge, GeoEdge::Weighted { .. })
                                 },
                             ) && {
-                                let (a, GeoEdge::Weighted { coord: b, .. }, c) =
+                                let (a, &GeoEdge::Weighted { coord: b, .. }, c) =
                                     (dst_point, &triangulation[dst][src], src_adjacent_point)
                                 else {
                                     unreachable!(
@@ -1120,7 +1096,7 @@ impl TspMstDfs for GeoAdjacencyMatrix {
                                             None
                                         }
                                     })
-                                    .any(|potential_miss| {
+                                    .any(|&potential_miss| {
                                         check_point_ownership((a, b, c), potential_miss)
                                     })
                             }
@@ -1131,10 +1107,10 @@ impl TspMstDfs for GeoAdjacencyMatrix {
                     (d1_adjacent_points.next(), d1_adjacent_points.next())
                 };
 
-                if let Some((ex1, p1)) = p1
-                    && let Some((ex2, p2)) = p2
+                if let Some((ex1, &p1)) = p1
+                    && let Some((ex2, &p2)) = p2
                     && let p_dst = dst_point
-                    && let GeoEdge::Weighted { coord: p_src, .. } = &triangulation[dst][src]
+                    && let GeoEdge::Weighted { coord: p_src, .. } = triangulation[dst][src]
                 {
                     // Some vertex in the quadrilateral proved to be a reflex
                     // vertex (i.e. angle > PI, see Sec. 1.1.2, Subsec.
@@ -1154,7 +1130,7 @@ impl TspMstDfs for GeoAdjacencyMatrix {
                     // Berg et. al., 2008.
                     if let Some(ring_center) = find_ring((p_src, p1, p_dst)) {
                         let (center_to_p2, ring_radius) =
-                            (seglen(&ring_center, p2), seglen(&ring_center, p1));
+                            (seglen(ring_center, p2), seglen(ring_center, p1));
 
                         if ring_radius - center_to_p2 < (ring_radius - *EPS) {
                             (
@@ -1441,8 +1417,9 @@ mod tests {
             points! {
                 (x: 1.25, y: 2),
                 (x: 1.3, y: 5),
-                (x: 1.5, y: 3.5)
-            },
+                (x: 1.5, y: 3.5),
+            }
+            .1,
             geomatrix! {
                 (0.,   0., 0),   (1.3, 5., 100), (1.5, 3.5, 50);
                 (1.25, 2., 100), (0.,  0., 0),   (1.5, 3.5, 50);
@@ -1459,8 +1436,9 @@ mod tests {
             points! {
                 (x: 0, y: 0),
                 (x: 1.3, y: 5),
-                (x: 1.5, y: 3.5)
-            },
+                (x: 1.5, y: 3.5),
+            }
+            .1,
             geomatrix! {
                 (0., 0., 0),   (1.3, 5., 100), (1.5, 3.5, 73);
                 (0., 0., 100), (0.,  0., 0),   (1.5, 3.5, 29);
@@ -1481,28 +1459,15 @@ mod tests {
                 (x: 2, y: 3.6),
                 (x: 3, y: 0.75),
                 (x: 3.75, y: 3.7),
-                (x: 4.25, y: 3),
-                (x: 4.3, y: 1.7),
-                (x: 4.5, y: 5),
-                (x: 5.8, y: 3.45),
-                (x: 6, y: 1),
-                (x: 6.2, y: 4.7),
-                (x: 7, y: 3.45)
-            },
+            }
+            .1,
             geomatrix! {
-                (0., 0., 0),   (1.3, 5., 100), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
-                (0., 0., 100), (0.,  0., 0),   (1.5, 3.5, 29), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
-                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
-                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
-                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
-                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
-                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
-                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
-                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
-                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73);
-                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73);
-                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (0.,  0., 0), (1.5, 3.5, 73);
-                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (1.5, 3.5, 73), (0.,  0., 0);
+                (0.,   0., 0),  (1.3, 5., 65),  (1.5, 3.5, 33), (2., 3.6, 38), (3., 0.75, 46),  (3.75, 3.7, 66);
+                (1.25, 2., 65), (0.,  0., 0),   (1.5, 3.5, 33), (2., 3.6, 34), (3., 0.75, 100), (3.75, 3.7, 60);
+                (1.25, 2., 33), (1.3, 5., 33),  (0.,  0.,  0),  (2., 3.6, 11), (3., 0.75, 68),  (3.75, 3.7, 49);
+                (1.25, 2., 38), (1.3, 5., 34),  (1.5, 3.5, 11), (0., 0.,  0),  (3., 0.75, 65),  (3.75, 3.7, 38);
+                (1.25, 2., 46), (1.3, 5., 100), (1.5, 3.5, 68), (2., 3.6, 65), (0., 0.,   0),   (3.75, 3.7, 66);
+                (1.25, 2., 66), (1.3, 5., 60),  (1.5, 3.5, 49), (2., 3.6, 38), (3., 0.75, 66),  (0.,   0.,  0);
             }?
         );
 
@@ -1510,9 +1475,47 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[should_panic = "Reached end"]
     fn triangulation1() {
-        points! {
+        let (points, mut matrix) = points! {
+            (x: 1.25, y: 2),
+            (x: 1.3, y: 5),
+            (x: 1.5, y: 3.5),
+            (x: 2, y: 3.6),
+            (x: 3, y: 0.75),
+            (x: 3.75, y: 3.7),
+        };
+
+        matrix.triangulate(points);
+    }
+
+    #[test]
+    #[should_panic = "Reached end"]
+    fn triangulation2() {
+        let (points, mut matrix) = points! {
+            (x: 0, y: 1),
+            (x: 0, y: 2.5),
+            (x: 1, y: 2),
+            (x: 2, y: 2.5),
+            (x: 2, y: 5),
+            (x: 3, y: 2.5),
+            (x: 4, y: 0),
+            (x: 4, y: 1),
+            (x: 4, y: 3.25),
+            (x: 5, y: 2.5),
+            (x: 6, y: 2),
+            (x: 6, y: 3.25),
+            (x: 7, y: 2),
+        };
+
+        matrix.triangulate(points);
+    }
+
+    #[test]
+    #[ignore = "I need to sample the workings of the `triangulate()` method with a smaller input \
+               set."]
+    fn triangulation3() {
+        let (points, mut matrix) = points! {
             (x: 1.25, y: 2),
             (x: 1.3, y: 5),
             (x: 1.5, y: 3.5),
@@ -1525,9 +1528,10 @@ mod tests {
             (x: 5.8, y: 3.45),
             (x: 6, y: 1),
             (x: 6.2, y: 4.7),
-            (x: 7, y: 3.45)
-        }
-        .triangulate();
+            (x: 7, y: 3.45),
+        };
+
+        matrix.triangulate(points);
     }
 
     #[test]

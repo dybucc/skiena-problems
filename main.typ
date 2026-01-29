@@ -2654,6 +2654,7 @@ Cartesian products")).
   The following includes a small set of utilities to more easily compute the test suite for my
   accompanying Rust programs.
 
+  #let proc-input = ()
   #canvas({
     import draw: *
 
@@ -2661,13 +2662,28 @@ Cartesian products")).
       calc.pow(calc.abs(a.x - b.x), 2) + calc.pow(calc.abs(a.y - b.y), 2),
     )
 
-    let input-set = (
+    let input-set-0 = (
       (x: 1.25, y: 2),
       (x: 1.3, y: 5),
       (x: 1.5, y: 3.5),
       (x: 2, y: 3.6),
       (x: 3, y: 0.75),
       (x: 3.75, y: 3.7),
+    )
+    let input-set-1 = (
+      (x: 0, y: 1),
+      (x: 0, y: 2.5),
+      (x: 1, y: 2),
+      (x: 2, y: 2.5),
+      (x: 2, y: 5),
+      (x: 3, y: 2.5),
+      (x: 4, y: 0),
+      (x: 4, y: 1),
+      (x: 4, y: 3.25),
+      (x: 5, y: 2.5),
+      (x: 6, y: 2),
+      (x: 6, y: 3.25),
+      (x: 7, y: 2),
     )
 
     set-style(
@@ -2682,31 +2698,46 @@ Cartesian products")).
       ),
     )
 
-    for (i, (x, y)) in input-set.enumerate() {
+    for (i, (x, y)) in input-set-0.enumerate() {
       circle(
         (x, y),
         name: str(i),
       )
+      content(
+        str(i),
+        $#i$,
+      )
     }
 
-    let proc-input = ()
-    for (i, point) in input-set.enumerate() {
-      for (j, other) in input-set.enumerate().filter(((j, _)) => j > i) {
+    for (i, point) in input-set-1.enumerate() {
+      for (j, other) in input-set-1.enumerate().filter(((j, _)) => j > i) {
         proc-input.push((str(i) + str(j), calc.round(seglen(point, other), digits: 2)))
 
-        line(
-          str(i),
-          str(j),
-          name: str(i) + str(j),
-        )
-        content(
-          str(i) + str(j),
-          $#(proc-input.last().last())$,
-        )
+        // line(
+        //   str(i),
+        //   str(j),
+        //   name: str(i) + str(j),
+        // )
       }
     }
 
+    // let (upper-hull, lower-hull) = ((0, 1, 4, 11, 12), (0, 6, 12))
+
+    // for (idx, point) in upper-hull.enumerate().filter(((i, _)) => i != upper-hull.len() - 1) {
+    //   line(
+    //     str(point),
+    //     str(upper-hull.at(idx + 1)),
+    //   )
+    // }
+    // for (idx, point) in lower-hull.enumerate().filter(((i, _)) => i != lower-hull.len() - 1) {
+    //   line(
+    //     str(point),
+    //     str(lower-hull.at(idx + 1)),
+    //   )
+    // }
+
     let largest = calc.max(..proc-input.map(((_, it)) => it))
+    proc-input = proc-input.map(((idx, val)) => (idx, val, calc.floor(val * 100 / largest)))
 
     hide({
       circle(
@@ -2715,86 +2746,16 @@ Cartesian products")).
       )
     })
 
-    content(
-      "content",
-      [
-        - Largest: (#(proc-input.find(((_, it)) => it == largest).first()), #largest),
-        #for (str, proc) in proc-input { [- #raw(str): #calc.floor(proc * 100 / largest)] }
-      ],
-    )
+    // content(
+    //   "content",
+    //   [
+    //     - Largest: (#raw(proc-input.find(((_, it, _)) => it == largest).first()), #largest),
+    //     #for (str, _, proc) in proc-input { [- #raw(str): #proc] }
+    //   ],
+    // )
   })
 
-  ```typc
-  canvas({
-    import draw: *
-
-    let seglen(a, b) = calc.sqrt(
-      calc.pow(calc.abs(a.x - b.x), 2) + calc.pow(calc.abs(a.y - b.y), 2),
-    )
-
-    let input-set = (
-      (x: 1.25, y: 2),
-      (x: 1.3, y: 5),
-      (x: 1.5, y: 3.5),
-      (x: 2, y: 3.6),
-      (x: 3, y: 0.75),
-      (x: 3.75, y: 3.7),
-    )
-
-    set-style(
-      circle: (
-        radius: 1pt,
-        fill: black,
-        stroke: .5pt + black,
-      ),
-      line: (
-        fill: black,
-        stroke: .5pt + black,
-      ),
-    )
-
-    for (i, (x, y)) in input-set.enumerate() {
-      circle(
-        (x, y),
-        name: str(i),
-      )
-    }
-
-    let proc-input = ()
-    for (i, point) in input-set.enumerate() {
-      for (j, other) in input-set.enumerate().filter(((j, _)) => j > i) {
-        proc-input.push((str(i) + str(j), calc.round(seglen(point, other), digits: 2)))
-
-        line(
-          str(i),
-          str(j),
-          name: str(i) + str(j),
-        )
-        content(
-          str(i) + str(j),
-          $#(proc-input.last().last())$,
-        )
-      }
-    }
-
-    let largest = calc.max(..proc-input.map(((_, it)) => it))
-
-    hide({
-      circle(
-        (10, 5),
-        name: "content",
-      )
-    })
-
-    content(
-      "content",
-      [
-        - Largest: #largest,
-        #for (str, proc) in proc-input { [- #raw(str): #calc.floor(proc * 100 / largest)] }
-      ],
-    )
-  })
-  ```
+  #metadata(proc-input)
 
 #pagebreak()
 

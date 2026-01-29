@@ -58,9 +58,11 @@ impl Point {
 pub fn points(input: TokenStream) -> TokenStream {
     let points = parse_macro_input!(input as Points).tokenize();
 
-    TokenStream::from(quote! {
-        GeoAdjacencyMatrix::from_point_set(#points)
-    })
+    if points.is_empty() {
+        panic!("There's no points.");
+    }
+
+    TokenStream::from(quote! { GeoAdjacencyMatrix::from_point_set(#points) })
 }
 
 #[cfg(test)]
