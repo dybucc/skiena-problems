@@ -831,49 +831,37 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
 
         // Follows Andrew's algorithm.
         fn build_hull(
-            mut triangulation: Option<&mut [Vec<GeoEdge>]>,
+            mut triangulation: &mut [Vec<GeoEdge>],
             hull: &mut Vec<(usize, Point2d)>,
-            compare: impl Fn(f64, f64) -> bool,
+            compare: impl Fn(Point2d, Point2d, Point2d) -> bool,
             points: &[(usize, Point2d)],
             edge_src: &[Vec<GeoEdge>],
         ) {
-            for (niter, &(vertex, point)) in points.iter().enumerate() {
-                while niter > 2
-                    && hull.len() > 1
+            for &(vertex, point) in points {
+                while hull.len() > 1
                     && let Some((rm, _)) = {
                         let (_, prev_last) = hull[hull.len() - 2];
 
-                        hull.pop_if(|(_, last)| {
-                            compare(
-                                if point.y - last.y < *EPS {
-                                    prev_last.y
-                                } else {
-                                    last.y
-                                },
-                                point.y,
-                            )
-                        })
+                        hull.pop_if(|(_, last)| compare(prev_last, *last, point))
                     }
                 {
-                    if let Some(ref mut triangulation) = triangulation {
-                        let (&(prev, _), post) = (
-                            hull.last()
-                                .expect("The hull should have at least two points here."),
-                            vertex,
-                        );
+                    let (&(prev, _), post) = (
+                        hull.last()
+                            .expect("The hull should have at least two points here."),
+                        vertex,
+                    );
 
-                        (
-                            triangulation[prev][rm],
-                            triangulation[post][rm],
-                            triangulation[rm][prev],
-                            triangulation[rm][post],
-                        ) = (
-                            edge_src[prev][rm].clone(),
-                            edge_src[post][rm].clone(),
-                            edge_src[rm][prev].clone(),
-                            edge_src[rm][post].clone(),
-                        );
-                    }
+                    (
+                        triangulation[prev][rm],
+                        triangulation[post][rm],
+                        triangulation[rm][prev],
+                        triangulation[rm][post],
+                    ) = (
+                        edge_src[prev][rm].clone(),
+                        edge_src[post][rm].clone(),
+                        edge_src[rm][prev].clone(),
+                        edge_src[rm][post].clone(),
+                    );
                 }
 
                 hull.push((vertex, point));
@@ -887,95 +875,50 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
             },
         );
         build_hull(
-            Some(&mut triangulation),
+            &mut triangulation,
             &mut upper_hull,
-            |last, point| last <= point,
-            &points,
-            &self.0,
-        );
-
-        points.sort_unstable_by(
-            |(_, Point2d { x: x1, y: y1 }), (_, Point2d { x: x2, y: y2 })| match x1.total_cmp(x2) {
-                Ordering::Equal => match y1.total_cmp(y2) {
-                    Ordering::Less => Ordering::Greater,
-                    Ordering::Greater => Ordering::Less,
-                    equal => equal,
-                },
-                other => other,
+            |prev_last, last, point| {
+                // If the area is negative, then `last` lies to the right of
+                // directed segment (`prev_last`, `point`), and it must be
+                // removed because it's a reflex vertex. See Sec. 1.2.1 in
+                // O'Rourke, 2001.
+                compute_raw_triangle_area((prev_last, point, last)).signum() == -1.
             },
+            &points,
+            &self.0,
         );
-
-        let first_same_x_n = points
-            .iter()
-            .filter(|&(_, Point2d { x, .. })| *x == points[0].1.x)
-            .count();
-        let first_same_x = &mut points[0..first_same_x_n];
-        first_same_x.reverse();
-
         build_hull(
-            None,
+            &mut triangulation,
             &mut lower_hull,
-            |last, point| last >= point,
+            |prev_last, last, point| {
+                compute_raw_triangle_area((prev_last, point, last)).signum() == 1.
+            },
             &points,
             &self.0,
         );
 
-        panic!(
-            "Reached end of `upper_hull` construction:\
-            \n{upper_hull:#?}\
-            \nReached end of `lower_hull` construction:\
-            \n{lower_hull:#?}\
-            \nFinal state of the point set:\
-            \n{points:#?}",
-        );
+        let mut consume_and_triangulate = |collection: Vec<(usize, Point2d)>| {
+            collection
+                .windows(2)
+                .map(|inner| (inner[0].0, inner[1].0))
+                .for_each(|(src, dst)| {
+                    triangulation[src][dst] = self.0[src][dst].clone();
+                    triangulation[dst][src] = self.0[dst][src].clone();
+                });
+        };
 
-        {
-            points.sort_unstable_by(
-                |(_, Point2d { x: x1, y: y1 }), (_, Point2d { x: x2, y: y2 })| match x1
-                    .total_cmp(x2)
-                {
-                    Ordering::Equal => y1.total_cmp(y2),
-                    other => other,
-                },
-            );
-
-            let first_samex_num = points
-                .iter()
-                .take_while(|&&(_, Point2d { x, .. })| x == points[0].1.x)
-                .count();
-            let first_samex = &mut points[0..first_samex_num];
-            first_samex.reverse();
-
-            let mut dummy_lower_hull = Vec::with_capacity(points.len().div_ceil(2));
-            build_hull(
-                Some(&mut triangulation),
-                &mut dummy_lower_hull,
-                |last, point| last >= point,
-                &points,
-                &self.0,
-            );
-        }
-
-        {
-            let mut consume_and_triangulate = |collection: Vec<(usize, Point2d)>| {
-                collection
-                    .windows(2)
-                    .map(|inner| (inner[0].0, inner[1].0))
-                    .for_each(|(src, dst)| {
-                        triangulation[src][dst] = self.0[src][dst].clone();
-                        triangulation[dst][src] = self.0[dst][src].clone();
-                    });
-            };
-
-            consume_and_triangulate(upper_hull);
-            consume_and_triangulate(lower_hull);
-        }
+        consume_and_triangulate(upper_hull);
+        consume_and_triangulate(lower_hull);
 
         static EPS: LazyLock<f64> = LazyLock::new(|| 1e-9);
 
         // See Lemma 1.3.1 in O'Rourke, 2001.
-        const fn compute_triangle_area((a, b, c): (Point2d, Point2d, Point2d)) -> f64 {
-            ((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)).abs() / 2.
+        const fn compute_triangle_area(t: (Point2d, Point2d, Point2d)) -> f64 {
+            compute_raw_triangle_area(t).abs() / 2.
+        }
+
+        const fn compute_raw_triangle_area((a, b, c): (Point2d, Point2d, Point2d)) -> f64 {
+            (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)
         }
 
         fn check_point_ownership(
@@ -993,7 +936,7 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                 )
             };
 
-            container_area - (area_0 + area_1 + area_2) <= *EPS
+            (container_area - (area_0 + area_1 + area_2)).abs().floor() as usize == 0
         }
 
         // This follows from the fact that for some three points to lie in the
@@ -1006,13 +949,10 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
         // segments going from each of the known points to the ring's center
         // point (the unknown.)
         fn find_ring((a, b, c): (Point2d, Point2d, Point2d)) -> Option<Point2d> {
-            // This should be good enough for the purposes of robot tour
-            // optimization.
-            static EPS: LazyLock<f64> = LazyLock::new(|| 1e-3);
-
             ((-b.x + a.x).abs() > *EPS
-                && (-b.y + c.y).abs() > *EPS
-                && ((b.y - a.y) / (-b.x + a.x)) * ((b.x - c.x) / (-b.y + c.y)) != 1. + *EPS)
+                && (-b.y + c.y).abs().floor() as usize == 0
+                && (((b.y - a.y) / (-b.x + a.x)) * ((b.x - c.x) / (-b.y + c.y))).floor() as usize
+                    != 1)
                 .then(|| {
                     let (c0, c1, c2, c3) = (
                         (a.x.powi(2) + a.y.powi(2) - b.x.powi(2) - b.y.powi(2))
@@ -1029,7 +969,7 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                 })
         }
 
-        let mut tracking_list = Vec::with_capacity(triangulation.len().pow(2));
+        let mut tracking_list = HashSet::with_capacity(triangulation.len().pow(2));
         for (src, edges) in triangulation.iter().enumerate().map(|(src, edges)| {
             (
                 src,
@@ -1039,7 +979,7 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                     .filter_map(|(dst, edge)| {
                         if let GeoEdge::Weighted { coord, .. } = edge {
                             (!tracking_list.contains(&(dst, src))).then(|| {
-                                tracking_list.push((src, dst));
+                                tracking_list.insert((src, dst));
 
                                 (dst, coord)
                             })
@@ -1050,6 +990,8 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                     .collect::<Vec<_>>(),
             )
         }) {
+            eprintln!("{edges:#?}");
+
             'edge_loop: for &(dst, &dst_point) in &edges {
                 let (p1, p2) = {
                     let mut d1_adjacent_points = triangulation[src]
@@ -1059,6 +1001,10 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                             if let GeoEdge::Weighted { coord, .. } = src_adjacent_edge
                                 && src_adjacent != dst
                             {
+                                if dst == 3 {
+                                    eprintln!("filter call: {src_adjacent}");
+                                }
+
                                 Some((src_adjacent, coord))
                             } else {
                                 None
@@ -1102,16 +1048,26 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                             }
                         });
 
-                    assert_eq!(d1_adjacent_points.clone().count(), 2);
+                    let count = d1_adjacent_points.clone().count();
+
+                    eprintln!("d1 adjacent points: {count}");
+
+                    // Either the edge is on the boundary of the triangulation,
+                    // or it's inside of it.
+                    assert!(count == 1 || count == 2);
 
                     (d1_adjacent_points.next(), d1_adjacent_points.next())
                 };
+
+                eprintln!("{src}->{dst}, {p1:?}, {p2:?}");
 
                 if let Some((ex1, &p1)) = p1
                     && let Some((ex2, &p2)) = p2
                     && let p_dst = dst_point
                     && let GeoEdge::Weighted { coord: p_src, .. } = triangulation[dst][src]
                 {
+                    eprintln!("Reached end of adjacent point scan: {p1:?}, {p2:?}");
+
                     // Some vertex in the quadrilateral proved to be a reflex
                     // vertex (i.e. angle > PI, see Sec. 1.1.2, Subsec.
                     // Empirical Exploration in O'Rourke, 2001.)

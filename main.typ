@@ -2709,6 +2709,55 @@ Cartesian products")).
       )
     }
 
+    line(
+      "0",
+      "1",
+    )
+    line(
+      "0",
+      "2",
+    )
+    line(
+      "0",
+      "3",
+    )
+    line(
+      "0",
+      "4",
+    )
+
+    line(
+      "1",
+      "2",
+    )
+    line(
+      "1",
+      "3",
+    )
+    line(
+      "1",
+      "5",
+    )
+
+    line(
+      "2",
+      "3",
+    )
+
+    line(
+      "3",
+      "4",
+    )
+    line(
+      "3",
+      "5",
+    )
+
+    line(
+      "4",
+      "5",
+    )
+
     for (i, point) in input-set-1.enumerate() {
       for (j, other) in input-set-1.enumerate().filter(((j, _)) => j > i) {
         proc-input.push((str(i) + str(j), calc.round(seglen(point, other), digits: 2)))
