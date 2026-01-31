@@ -657,11 +657,11 @@ impl GeoAdjacencyMatrix {
         let largest_distance = points
             .iter()
             .enumerate()
-            .filter_map(|(idx, point)| {
+            .filter_map(|(idx, &point)| {
                 let target = points
                     .iter()
                     .skip(idx + 1)
-                    .map(|other_point| seglen(*point, *other_point))
+                    .map(|&other_point| seglen(point, other_point))
                     .max_by(|a, b| a.total_cmp(b))
                     .unwrap_or_default(); // We've either hit the end or not.
 
@@ -910,8 +910,6 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
         consume_and_triangulate(upper_hull);
         consume_and_triangulate(lower_hull);
 
-        static EPS: LazyLock<f64> = LazyLock::new(|| 1e-9);
-
         // See Lemma 1.3.1 in O'Rourke, 2001.
         const fn compute_triangle_area(t: (Point2d, Point2d, Point2d)) -> f64 {
             compute_raw_triangle_area(t).abs() / 2.
@@ -921,7 +919,7 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
             (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)
         }
 
-        fn check_point_ownership(
+        const fn check_point_ownership(
             (a, b, c): (Point2d, Point2d, Point2d),
             p_to_check: Point2d,
         ) -> bool {
@@ -949,7 +947,7 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
         // segments going from each of the known points to the ring's center
         // point (the unknown.)
         fn find_ring((a, b, c): (Point2d, Point2d, Point2d)) -> Option<Point2d> {
-            ((-b.x + a.x).abs() > *EPS
+            ((-b.x + a.x).abs().floor() as usize == 0
                 && (-b.y + c.y).abs().floor() as usize == 0
                 && (((b.y - a.y) / (-b.x + a.x)) * ((b.x - c.x) / (-b.y + c.y))).floor() as usize
                     != 1)
@@ -967,6 +965,37 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
 
                     Point2d { x, y }
                 })
+        }
+
+        let mut prev_triangulation: Vec<_> = triangulation
+            .iter()
+            .enumerate()
+            .flat_map(|(src, row)| {
+                row.iter()
+                    .skip(src + 1)
+                    .map(|col| (src, col))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+
+        #[allow(clippy::never_loop, reason = "WIP.")]
+        loop {
+            let new_triangulation =
+                prev_triangulation
+                    .iter()
+                    .fold(Vec::new(), |mut accum, &(src, edge)| {
+                        let GeoEdge::Weighted { coord, .. } = edge else {
+                            accum.push(GeoEdge::NonExistent);
+                            return accum;
+                        };
+
+                        accum
+                    });
+
+            todo!(
+                "Diff the triangulations to check whether we've reached an angle-optimal \
+                triangulation.",
+            );
         }
 
         let mut tracking_list = HashSet::with_capacity(triangulation.len().pow(2));
@@ -990,9 +1019,11 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                     .collect::<Vec<_>>(),
             )
         }) {
-            eprintln!("{edges:#?}");
+            (src == 0).then(|| eprintln!("edges from {src}:\n{edges:#?}"));
 
             'edge_loop: for &(dst, &dst_point) in &edges {
+                (dst == 3).then(|| eprintln!("state of the triangulation: {triangulation:#?}"));
+
                 let (p1, p2) = {
                     let mut d1_adjacent_points = triangulation[src]
                         .iter()
@@ -1001,9 +1032,7 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                             if let GeoEdge::Weighted { coord, .. } = src_adjacent_edge
                                 && src_adjacent != dst
                             {
-                                if dst == 3 {
-                                    eprintln!("filter call: {src_adjacent}");
-                                }
+                                (dst == 3).then(|| eprintln!("filter call: {src_adjacent}"));
 
                                 Some((src_adjacent, coord))
                             } else {
@@ -1024,9 +1053,12 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                                         "This destructuring pattern should not be refutable, \
                                         because edge `src`->`dst` exists, and thus edge \
                                         `dst`->`src` must exist; The triangulation is processed in \
-                                        terms of a directed graph."
+                                        terms of an undirected graph where an edge is represented \
+                                        by two arcs."
                                     );
                                 };
+
+                                (dst == 3).then(|| eprintln!("past filter call: {src_adjacent}"));
 
                                 !triangulation[src]
                                     .iter()
@@ -1050,16 +1082,24 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
 
                     let count = d1_adjacent_points.clone().count();
 
-                    eprintln!("d1 adjacent points: {count}");
+                    (dst == 3).then(|| eprintln!("{src}->{dst}, d1 adjacent points: {count}"));
 
-                    // Either the edge is on the boundary of the triangulation,
-                    // or it's inside of it.
-                    assert!(count == 1 || count == 2);
+                    // This already accounts for the degenerate case where the
+                    // edge incident to the triangles forming some convex
+                    // qudrilateral is also incident to a third triangle whose
+                    // corresponding quadrilateral (with a different incident
+                    // edge) contains a reflex vertex.
+                    assert!(
+                        count == 1 || count == 2,
+                        "The edge under consideration can only ever be on the boundary of the \
+                        triangulation (with 1 adjacent, distance 1, vertex,) or be an inner edge \
+                        (with 2 adjacent, distance 1, vertices.)",
+                    );
 
                     (d1_adjacent_points.next(), d1_adjacent_points.next())
                 };
 
-                eprintln!("{src}->{dst}, {p1:?}, {p2:?}");
+                (dst == 3).then(|| eprintln!("{src}->{dst}, {p1:?}, {p2:?}"));
 
                 if let Some((ex1, &p1)) = p1
                     && let Some((ex2, &p2)) = p2
@@ -1082,13 +1122,13 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                     // that crosses three of the quadrilateral's vertices, and
                     // evaluating whether the remaining vertex lies within the
                     // inner area of that ring. The correctness of this argument
-                    // follows from Thales' theorem. See Section 9.1.2 in de
-                    // Berg et. al., 2008.
+                    // follows from Thales' theorem. See Section 9.1 in de Berg
+                    // et. al., 2008.
                     if let Some(ring_center) = find_ring((p_src, p1, p_dst)) {
                         let (center_to_p2, ring_radius) =
                             (seglen(ring_center, p2), seglen(ring_center, p1));
 
-                        if ring_radius - center_to_p2 < (ring_radius - *EPS) {
+                        if (ring_radius - center_to_p2).abs().floor() as usize == 0 {
                             (
                                 *RefCell::new(&triangulation[src][dst]).borrow_mut(),
                                 *RefCell::new(&triangulation[dst][src]).borrow_mut(),
