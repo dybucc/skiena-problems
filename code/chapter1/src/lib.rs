@@ -96,7 +96,7 @@ pub enum GeoEdge {
     Weighted { weight: usize, coord: Point2d },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Point2d {
     pub x: f64,
     pub y: f64,
@@ -967,35 +967,47 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                 })
         }
 
-        let mut prev_triangulation: Vec<_> = triangulation
-            .iter()
-            .enumerate()
-            .flat_map(|(src, row)| {
-                row.iter()
-                    .skip(src + 1)
-                    .map(|col| (src, col))
-                    .collect::<Vec<_>>()
-            })
-            .collect();
-
         #[allow(clippy::never_loop, reason = "WIP.")]
         loop {
-            let new_triangulation =
-                prev_triangulation
-                    .iter()
-                    .fold(Vec::new(), |mut accum, &(src, edge)| {
-                        let GeoEdge::Weighted { coord, .. } = edge else {
-                            accum.push(GeoEdge::NonExistent);
-                            return accum;
-                        };
+            let illegal_edge = triangulation
+                .iter()
+                .enumerate()
+                .flat_map(|(src, row)| {
+                    row.iter()
+                        .enumerate()
+                        .skip(src + 1)
+                        .map(move |(dst, _)| (src, dst))
+                })
+                .find(|&(src, dst)| {
+                    let GeoEdge::Weighted { coord: p_dst, .. } = &triangulation[src][dst] else {
+                        return false;
+                    };
+                    let GeoEdge::Weighted { coord: p_src, .. } = &triangulation[dst][src] else {
+                        return false;
+                    };
+                    let (p1, p2) = triangulation[src].iter().enumerate().fold(
+                        (Point2d::default(), Point2d::default()),
+                        |(p1, p2), (idx, edge)| {
+                            let GeoEdge::Weighted { coord, .. } = edge else {
+                                return (p1, p2);
+                            };
 
-                        accum
-                    });
+                            if let Some((dst, _)) = triangulation[idx].iter().enumerate().find(
+                                |&(potential_dst, edge)| {
+                                    potential_dst == dst && matches!(edge, GeoEdge::Weighted { .. })
+                                },
+                            ) {
+                                todo!();
+                            } else {
+                                todo!();
+                            }
+                        },
+                    );
 
-            todo!(
-                "Diff the triangulations to check whether we've reached an angle-optimal \
-                triangulation.",
-            );
+                    false
+                });
+
+            todo!("Check if there's another illegal edge (as per de Berg et. al., 2008) or break.");
         }
 
         let mut tracking_list = HashSet::with_capacity(triangulation.len().pow(2));
