@@ -14,13 +14,12 @@ use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
     iter,
+    ops::ControlFlow,
     sync::LazyLock,
 };
 
 #[derive(Debug)]
-pub struct AdjacencyMatrix {
-    inner: Vec<Vec<Edge>>,
-}
+pub struct AdjacencyMatrix(Vec<Vec<Edge>>);
 
 #[derive(Debug)]
 pub struct Pairs<'a> {
@@ -96,7 +95,7 @@ pub enum GeoEdge {
     Weighted { weight: usize, coord: Point2d },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Point2d {
     pub x: f64,
     pub y: f64,
@@ -111,9 +110,7 @@ pub struct Dfs {
 }
 
 #[derive(Debug)]
-pub struct PairsError {
-    pub inner: PairsErrorType,
-}
+pub struct PairsError(pub PairsErrorType);
 
 #[derive(Debug)]
 pub enum PairsErrorType {
@@ -127,9 +124,7 @@ pub enum Edge {
 }
 
 #[derive(Debug)]
-pub struct AdjacencyMatrixError {
-    inner: AdjacencyMatrixErrorType,
-}
+pub struct AdjacencyMatrixError(AdjacencyMatrixErrorType);
 
 #[derive(Debug)]
 pub enum AdjacencyMatrixErrorType {
@@ -194,37 +189,42 @@ its overarching enum type:
     }};
     (NonSquareMatrix) => {{
         AdjacencyMatrixErrorType::NonSquareMatrix(String::from(
-            "matrix is not square; adjacency matrices must be square",
+            "Matrix is not square; Adjacency matrices must be square.",
         ))
     }};
     (IncompleteGraph) => {{
         AdjacencyMatrixErrorType::IncompleteGraph(String::from(
-            "matrix contains more nonexistent edges than it should; this is not a complete graph",
+            "Matrix contains more nonexistent edges than it should; this is not a complete graph.",
         ))
     }};
     (DirectedGraph) => {{
         AdjacencyMatrixErrorType::DirectedGraph(String::from(
-            "matrix contains different values above and below the main diagonal; this is not an \
-            undirected graph",
+            "Matrix contains different values above and below the main diagonal; This is not an \
+            undirected graph.",
         ))
     }};
     (SelfLoops) => {{
         AdjacencyMatrixErrorType::SelfLoops(String::from(
-            "matrix contains self-loops; this is not a simple graph",
+            "Matrix contains self-loops; This is not a simple graph.",
         ))
     }};
     (MultipleEqualPoints) => {{
         AdjacencyMatrixErrorType::MultipleEqualPoints(String::from(
-            "matrix contains multple vertices with the same coordinates; that's unsupported",
+            "Matrix contains multple vertices with the same coordinates; That's unsupported.",
         ))
     }};
     (UnequalSamePoints) => {{
         AdjacencyMatrixErrorType::UnequalSamePoints(String::from(
-            "matrix contains points in the same column that are not equal; points in the same \
-            column indicate an edge from any row (index) vertex to that point",
+            "Matrix contains points in the same column that are not equal; Points in the same \
+            column indicate an edge from any row (index) vertex to that point.",
         ))
     }};
-    (IndexOutOfBounds) => {{ PairsErrorType::IndexOutOfBounds(String::from("ufds doesn't contain such index element")) }};
+    (IndexOutOfBounds) => {{
+        PairsErrorType::IndexOutOfBounds(String::from(
+            "UFDS doesn't contain \
+            such index element.",
+        ))
+    }};
 }
 
 #[macro_export]
@@ -238,13 +238,13 @@ pub fn seglen(Point2d { x: x1, y: y1 }: Point2d, Point2d { x: x2, y: y2 }: Point
 
 impl From<AdjacencyMatrixErrorType> for AdjacencyMatrixError {
     fn from(value: AdjacencyMatrixErrorType) -> Self {
-        Self { inner: value }
+        Self(value)
     }
 }
 
 impl From<PairsErrorType> for PairsError {
     fn from(value: PairsErrorType) -> Self {
-        Self { inner: value }
+        Self(value)
     }
 }
 
@@ -281,16 +281,14 @@ impl AdjacencyMatrix {
             )?;
         }
 
-        Ok(Self {
-            inner: input.into(),
-        })
+        Ok(Self(input.into()))
     }
 }
 
 impl<'a> Pairs<'a> {
     pub fn new(src: &'a AdjacencyMatrix) -> Self {
         Self {
-            forest: (0..src.inner.len()).collect(),
+            forest: (0..src.0.len()).collect(),
             current_node: None,
             current_tree: None,
             current_product: vec![],
@@ -384,7 +382,7 @@ impl Pairs<'_> {
     //       implementation when used in `tsp()` of `TspClosestPair`.
     pub fn min_fix(&mut self) -> Option<<Self as Iterator>::Item> {
         self.min_by_key(|&(node1, node2)| {
-            let Edge::Weighted(weight) = self.src.inner[node1][node2] else {
+            let Edge::Weighted(weight) = self.src.0[node1][node2] else {
                 unreachable!(
                     "no node considered in the `Pairs` iterator should be `Edge::NonExistent`",
                 )
@@ -497,7 +495,7 @@ impl Iterator for Pairs<'_> {
         Self: Sized,
         Self::Item: Ord,
     {
-        let matrix = &self.src.inner;
+        let matrix = &self.src.0;
         self.min_by_key(|&(node1, node2)| {
             let Edge::Weighted(weight) = matrix[node1][node2] else {
                 unreachable!(
@@ -729,12 +727,12 @@ pub trait TspTriMstDfs {
 
 impl TspNearestNeighbor for AdjacencyMatrix {
     fn tsp(&self) -> Vec<usize> {
-        let mut visited = vec![false; self.inner.len()];
+        let mut visited = vec![false; self.0.len()];
         let mut output = Vec::new();
         let mut current_idx = 0;
 
         while visited.iter().any(|visited| !visited) {
-            let current = &self.inner[current_idx];
+            let current = &self.0[current_idx];
 
             output.push(current_idx);
             visited[current_idx] = true;
@@ -774,7 +772,7 @@ impl TspClosestPair for AdjacencyMatrix {
 
     fn tsp(&self) -> Vec<usize> {
         let mut pairs_iter = self.pairs();
-        for _ in 1..self.inner.len() {
+        for _ in 1..self.0.len() {
             let (node1, node2) = pairs_iter.min_fix().expect(
                 "there should always be a minimum value given the loop runs for n - 1 \
                 iterations, where n is the number of nodes in the graph, and the underlying ufds \
@@ -978,36 +976,70 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                         .skip(src + 1)
                         .map(move |(dst, _)| (src, dst))
                 })
-                .find(|&(src, dst)| {
+                .find_map(|(src, dst)| {
                     let GeoEdge::Weighted { coord: p_dst, .. } = &triangulation[src][dst] else {
-                        return false;
+                        return None;
                     };
                     let GeoEdge::Weighted { coord: p_src, .. } = &triangulation[dst][src] else {
-                        return false;
+                        return None;
                     };
-                    let (p1, p2) = triangulation[src].iter().enumerate().fold(
-                        (Point2d::default(), Point2d::default()),
-                        |(p1, p2), (idx, edge)| {
-                            let GeoEdge::Weighted { coord, .. } = edge else {
-                                return (p1, p2);
-                            };
+                    // If we broke early, then we found (`p1`, `p2`); Otherwise,
+                    // we may have found them at the end or not found them at
+                    // all. At a top level let-binding pattern, I need to
+                    // provide same-type values for all new bindings, so the
+                    // `Break` case doesn't further destructure
+                    // `(Some(p1), Some(p2))` into `(p1, p2)`.
+                    let (ControlFlow::Break((p1, p2)) | ControlFlow::Continue((p1, p2))) =
+                        triangulation[src].iter().enumerate().try_fold(
+                            (None, None),
+                            |(mut p1, mut p2), (idx, edge)| {
+                                let GeoEdge::Weighted { coord, .. } = edge else {
+                                    return ControlFlow::Continue((p1, p2));
+                                };
 
-                            if let Some((dst, _)) = triangulation[idx].iter().enumerate().find(
-                                |&(potential_dst, edge)| {
-                                    potential_dst == dst && matches!(edge, GeoEdge::Weighted { .. })
-                                },
-                            ) {
-                                todo!();
-                            } else {
-                                todo!();
-                            }
-                        },
-                    );
+                                let find_p = || {
+                                    triangulation[idx]
+                                        .iter()
+                                        .enumerate()
+                                        .find_map(|(idx, edge)| {
+                                            let GeoEdge::Weighted {
+                                                coord: inner_coord, ..
+                                            } = edge
+                                            else {
+                                                return None;
+                                            };
 
-                    false
+                                            (idx == dst
+                                                && if let Some(p1) = p1 {
+                                                    p1 != inner_coord
+                                                } else if let Some(p2) = p2 {
+                                                    p2 != inner_coord
+                                                } else {
+                                                    true
+                                                })
+                                            .then_some(coord)
+                                        })
+                                };
+
+                                match (p1, p2) {
+                                    (None, p2) => ControlFlow::Continue((find_p(), p2)),
+                                    (p1, None) => ControlFlow::Continue((p1, find_p())),
+                                    // None of the points are `None` so we've
+                                    // found all we needed.
+                                    other => ControlFlow::Break(other),
+                                }
+                            },
+                        );
+
+                    // TODO: actually check if the edge is illegal and return
+                    //       all `p_src`, `p_dst`, `p1` and `p2`
+                    None
                 });
 
-            todo!("Check if there's another illegal edge (as per de Berg et. al., 2008) or break.");
+            todo!(
+                "Break if `illegal_edge` above is `None` because no further edge flipping \
+                operation can be done.",
+            );
         }
 
         let mut tracking_list = HashSet::with_capacity(triangulation.len().pow(2));
@@ -1208,7 +1240,7 @@ mod tests {
                 0, 2;
                 3, 0;
             }
-            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+            .is_err_and(|AdjacencyMatrixError(err)| matches!(
                 err,
                 AdjacencyMatrixErrorType::DirectedGraph(_)
             )),
@@ -1223,7 +1255,7 @@ mod tests {
                 (0., 0., 0), (1., 1., 2);
                 (0., 0., 3), (0., 0., 0);
             }
-            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+            .is_err_and(|AdjacencyMatrixError(err)| matches!(
                 err,
                 AdjacencyMatrixErrorType::DirectedGraph(_)
             )),
@@ -1238,7 +1270,7 @@ mod tests {
                 0, 2, 3;
                 0, 2;
             }
-            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+            .is_err_and(|AdjacencyMatrixError(err)| matches!(
                 err,
                 AdjacencyMatrixErrorType::NonSquareMatrix(_)
             )),
@@ -1254,7 +1286,7 @@ mod tests {
                 (0., 0., 0), (0., 0., 2), (0., 0., 3);
                 (0., 0., 0), (0., 0., 2);
             }
-            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+            .is_err_and(|AdjacencyMatrixError(err)| matches!(
                 err,
                 AdjacencyMatrixErrorType::NonSquareMatrix(_)
             )),
@@ -1270,7 +1302,7 @@ mod tests {
                 1, 2;
                 2, 1;
             }
-            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+            .is_err_and(|AdjacencyMatrixError(err)| matches!(
                 err,
                 AdjacencyMatrixErrorType::SelfLoops(_)
             )),
@@ -1286,7 +1318,7 @@ mod tests {
                 (0., 0., 1), (1., 0., 2);
                 (0., 0., 2), (1., 0., 1);
             }
-            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+            .is_err_and(|AdjacencyMatrixError(err)| matches!(
                 err,
                 AdjacencyMatrixErrorType::SelfLoops(_)
             )),
@@ -1302,7 +1334,7 @@ mod tests {
                 0, 0;
                 2, 0;
             }
-            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+            .is_err_and(|AdjacencyMatrixError(err)| matches!(
                 err,
                 AdjacencyMatrixErrorType::IncompleteGraph(_)
             )),
@@ -1319,7 +1351,7 @@ mod tests {
                 (0., 0., 0), (0., 0., 0);
                 (0., 0., 2), (0., 0., 0);
             }
-            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+            .is_err_and(|AdjacencyMatrixError(err)| matches!(
                 err,
                 AdjacencyMatrixErrorType::IncompleteGraph(_)
             )),
@@ -1337,7 +1369,7 @@ mod tests {
                 (0., 1., 1), (0., 0., 0), (2., 0., 1);
                 (0., 1., 1), (1., 0., 1), (0., 0., 0);
             }
-            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+            .is_err_and(|AdjacencyMatrixError(err)| matches!(
                 err,
                 AdjacencyMatrixErrorType::MultipleEqualPoints(_)
             )),
@@ -1354,7 +1386,7 @@ mod tests {
                 (0., 0., 1), (0., 0., 0), (0., 2., 1);
                 (1., 0., 1), (0., 1., 1), (0., 0., 0);
             }
-            .is_err_and(|AdjacencyMatrixError { inner: err }| matches!(
+            .is_err_and(|AdjacencyMatrixError(err)| matches!(
                 err,
                 AdjacencyMatrixErrorType::UnequalSamePoints(_)
             )),
