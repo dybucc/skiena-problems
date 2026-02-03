@@ -2896,3 +2896,34 @@ Cartesian products")).
   - It is guaranteed that there will be an answer for the given input `nums`.
 
   _Follow Up_: Can you do it in $O(n)$ time and/or in-place with $O(1)$ extra space?
+
+= Lecture notes in Mathematics
+
+== Chapter 2
+
+/ Problem 2.1: \
+  If an additional guest can be rotated, then there's seven times more possibilities for each one of
+  the prior possibilities; This translates to a product that extends its range to $i = 1, dots, 7$.
+
+  $
+    product_(i = 1)^7 = 7 dot 6 dot dots.c dot 1 = 7 dot 720 = 5040 "possible seatings".
+  $
+
+/ Problem 2.2: \
+  The first approach expects to compute the number of combinations where some two elements can be
+  paired together into a single group, without accounting for the changes in table. Accounting for
+  the changes in table, and possibly factoring that out once the result is obtained, we compute
+  $3 "tables" dot 2 "matchings"/"table" dot product_(i = 1)^6 = 4320 "pairings"$.
+
+  These pairings still contain the tables, so factoring out the tables, the computation results in
+  1440 possible pairings, if we don't account for subset belonging of each ordered pair, and only
+  for the order of the elements in such 2-tuple.
+
+  The second approach expects each of the singleton subsets that the tables represent become
+  equivalent for a pairing that would have been different before when the difference lied only in
+  the pairing's order of elements. Thus, this becomes a problem on finding all possible unordered
+  pairs of the 6 available elements for 3 different singleton subsets to which these elements should
+  belong.
+
+  This means we ought factor out from the above formulation the number of matchings per single full
+  combination of elements, which yields 2160 possible pairings.
