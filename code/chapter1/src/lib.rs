@@ -895,7 +895,7 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
             &self.0,
         );
 
-        let mut consume_and_triangulate = |collection: Vec<(usize, Point2d)>| {
+        let mut triangulate_bounds_of = |collection: Vec<(usize, Point2d)>| {
             collection
                 .windows(2)
                 .map(|inner| (inner[0].0, inner[1].0))
@@ -905,8 +905,8 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                 });
         };
 
-        consume_and_triangulate(upper_hull);
-        consume_and_triangulate(lower_hull);
+        triangulate_bounds_of(upper_hull);
+        triangulate_bounds_of(lower_hull);
 
         // See Lemma 1.3.1 in O'Rourke, 2001.
         const fn compute_triangle_area(t: (Point2d, Point2d, Point2d)) -> f64 {
@@ -943,7 +943,8 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
         // having the unknown as the remaining vertex in each triangle. Such
         // edge is a segment whose length will be the same for all three
         // segments going from each of the known points to the ring's center
-        // point (the unknown.)
+        // point (the unknown.) Pp. 67-70 of my notes contain the developed
+        // argument.
         fn find_ring((a, b, c): (Point2d, Point2d, Point2d)) -> Option<Point2d> {
             ((-b.x + a.x).abs().floor() as usize == 0
                 && (-b.y + c.y).abs().floor() as usize == 0
@@ -965,17 +966,17 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                 })
         }
 
-        #[allow(clippy::never_loop, reason = "WIP.")]
         loop {
+            // See Sec. 9.1 in de Berg et. al., 2008 for details on the
+            // terminology used.
             let illegal_edge = triangulation
                 .iter()
                 .enumerate()
-                .flat_map(|(src, row)| {
-                    row.iter()
-                        .enumerate()
-                        .skip(src + 1)
-                        .map(move |(dst, _)| (src, dst))
-                })
+                // Only takes the edges above the main diagonal; The
+                // triangulation is stored as an adjacency matrix for a directed
+                // graph so all other edges (below the main diagonal) are only
+                // flipped.
+                .flat_map(|(src, row)| (0..row.len()).skip(src + 1).map(move |dst| (src, dst)))
                 .find_map(|(src, dst)| {
                     let GeoEdge::Weighted { coord: p_dst, .. } = &triangulation[src][dst] else {
                         return None;
@@ -985,55 +986,64 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                     };
                     // If we broke early, then we found (`p1`, `p2`); Otherwise,
                     // we may have found them at the end or not found them at
-                    // all. At a top level let-binding pattern, I need to
-                    // provide same-type values for all new bindings, so the
-                    // `Break` case doesn't further destructure
-                    // `(Some(p1), Some(p2))` into `(p1, p2)`.
-                    let (ControlFlow::Break((p1, p2)) | ControlFlow::Continue((p1, p2))) =
-                        triangulation[src].iter().enumerate().try_fold(
-                            (None, None),
-                            |(mut p1, mut p2), (idx, edge)| {
-                                let GeoEdge::Weighted { coord, .. } = edge else {
-                                    return ControlFlow::Continue((p1, p2));
-                                };
+                    // all.
+                    if let ControlFlow::Continue((Some(p1), Some(p2)))
+                    | ControlFlow::Break((Some(p1), Some(p2))) = triangulation[src]
+                        .iter()
+                        .enumerate()
+                        .try_fold((None, None), |(mut p1, mut p2), (idx, edge)| {
+                            let GeoEdge::Weighted {
+                                coord: outer_coord, ..
+                            } = edge
+                            else {
+                                return ControlFlow::Continue((p1, p2));
+                            };
 
-                                let find_p = || {
-                                    triangulation[idx]
-                                        .iter()
-                                        .enumerate()
-                                        .find_map(|(idx, edge)| {
-                                            let GeoEdge::Weighted {
-                                                coord: inner_coord, ..
-                                            } = edge
-                                            else {
-                                                return None;
-                                            };
-
-                                            (idx == dst
-                                                && if let Some(p1) = p1 {
-                                                    p1 != inner_coord
-                                                } else if let Some(p2) = p2 {
-                                                    p2 != inner_coord
-                                                } else {
-                                                    true
+                            // Checks if there's any neighbor to the current
+                            // neighbor of `src` that is equivalent to `dst`,
+                            // while also making sure we are not choosing a
+                            // point that stems from `src` but can contain an
+                            // actually valid point (because there's a different
+                            // quadrilateral nearby with a reflex vertex.)
+                            let find_p = || {
+                                triangulation[idx]
+                                    .iter()
+                                    .enumerate()
+                                    .find_map(|(idx, edge)| {
+                                        (idx == dst
+                                            && matches!(edge, GeoEdge::Weighted { .. })
+                                            && triangulation[src]
+                                                .iter()
+                                                .filter_map(|elem| {
+                                                    if let GeoEdge::Weighted { coord, .. } = elem {
+                                                        Some(coord)
+                                                    } else {
+                                                        None
+                                                    }
                                                 })
-                                            .then_some(coord)
-                                        })
-                                };
+                                                .all(|p_to_check| {
+                                                    !check_point_ownership(
+                                                        (*p_src, *p_dst, *outer_coord),
+                                                        *p_to_check,
+                                                    )
+                                                }))
+                                        .then_some(outer_coord)
+                                    })
+                            };
 
-                                match (p1, p2) {
-                                    (None, p2) => ControlFlow::Continue((find_p(), p2)),
-                                    (p1, None) => ControlFlow::Continue((p1, find_p())),
-                                    // None of the points are `None` so we've
-                                    // found all we needed.
-                                    other => ControlFlow::Break(other),
-                                }
-                            },
-                        );
-
-                    // TODO: actually check if the edge is illegal and return
-                    //       all `p_src`, `p_dst`, `p1` and `p2`
-                    None
+                            match (p1, p2) {
+                                (None, p2) => ControlFlow::Continue((find_p(), p2)),
+                                (p1, None) => ControlFlow::Continue((p1, find_p())),
+                                // None of the points are `None` so we've found
+                                // all we needed.
+                                other => ControlFlow::Break(other),
+                            }
+                        })
+                    {
+                        Some((p_src, p_dst, p1, p2))
+                    } else {
+                        None
+                    }
                 });
 
             todo!(
