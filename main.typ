@@ -2927,3 +2927,40 @@ Cartesian products")).
 
   This means we ought factor out from the above formulation the number of matchings per single full
   combination of elements, which yields 2160 possible pairings.
+
+= Networking: a Top-Down Approach (Sec. 1.3.2)
+
+/ Intermission problem. Sec. 1.3.1, Subsec. _Store and forward transmission_: \
+  I ought determine the delay in the transmission of $P$ packets from some source connection to an
+  end connection through $N$ links. For a single packet to to reach the end destination on some such
+  $N$ links, it can be assumed that there is a
+
+  $
+    d = N dot L / R "delay," \
+    "where" L "is the number of packets, and" \
+    R "is the constant transmission rate to all links".
+  $
+
+  Considering the transmission of a packet only starts once a full prior packet has been transmitted
+  to a link, some first packet would have a delay $L / R$ to reach the first link, after which the
+  second packet would start transmission into the first link, while the first link would start
+  transmission of the first packet to the second link.
+
+  By the time the first packet reached the second link, the second packet would have reached the
+  first link. Then, after tranmission of the first packet has started moving onto the third link,
+  the second packet has started transmission onto the second link, and the third packet has started
+  transmission onto the first link.
+
+  Assume the source destination is reached after the third link. The first packet would reach that
+  point after $N dot L / R$, where $N = 3$. But because of the overlapping nature of tranmission, by
+  that time the second packet would have reached the third link, and thus would require
+  $(N dot L / R) + L / R$ to reach the destination. Much in the same vein, the third packet would
+  only have reached the third link when the second packet hit the destination, and thus would
+  require $(N dot L / R + 2 dot L / R)$.
+
+  It thus follows that for some $P$ packets to be sent across $N$ links from source to destination
+  the delay is of
+
+  $
+    d_"all packets" = N dot L / R + (P - 1) dot L / R = L / R (N - P - 1).
+  $
