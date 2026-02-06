@@ -232,6 +232,14 @@ macro_rules! ensure_or {
     ($check:expr, $error:tt$(,)?) => {{ $check.then_some(()).ok_or_else(|| build_error!($error)) }};
 }
 
+/// Computes the segment length of two [`Point2d`]s.
+///
+/// The implementation follows that for some segment denoted by two endpoints
+/// `a` and `b`, the length of such a segment is bound to be equivalent to the
+/// length of the hypotenuse denoted by that same segement of a right triangle.
+/// This then exploits the R^2 elements (ordered pairs resulting from the
+/// cartesian product of R x R) of each point to compute the sides of such a
+/// triangle and solves through Pythagoras' Theorem.
 pub fn seglen(Point2d { x: x1, y: y1 }: Point2d, Point2d { x: x2, y: y2 }: Point2d) -> f64 {
     ((x1 - x2).abs().powi(2) + (y1 - y2).abs().powi(2)).sqrt()
 }
@@ -810,6 +818,33 @@ impl TspClosestPair for AdjacencyMatrix {
 }
 
 impl TspTriMstDfs for GeoAdjacencyMatrix {
+    /// Computes the Delauney trianguluation of a given point set and stores it
+    /// in the adjacency matrix receiver.
+    ///
+    /// The method follows that for some point set _already_ embedded into the
+    /// receiver, and a separate vector comprising only the point set (not
+    /// stored as a graph,) it computes the convex hull of the point set with a
+    /// small modification to Andrew's algorithm, following Skiena's changes in
+    /// Sec. 20.3 of his catalogue. It builds up the triangulation by adding to
+    /// the adjacency matrix that is created for it all edges from the hull that
+    /// end up discarded. Then, post-hull construction (lower and upper hull,)
+    /// it uses the resulting hulls to add whichever boundary edges are not yet
+    /// part of the triangulation because they never got the chance to be
+    /// discarded in the first place.
+    ///
+    /// Then, for the resulting triangulation, it computes the best
+    /// angle-optimal triangulation by following the method of local maxima
+    /// outlined by de Berg, et. al., Sec. 9.1. It's not efficient, but I wanted
+    /// to attempt building a Delauney triangulation without just using an
+    /// algorithm that gets me the best angle-optimal triangulation from the get
+    /// go. The algorithm follows that so long as an edge flipping operation is
+    /// determined viable because there's some convex quadrilateral for which
+    /// the edge connecting the only two _non_-adjacent vertices yields an
+    /// angle-vector for the two triangles incident to such an edge that is
+    /// lexicographically larger than the prior edge's incident triangles'
+    /// angle-vector, then edge-flipping is possible. This is performed in an
+    /// infinite loop because the number of triangulations for a point set is
+    /// unknown but finite.
     fn triangulate(&mut self, points: Vec<Point2d>) {
         #![expect(unused, reason = "Testing is taking place in separate steps.")]
 
@@ -966,90 +1001,99 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                 })
         }
 
-        loop {
-            // See Sec. 9.1 in de Berg et. al., 2008 for details on the
-            // terminology used.
-            let illegal_edge = triangulation
-                .iter()
-                .enumerate()
-                // Only takes the edges above the main diagonal; The
-                // triangulation is stored as an adjacency matrix for a directed
-                // graph so all other edges (below the main diagonal) are only
-                // flipped.
-                .flat_map(|(src, row)| (0..row.len()).skip(src + 1).map(move |dst| (src, dst)))
-                .find_map(|(src, dst)| {
-                    let GeoEdge::Weighted { coord: p_dst, .. } = &triangulation[src][dst] else {
-                        return None;
-                    };
-                    let GeoEdge::Weighted { coord: p_src, .. } = &triangulation[dst][src] else {
-                        return None;
-                    };
-                    // If we broke early, then we found (`p1`, `p2`); Otherwise,
-                    // we may have found them at the end or not found them at
-                    // all.
-                    if let ControlFlow::Continue((Some(p1), Some(p2)))
-                    | ControlFlow::Break((Some(p1), Some(p2))) = triangulation[src]
-                        .iter()
-                        .enumerate()
-                        .try_fold((None, None), |(mut p1, mut p2), (idx, edge)| {
-                            let GeoEdge::Weighted {
-                                coord: outer_coord, ..
-                            } = edge
-                            else {
-                                return ControlFlow::Continue((p1, p2));
-                            };
+        // See Sec. 9.1 in de Berg et. al., 2008 for details on the terminology.
+        while let Some((src, dst)) = triangulation
+            .iter()
+            .enumerate()
+            // Only takes the edges above the main diagonal; The triangulation
+            // is stored as an adjacency matrix for an undirected, simple graph
+            // so all other edges (below the main diagonal) are only flipped,
+            // and the main diagonal is empty.
+            .flat_map(|(src, row)| (0..row.len()).skip(src + 1).map(move |dst| (src, dst)))
+            .find_map(|(src, dst)| {
+                let GeoEdge::Weighted { coord: p_dst, .. } = &triangulation[src][dst] else {
+                    return None;
+                };
+                let GeoEdge::Weighted { coord: p_src, .. } = &triangulation[dst][src] else {
+                    return None;
+                };
 
-                            // Checks if there's any neighbor to the current
-                            // neighbor of `src` that is equivalent to `dst`,
-                            // while also making sure we are not choosing a
-                            // point that stems from `src` but can contain an
-                            // actually valid point (because there's a different
-                            // quadrilateral nearby with a reflex vertex.)
-                            let find_p = || {
-                                triangulation[idx]
-                                    .iter()
-                                    .enumerate()
-                                    .find_map(|(idx, edge)| {
-                                        (idx == dst
-                                            && matches!(edge, GeoEdge::Weighted { .. })
-                                            && triangulation[src]
-                                                .iter()
-                                                .filter_map(|elem| {
-                                                    if let GeoEdge::Weighted { coord, .. } = elem {
-                                                        Some(coord)
-                                                    } else {
-                                                        None
-                                                    }
-                                                })
-                                                .all(|p_to_check| {
-                                                    !check_point_ownership(
-                                                        (*p_src, *p_dst, *outer_coord),
-                                                        *p_to_check,
-                                                    )
-                                                }))
-                                        .then_some(outer_coord)
-                                    })
-                            };
+                // If we broke early, then we found (`p1`, `p2`); Otherwise,
+                // we may have found them at the end or not found them at
+                // all.
+                if let ControlFlow::Continue((Some(p1), Some(p2)))
+                | ControlFlow::Break((Some(p1), Some(p2))) = triangulation[src]
+                    .iter()
+                    .enumerate()
+                    .try_fold((None, None), |(mut p1, mut p2), (idx, edge)| {
+                        let GeoEdge::Weighted { coord, .. } = edge else {
+                            return ControlFlow::Continue((p1, p2));
+                        };
 
-                            match (p1, p2) {
-                                (None, p2) => ControlFlow::Continue((find_p(), p2)),
-                                (p1, None) => ControlFlow::Continue((p1, find_p())),
-                                // None of the points are `None` so we've found
-                                // all we needed.
-                                other => ControlFlow::Break(other),
-                            }
-                        })
-                    {
-                        Some((p_src, p_dst, p1, p2))
-                    } else {
-                        None
+                        // Checks if there's any neighbor to the current
+                        // neighbor of `src` that is equivalent to `dst`, while
+                        // also making sure we are not choosing a point that
+                        // stems from `src` but can contain an actually valid
+                        // point (because there's a different quadrilateral
+                        // nearby with a reflex vertex.)
+                        let find_p = || {
+                            triangulation[idx].iter().enumerate().find_map(
+                                |(inner_idx, inner_edge)| {
+                                    (inner_idx == dst
+                                        && matches!(inner_edge, GeoEdge::Weighted { .. })
+                                        && triangulation[src]
+                                            .iter()
+                                            .filter_map(|elem| {
+                                                if let GeoEdge::Weighted {
+                                                    coord: p_to_check, ..
+                                                } = elem
+                                                    && p_to_check != coord
+                                                    && p_to_check != p_dst
+                                                {
+                                                    Some(p_to_check)
+                                                } else {
+                                                    None
+                                                }
+                                            })
+                                            .all(|p_to_check| {
+                                                !check_point_ownership(
+                                                    (*p_src, *p_dst, *coord),
+                                                    *p_to_check,
+                                                )
+                                            }))
+                                    .then_some(coord) // The outside `coord`.
+                                },
+                            )
+                        };
+
+                        match (p1, p2) {
+                            (None, p2) => ControlFlow::Continue((find_p(), p2)),
+                            (p1, None) => ControlFlow::Continue((p1, find_p())),
+                            // None of the points are `None` so we've found
+                            // all we needed.
+                            other => ControlFlow::Break(other),
+                        }
+                    })
+                    && !check_point_ownership((*p1, *p2, *p_src), *p_dst)
+                    && !check_point_ownership((*p1, *p2, *p_dst), *p_src)
+                    && let Some(ring_center) = find_ring((*p_src, *p_dst, *p1))
+                    && {
+                        let diff = (seglen(ring_center, *p1) - seglen(ring_center, *p2));
+
+                        if diff.signum() == -1. {
+                            diff.ceil() as isize >= 0
+                        } else {
+                            diff.floor() as isize >= 0
+                        }
                     }
-                });
-
-            todo!(
-                "Break if `illegal_edge` above is `None` because no further edge flipping \
-                operation can be done.",
-            );
+                {
+                    Some((src, dst))
+                } else {
+                    None
+                }
+            })
+        {
+            todo!("Flip the edge in `triangulation`.");
         }
 
         let mut tracking_list = HashSet::with_capacity(triangulation.len().pow(2));
