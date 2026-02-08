@@ -7,12 +7,11 @@
 //! The goal is to simply group under a single umbrella the methods required to
 //! implement a certain algorithm for a specific instance of a specific problem.
 
-#![allow(dead_code, reason = "The reportedly unused items are used.")]
-
 use std::{
     cell::RefCell,
     cmp::Ordering,
     collections::{HashMap, HashSet},
+    hash::{Hash, Hasher},
     iter,
     ops::ControlFlow,
     sync::LazyLock,
@@ -53,6 +52,11 @@ pub struct Pairs<'a> {
 pub struct AdjacencyList(HashMap<usize, HashSet<usize>>);
 
 impl AdjacencyList {
+    /// # Panics
+    ///
+    /// Can't really panic because all elements of the forest are guaranteed to
+    /// at least have themselves as their ancestors.
+    #[must_use]
     pub fn from_pairs(pairs: &Pairs) -> Self {
         let mut output = Self(HashMap::with_capacity(pairs.forest.len()));
         for ancestors in (0..pairs.forest.len()).filter_map(|node| {
@@ -100,6 +104,15 @@ pub struct Point2d {
     pub x: f64,
     pub y: f64,
 }
+
+impl Hash for Point2d {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.x.to_bits().hash(state);
+        self.y.to_bits().hash(state);
+    }
+}
+
+impl Eq for Point2d {}
 
 #[derive(Debug)]
 pub struct Dfs {
@@ -232,18 +245,6 @@ macro_rules! ensure_or {
     ($check:expr, $error:tt$(,)?) => {{ $check.then_some(()).ok_or_else(|| build_error!($error)) }};
 }
 
-/// Computes the segment length of two [`Point2d`]s.
-///
-/// The implementation follows that for some segment denoted by two endpoints
-/// `a` and `b`, the length of such a segment is bound to be equivalent to the
-/// length of the hypotenuse denoted by that same segement of a right triangle.
-/// This then exploits the R^2 elements (ordered pairs resulting from the
-/// cartesian product of R x R) of each point to compute the sides of such a
-/// triangle and solves through Pythagoras' Theorem.
-pub fn seglen(Point2d { x: x1, y: y1 }: Point2d, Point2d { x: x2, y: y2 }: Point2d) -> f64 {
-    ((x1 - x2).abs().powi(2) + (y1 - y2).abs().powi(2)).sqrt()
-}
-
 impl From<AdjacencyMatrixErrorType> for AdjacencyMatrixError {
     fn from(value: AdjacencyMatrixErrorType) -> Self {
         Self(value)
@@ -256,7 +257,30 @@ impl From<PairsErrorType> for PairsError {
     }
 }
 
+/// Computes the segment length of two [`Point2d`]s.
+///
+/// The implementation follows that for some segment denoted by two endpoints
+/// `a` and `b`, the length of such a segment is bound to be equivalent to the
+/// length of the hypotenuse denoted by that same segement of a right triangle.
+/// This then exploits the R^2 elements (ordered pairs resulting from the
+/// cartesian product of R x R) of each point to compute the sides of such a
+/// triangle and solves through Pythagoras' Theorem.
+#[must_use]
+pub fn seglen(Point2d { x: x1, y: y1 }: Point2d, Point2d { x: x2, y: y2 }: Point2d) -> f64 {
+    ((x1 - x2).abs().powi(2) + (y1 - y2).abs().powi(2)).sqrt()
+}
+
 impl AdjacencyMatrix {
+    /// # Errors
+    ///
+    /// May fail if:
+    /// 1. the input matrix is not square, or
+    /// 2. the input matrix denotes a non-simple graph (specifically, containing
+    ///    self loops,) or
+    /// 3. the input matrix denotes an incomplete graph, or
+    /// 4. the input matrix denotes a directed graph (with elements below the
+    ///    main diagonal that do not map 1:1 to the elements above the main
+    ///    diagonal.)
     pub fn new(input: &[Vec<Edge>]) -> Result<Self, AdjacencyMatrixError> {
         ensure_or!(input.len() > 1, NonSquareMatrix)?;
         for (idx, vertex) in input.iter().enumerate() {
@@ -294,6 +318,7 @@ impl AdjacencyMatrix {
 }
 
 impl<'a> Pairs<'a> {
+    #[must_use]
     pub fn new(src: &'a AdjacencyMatrix) -> Self {
         Self {
             forest: (0..src.0.len()).collect(),
@@ -307,6 +332,10 @@ impl<'a> Pairs<'a> {
 }
 
 impl Pairs<'_> {
+    /// # Errors
+    ///
+    /// Fails if any one of `this` or `other` are not indices pointing to valid
+    /// nodes in the underlying UFDS.
     pub fn unite(&mut self, this: usize, other: usize) -> Result<(), PairsError> {
         if !self.same(this, other)? {
             self.forest[other] = this;
@@ -320,6 +349,11 @@ impl Pairs<'_> {
     /// Returns the same node if the node makes up a single-vertex tree.
     /// Otherwise, returns the root node by following the parent relationship in
     /// the same tree.
+    ///
+    /// # Errors
+    ///
+    /// Fails if `this` denotes an index that does not point to a valid element
+    /// of the underlying UFDS.
     pub fn find(&self, this: usize) -> Result<usize, PairsError> {
         ensure_or!(this < self.forest.len(), IndexOutOfBounds)?;
         match self.forest[this] {
@@ -328,6 +362,10 @@ impl Pairs<'_> {
         }
     }
 
+    /// # Errors
+    ///
+    /// Fails if any one of `this` or `other` are not indices pointing to valid
+    /// nodes in the underlying UFDS.
     pub fn same(&self, this: usize, other: usize) -> Result<bool, PairsError> {
         let (this, other) = (self.find(this)?, self.find(other)?);
 
@@ -336,6 +374,10 @@ impl Pairs<'_> {
 }
 
 impl Pairs<'_> {
+    /// # Errors
+    ///
+    /// Fails if `this` denotes an index that does not point to a valid element
+    /// of the underlying UFDS.
     pub fn ancestors(&self, this: usize) -> Result<Vec<usize>, PairsError> {
         let (this_root, mut parent, mut ancestors) = (self.find(this)?, this, vec![this]);
 
@@ -349,6 +391,16 @@ impl Pairs<'_> {
         Ok(ancestors)
     }
 
+    /// # Panics
+    ///
+    /// Can't really panic. See [Errors].
+    ///
+    /// # Errors
+    ///
+    /// Fails if `this` denotes an index that does not point to a valid element
+    /// of the underlying UFDS.
+    ///
+    /// [Errors]: #errors-4
     pub fn build_tree_from(&mut self, this: usize) -> Result<(), PairsError> {
         ensure_or!(this < self.forest.len(), IndexOutOfBounds)?;
         self.current_tree = Some(
@@ -369,7 +421,11 @@ impl Pairs<'_> {
         Ok(())
     }
 
-    pub fn cartesian_product(&mut self) -> Result<(), PairsError> {
+    /// # Panics
+    ///
+    /// Panics if `self.current_tree` is not `Some(_)`. This happens most
+    /// naturaly as a consequence of calling this outside iterator chains.
+    pub fn cartesian_product(&mut self) {
         static ERROR_MSG: LazyLock<&str> =
             LazyLock::new(|| "this method should not be called outside iterator chains");
 
@@ -381,8 +437,6 @@ impl Pairs<'_> {
         self.current_product = iter::repeat_n(self.current_node.expect(&ERROR_MSG), others.len())
             .zip(others)
             .collect();
-
-        Ok(())
     }
 
     // NOTE: this exists as a replacement for the `min()` override of
@@ -400,6 +454,11 @@ impl Pairs<'_> {
         })
     }
 
+    /// # Panics
+    ///
+    /// Panics if the method is called before the underlying UFDS isn't made up
+    /// of a single tree (contrary to multiple trees in the initial forest.)
+    #[must_use]
     pub fn dfs(&self) -> Dfs {
         let mut root = self
             .forest
@@ -447,10 +506,7 @@ impl Iterator for Pairs<'_> {
                     "the operation should be infallible because the index is a constant \
                     that's always within bounds",
                 );
-                self.cartesian_product().expect(
-                    "the product should be an infallible operation if the source graph is \
-                    valid",
-                );
+                self.cartesian_product();
                 self.current_iter = Some(0);
             }
             Some(mut current_node) => {
@@ -469,10 +525,10 @@ impl Iterator for Pairs<'_> {
 
                             self.current_node = Some(current_node);
                             self.build_tree_from(current_node).expect(&ERROR_MSG);
-                            self.cartesian_product().expect(&ERROR_MSG);
+                            self.cartesian_product();
                             self.current_iter = Some(0);
                         }
-                        _ => unreachable!(
+                        Ordering::Greater => unreachable!(
                             "the collection index should have been reset in the `Ordering::Equal` \
                             branch"
                         ),
@@ -542,6 +598,24 @@ impl Iterator for Dfs {
 }
 
 impl GeoAdjacencyMatrix {
+    /// # Errors
+    ///
+    /// May fail if:
+    /// 1. the input matrix is not square, or
+    /// 2. the input matrix denotes a non-simple graph (specifically, containing
+    ///    self loops,) or
+    /// 3. the input matrix denotes an incomplete graph, or
+    /// 4. the input matrix denotes a directed graph (with elements below the
+    ///    main diagonal that do not map 1:1 to the elements above the main
+    ///    diagonal,) or
+    /// 5. the input matrix contains some row (denoting the edges of the vertex
+    ///    represented by that row's index) with the same points, which is not
+    ///    possible as all columns must represent the same point and thus every
+    ///    row must contain a different sequence of points, or
+    /// 6. if the input matrix has dimensionality greater than 2 (there's more
+    ///    than 2 vertices in the graph,) then it contains some element in some
+    ///    column that is not equal to the same element in the same column, as
+    ///    commented on the prior failure condition.
     pub fn new(inner: &[Vec<GeoEdge>]) -> Result<Self, AdjacencyMatrixError> {
         ensure_or!(inner.len() > 1, NonSquareMatrix)?;
         for (vertex, edges) in inner.iter().enumerate() {
@@ -589,11 +663,9 @@ impl GeoAdjacencyMatrix {
             ensure_or!(
                 row_vec
                     .iter()
-                    .fold(Vec::new(), |accum, &(_, (_, point))| {
+                    .fold(HashSet::new(), |mut accum, &(_, (_, point))| {
                         if !accum.contains(&point) {
-                            let mut accum = accum;
-                            accum.push(point);
-
+                            accum.insert(point);
                             return accum;
                         }
 
@@ -601,31 +673,31 @@ impl GeoAdjacencyMatrix {
                     })
                     .len()
                     == row_vec.len(),
-                MultipleEqualPoints
+                MultipleEqualPoints,
             )?;
 
             // Square matrices with dimensionality 2 don't have any other
             // elements in the same column that are not `GeoEdge::NonExistent`.
             if vertex == 0 && inner.len() > 2 {
                 ensure_or!(
-                    row_vec.iter().all(|&(vertex, (_, point))| {
-                        let (mut idx_state, mut checks) = (1, Vec::with_capacity(inner.len()));
-
-                        while let Some(inner) = inner.get(vertex + idx_state) {
-                            idx_state += 1;
-                            if let GeoEdge::Weighted { coord, .. } = &inner[vertex] {
-                                checks.push(coord == point);
-                            }
-                        }
-
-                        checks.iter().fold(
-                            true,
-                            |accum, check| {
-                                if accum && *check { accum } else { false }
-                            },
-                        )
+                    row_vec.iter().all(|&(vertex, (_, &point))| {
+                        inner
+                            .iter()
+                            .skip(1)
+                            .flat_map(|elem| {
+                                elem.iter().enumerate().filter_map(|(idx, elem)| {
+                                    if let GeoEdge::Weighted { coord, .. } = elem
+                                        && idx == vertex
+                                    {
+                                        Some(*coord)
+                                    } else {
+                                        None
+                                    }
+                                })
+                            })
+                            .eq(iter::repeat_n(point, inner.len() - 1))
                     }),
-                    UnequalSamePoints
+                    UnequalSamePoints,
                 )?;
             }
         }
@@ -633,6 +705,9 @@ impl GeoAdjacencyMatrix {
         Ok(Self(inner.to_owned()))
     }
 
+    /// # Panics
+    ///
+    /// Panics if the input point set is empty.
     pub fn from_point_set(points: Vec<Point2d>) -> (Vec<Point2d>, Self) {
         #[derive(Clone, Copy)]
         enum IRGeoEdge {
@@ -668,12 +743,12 @@ impl GeoAdjacencyMatrix {
                     .iter()
                     .skip(idx + 1)
                     .map(|&other_point| seglen(point, other_point))
-                    .max_by(|a, b| a.total_cmp(b))
+                    .max_by(f64::total_cmp)
                     .unwrap_or_default(); // We've either hit the end or not.
 
                 (target != 0.).then_some(target)
             })
-            .max_by(|a, b| a.total_cmp(b))
+            .max_by(f64::total_cmp)
             .expect(
                 "The point set should have at least four points to make things interesting, though \
                 two is the bare minimum to make for a non-singleton set.",
@@ -691,6 +766,11 @@ impl GeoAdjacencyMatrix {
                             IRGeoEdge::Weighted(coord) => GeoEdge::Weighted {
                                 // The weight is computed as a ratio of the
                                 // largest distance found above.
+                                #[expect(
+                                    clippy::cast_possible_truncation,
+                                    clippy::cast_sign_loss,
+                                    reason = "`seglen()` always produces positive numbers."
+                                )]
                                 weight: ((seglen(points[row], points[col]) * 100.)
                                     / largest_distance)
                                     .floor() as usize,
@@ -781,17 +861,17 @@ impl TspClosestPair for AdjacencyMatrix {
     fn tsp(&self) -> Vec<usize> {
         let mut pairs_iter = self.pairs();
         for _ in 1..self.0.len() {
+            static ERROR_MSG: LazyLock<&str> = LazyLock::new(|| {
+                "`node2` was just sourced through `min_fix()` so the operation should be \
+                infallible"
+            });
+
             let (node1, node2) = pairs_iter.min_fix().expect(
                 "there should always be a minimum value given the loop runs for n - 1 \
                 iterations, where n is the number of nodes in the graph, and the underlying ufds \
                 decreases its number of disjoint trees by a factor of 1 on each iteration (i.e. on \
                 each call to `unite()` with the nodes yielded by `min_fix()`)",
             );
-
-            static ERROR_MSG: LazyLock<&str> = LazyLock::new(|| {
-                "`node2` was just sourced through `min_fix()` so the operation should be \
-                infallible"
-            });
 
             // If the node to be `unite()`d is not a root node, then make it a
             // root node by reversing the parent node of its ancestors.
@@ -848,20 +928,6 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
     fn triangulate(&mut self, points: Vec<Point2d>) {
         #![expect(unused, reason = "Testing is taking place in separate steps.")]
 
-        let mut points: Vec<_> = points.into_iter().enumerate().collect();
-        let (mut upper_hull, mut lower_hull, mut triangulation) = (
-            Vec::with_capacity(points.len().div_ceil(2)),
-            Vec::with_capacity(points.len().div_ceil(2)),
-            Vec::with_capacity(points.len()),
-        );
-
-        triangulation.resize_with(points.len(), || {
-            let mut output = Vec::with_capacity(points.len());
-            output.resize(points.len(), GeoEdge::NonExistent);
-
-            output
-        });
-
         // Follows Andrew's algorithm.
         fn build_hull(
             mut triangulation: &mut [Vec<GeoEdge>],
@@ -901,48 +967,6 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
             }
         }
 
-        points.sort_unstable_by(
-            |(_, Point2d { x: x1, y: y1 }), (_, Point2d { x: x2, y: y2 })| match x1.total_cmp(x2) {
-                Ordering::Equal => y1.total_cmp(y2),
-                other => other,
-            },
-        );
-        build_hull(
-            &mut triangulation,
-            &mut upper_hull,
-            |prev_last, last, point| {
-                // If the area is negative, then `last` lies to the right of
-                // directed segment (`prev_last`, `point`), and it must be
-                // removed because it's a reflex vertex. See Sec. 1.2.1 in
-                // O'Rourke, 2001.
-                compute_raw_triangle_area((prev_last, point, last)).signum() == -1.
-            },
-            &points,
-            &self.0,
-        );
-        build_hull(
-            &mut triangulation,
-            &mut lower_hull,
-            |prev_last, last, point| {
-                compute_raw_triangle_area((prev_last, point, last)).signum() == 1.
-            },
-            &points,
-            &self.0,
-        );
-
-        let mut triangulate_bounds_of = |collection: Vec<(usize, Point2d)>| {
-            collection
-                .windows(2)
-                .map(|inner| (inner[0].0, inner[1].0))
-                .for_each(|(src, dst)| {
-                    triangulation[src][dst] = self.0[src][dst].clone();
-                    triangulation[dst][src] = self.0[dst][src].clone();
-                });
-        };
-
-        triangulate_bounds_of(upper_hull);
-        triangulate_bounds_of(lower_hull);
-
         // See Lemma 1.3.1 in O'Rourke, 2001.
         const fn compute_triangle_area(t: (Point2d, Point2d, Point2d)) -> f64 {
             compute_raw_triangle_area(t).abs() / 2.
@@ -956,6 +980,13 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
             (a, b, c): (Point2d, Point2d, Point2d),
             p_to_check: Point2d,
         ) -> bool {
+            #![expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "The absolute value is always taken and `floor` gets me a \"floating \
+                         point integer\"."
+            )]
+
             let container_area = compute_triangle_area((a, b, c));
             let (area_0, area_1, area_2) = {
                 let (t_0, t_1, t_2) = ((a, b, p_to_check), (a, c, p_to_check), (c, b, p_to_check));
@@ -981,6 +1012,13 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
         // point (the unknown.) Pp. 67-70 of my notes contain the developed
         // argument.
         fn find_ring((a, b, c): (Point2d, Point2d, Point2d)) -> Option<Point2d> {
+            #![expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "The absolute value is always taken and `floor` gets me a \"floating \
+                         point integer\"."
+            )]
+
             ((-b.x + a.x).abs().floor() as usize == 0
                 && (-b.y + c.y).abs().floor() as usize == 0
                 && (((b.y - a.y) / (-b.x + a.x)) * ((b.x - c.x) / (-b.y + c.y))).floor() as usize
@@ -994,12 +1032,78 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                             / (2. * (-b.y + c.y)),
                         (b.y - a.y) / (-b.x + a.x),
                     );
-                    let y = (c0 * c1 + c2) / (1. - c3 * c1);
-                    let x = y * c3 + c0;
+                    let y_component = (c0 * c1 + c2) / (1. - c3 * c1);
+                    let x_component = y_component * c3 + c0;
 
-                    Point2d { x, y }
+                    Point2d {
+                        x: x_component,
+                        y: y_component,
+                    }
                 })
         }
+
+        let mut points: Vec<_> = points.into_iter().enumerate().collect();
+        let (mut upper_hull, mut lower_hull, mut triangulation) = (
+            Vec::with_capacity(points.len().div_ceil(2)),
+            Vec::with_capacity(points.len().div_ceil(2)),
+            Vec::with_capacity(points.len()),
+        );
+
+        triangulation.resize_with(points.len(), || {
+            let mut output = Vec::with_capacity(points.len());
+            output.resize(points.len(), GeoEdge::NonExistent);
+
+            output
+        });
+
+        points.sort_unstable_by(
+            |(_, Point2d { x: x1, y: y1 }), (_, Point2d { x: x2, y: y2 })| match x1.total_cmp(x2) {
+                Ordering::Equal => y1.total_cmp(y2),
+                other => other,
+            },
+        );
+        {
+            #![expect(
+                clippy::float_cmp,
+                reason = "`signum()` always returns -1., 1. or NaN; I am sure it will never be NaN."
+            )]
+
+            build_hull(
+                &mut triangulation,
+                &mut upper_hull,
+                |prev_last, last, point| {
+                    // If the area is negative, then `last` lies to the right of
+                    // directed segment (`prev_last`, `point`), and it must be
+                    // removed because it's a reflex vertex. See Sec. 1.2.1 in
+                    // O'Rourke, 2001.
+                    compute_raw_triangle_area((prev_last, point, last)).signum() == -1.
+                },
+                &points,
+                &self.0,
+            );
+            build_hull(
+                &mut triangulation,
+                &mut lower_hull,
+                |prev_last, last, point| {
+                    compute_raw_triangle_area((prev_last, point, last)).signum() == 1.
+                },
+                &points,
+                &self.0,
+            );
+        }
+
+        let mut triangulate_bounds_of = |collection: Vec<(usize, Point2d)>| {
+            collection
+                .windows(2)
+                .map(|inner| (inner[0].0, inner[1].0))
+                .for_each(|(src, dst)| {
+                    triangulation[src][dst] = self.0[src][dst].clone();
+                    triangulation[dst][src] = self.0[dst][src].clone();
+                });
+        };
+
+        triangulate_bounds_of(upper_hull);
+        triangulate_bounds_of(lower_hull);
 
         // See Sec. 9.1 in de Berg et. al., 2008 for details on the terminology.
         while let Some((src, dst)) = triangulation
@@ -1010,6 +1114,21 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
             // so all other edges (below the main diagonal) are only flipped,
             // and the main diagonal is empty.
             .flat_map(|(src, row)| (0..row.len()).skip(src + 1).map(move |dst| (src, dst)))
+            // Finds an edge in the triangulation that is determined to be
+            // illegal by de Berg et. al.'s terminology.
+            // It's failry straightforward; You try to find the two other points
+            // that would make up a quadrilateral alongside the edge at hand
+            // (denoted by (`src`, `dst`),) and then make sure the quadrilateral
+            // is convex. We could fail at the start if the edge is not an inner
+            // edge but rather a boundary edge of the convex hull, or we could
+            // fail in finding a convex quadrilateral because one of the points
+            // in the triangulation is a reflex vertex (i.e. you can find it
+            // lying within the area of the triangle formed by the other three
+            // vertices.) Then you check if there's a possibly better,
+            // angle-optimal-wise, triangulation by checking for a consequence
+            // of Thales' theorem (the `find_ring` at the end is part of that)
+            // and perform edge flipping if that's the case. See Sec. 9.1 in de
+            // Berg et. al., 2008 for an explanation on this last algorithm.
             .find_map(|(src, dst)| {
                 let GeoEdge::Weighted { coord: p_dst, .. } = &triangulation[src][dst] else {
                     return None;
@@ -1069,8 +1188,8 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                         match (p1, p2) {
                             (None, p2) => ControlFlow::Continue((find_p(), p2)),
                             (p1, None) => ControlFlow::Continue((p1, find_p())),
-                            // None of the points are `None` so we've found
-                            // all we needed.
+                            // None of the points are `None` so we've found all
+                            // we needed.
                             other => ControlFlow::Break(other),
                         }
                     })
@@ -1078,8 +1197,19 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                     && !check_point_ownership((*p1, *p2, *p_dst), *p_src)
                     && let Some(ring_center) = find_ring((*p_src, *p_dst, *p1))
                     && {
-                        let diff = (seglen(ring_center, *p1) - seglen(ring_center, *p2));
+                        let diff = seglen(ring_center, *p1) - seglen(ring_center, *p2);
 
+                        // Floating point imprecission could cause p2 to lie
+                        // inside the ring by lying on the boundary, but still
+                        // turn out a tad bit negative; We allow up to -0.99...
+                        #[expect(
+                            clippy::float_cmp,
+                            clippy::cast_possible_truncation,
+                            reason = "`signum()` always returns -1., 1. or NaN; I am sure it will \
+                                     never be NaN. Truncation won't happen as the problem space \
+                                     doesn't allow for arbitrarily large values for `f64` and both \
+                                     `ceil()` and `floor()` yield \"floating point integers\"."
+                        )]
                         if diff.signum() == -1. {
                             diff.ceil() as isize >= 0
                         } else {
@@ -1096,6 +1226,7 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
             todo!("Flip the edge in `triangulation`.");
         }
 
+        // Alternative, messier approach. The above should serve as a refactor.
         let mut tracking_list = HashSet::with_capacity(triangulation.len().pow(2));
         for (src, edges) in triangulation.iter().enumerate().map(|(src, edges)| {
             (

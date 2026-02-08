@@ -2,6 +2,15 @@
 name = "chapter1"
 version = "0.1.0"
 edition = "2024"
+keywords.workspace = true
+readme.workspace = true
+repository.workspace = true
+description.workspace = true
+categories.workspace = true
+license.workspace = true
 
 [dependencies]
 macros = { path = "../macros" }
+
+[lints]
+workspace = true

@@ -1,3 +1,15 @@
 [workspace]
 resolver = "3"
 members = ["chapter1", "macros"]
+
+[workspace.lints.clippy]
+pedantic = "warn"
+cargo = "warn"
+
+[workspace.package]
+description = "Problems from Skiena's The Algorithm Design Manual, 3rd ed."
+readme = "./README.md"
+repository = "https://github.com/dybucc/skiena-problems"
+keywords = ["algorithms", "data-structres", "dsa"]
+categories = ["algorithms", "data-structures", "mathematics"]
+license = "LGPL-2.1-only"

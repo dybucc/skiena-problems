@@ -2,9 +2,18 @@
 name = "macros"
 version = "0.1.0"
 edition = "2024"
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [lib]
 proc-macro = true
+
+[lints]
+workspace = true
 
 [dependencies]
 proc-macro2 = "1.0.106"

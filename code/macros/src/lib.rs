@@ -12,24 +12,26 @@ struct Points(Punctuated<Point, Token![,]>);
 
 impl Points {
     fn tokenize(self) -> TokenStream2 {
-        let mut points = Punctuated::<_, Token![,]>::new();
+        let points = self
+            .0
+            .iter()
+            .fold(Punctuated::<_, Token![,]>::new(), |mut accum, point| {
+                let (x, y) = (
+                    &point
+                        .0
+                        .first()
+                        .expect("All points should have an x-component.")
+                        .expr,
+                    &point
+                        .0
+                        .last()
+                        .expect("All points should have a y-component.")
+                        .expr,
+                );
+                accum.push(quote! { Point2d { x: #x as f64, y: #y as f64 } });
 
-        for point in self.0 {
-            let (x, y) = (
-                &point
-                    .0
-                    .first()
-                    .expect("All points should have an x-component.")
-                    .expr,
-                &point
-                    .0
-                    .last()
-                    .expect("All points should have a y-component.")
-                    .expr,
-            );
-
-            points.push(quote! { Point2d { x: #x as f64, y: #y as f64 } });
-        }
+                accum
+            });
 
         quote! { vec![#points] }
     }
@@ -57,10 +59,6 @@ impl Point {
 #[proc_macro]
 pub fn points(input: TokenStream) -> TokenStream {
     let points = parse_macro_input!(input as Points).tokenize();
-
-    if points.is_empty() {
-        panic!("There's no points.");
-    }
 
     TokenStream::from(quote! { GeoAdjacencyMatrix::from_point_set(#points) })
 }
