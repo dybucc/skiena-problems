@@ -8,7 +8,6 @@
 //! implement a certain algorithm for a specific instance of a specific problem.
 
 use std::{
-    cell::RefCell,
     cmp::Ordering,
     collections::{HashMap, HashSet},
     hash::{Hash, Hasher},
@@ -93,7 +92,7 @@ impl AdjacencyList {
 #[derive(Debug)]
 pub struct GeoAdjacencyMatrix(Vec<Vec<GeoEdge>>);
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum GeoEdge {
     NonExistent,
     Weighted { weight: usize, coord: Point2d },
@@ -136,6 +135,10 @@ pub enum Edge {
     Weighted(usize),
 }
 
+#[expect(
+    dead_code,
+    reason = "This works alongside the `build_error!` macro, so it's actually used."
+)]
 #[derive(Debug)]
 pub struct AdjacencyMatrixError(AdjacencyMatrixErrorType);
 
@@ -806,9 +809,108 @@ pub trait TspClosestPair {
 }
 
 pub trait TspTriMstDfs {
+    fn build_hull(
+        triangulation: &mut [Vec<GeoEdge>],
+        hull: &mut Vec<(usize, Point2d)>,
+        compare: impl Fn(Point2d, Point2d, Point2d) -> bool,
+        points: &[(usize, Point2d)],
+        edge_src: &[Vec<GeoEdge>],
+    ) {
+        for &(vertex, point) in points {
+            while hull.len() > 1
+                && let Some((rm, _)) = {
+                    let (_, prev_last) = hull[hull.len() - 2];
+
+                    hull.pop_if(|(_, last)| compare(prev_last, *last, point))
+                }
+            {
+                let (&(prev, _), post) = (
+                    hull.last()
+                        .expect("The hull should have at least two points here."),
+                    vertex,
+                );
+
+                (
+                    triangulation[prev][rm],
+                    triangulation[post][rm],
+                    triangulation[rm][prev],
+                    triangulation[rm][post],
+                ) = (
+                    edge_src[prev][rm],
+                    edge_src[post][rm],
+                    edge_src[rm][prev],
+                    edge_src[rm][post],
+                );
+            }
+
+            hull.push((vertex, point));
+        }
+    }
+    #[must_use]
+    fn compute_triangle_area(t: (Point2d, Point2d, Point2d)) -> f64 {
+        Self::compute_raw_triangle_area(t).abs() / 2.
+    }
+    #[must_use]
+    fn compute_raw_triangle_area((a, b, c): (Point2d, Point2d, Point2d)) -> f64 {
+        (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)
+    }
+    #[must_use]
+    fn find_ring((a, b, c): (Point2d, Point2d, Point2d)) -> Option<Point2d> {
+        #![expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "The absolute value is always taken and `floor` gets me a \"floating \
+                         point integer\"; The problem space doesn't allow for arbitrarily large \
+                         values for the elements of the point set and I assume all point are given \
+                         with respect to an axes-aligned box that considers only positive values."
+        )]
+
+        ((-b.x + a.x).abs().floor() as usize == 0
+            && (-b.y + c.y).abs().floor() as usize == 0
+            && (((b.y - a.y) / (-b.x + a.x)) * ((b.x - c.x) / (-b.y + c.y))).floor() as usize != 1)
+            .then(|| {
+                let (c0, c1, c2, c3) = (
+                    (a.x.powi(2) + a.y.powi(2) - b.x.powi(2) - b.y.powi(2)) / (2. * (-b.x + a.x)),
+                    (b.x - c.x) / (-b.y + c.y),
+                    (c.x.powi(2) + c.y.powi(2) - b.x.powi(2) - b.y.powi(2)) / (2. * (-b.y + c.y)),
+                    (b.y - a.y) / (-b.x + a.x),
+                );
+                let y_component = (c0 * c1 + c2) / (1. - c3 * c1);
+                let x_component = y_component * c3 + c0;
+
+                Point2d {
+                    x: x_component,
+                    y: y_component,
+                }
+            })
+    }
+    #[must_use]
+    fn check_point_ownership((a, b, c): (Point2d, Point2d, Point2d), p_to_check: Point2d) -> bool {
+        #![expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "The value won't be truncted because it's already a \"floating point \
+                     integer\" thanks to `floor()`, and the known positive values (thanks to \
+                     `abs()`) are well within bounds of `usize`."
+        )]
+
+        let container_area = Self::compute_triangle_area((a, b, c));
+        let (area_0, area_1, area_2) = {
+            let (t_0, t_1, t_2) = ((a, b, p_to_check), (a, c, p_to_check), (b, c, p_to_check));
+
+            (
+                Self::compute_triangle_area(t_0),
+                Self::compute_triangle_area(t_1),
+                Self::compute_triangle_area(t_2),
+            )
+        };
+
+        (container_area - (area_0 + area_1 + area_2)).abs().floor() as usize == 0
+    }
+    fn optimize_triangulation(&mut self, triangulation: Vec<Vec<GeoEdge>>);
     fn triangulate(&mut self, points: Vec<Point2d>);
-    fn mst(input: &Self) -> Vec<usize>;
-    fn dfs(input: &Self) -> Vec<usize>;
+    fn mst(&self) -> Vec<usize>;
+    fn dfs(&self) -> Vec<usize>;
 
     fn tsp(&self) -> Vec<usize>;
 }
@@ -898,221 +1000,36 @@ impl TspClosestPair for AdjacencyMatrix {
 }
 
 impl TspTriMstDfs for GeoAdjacencyMatrix {
-    /// Computes the Delauney trianguluation of a given point set and stores it
-    /// in the adjacency matrix receiver.
+    /// Finds the best angle-optimal triangulation for a point set `self` given
+    /// a starting triangulation `triangulation`.
     ///
-    /// The method follows that for some point set _already_ embedded into the
-    /// receiver, and a separate vector comprising only the point set (not
-    /// stored as a graph,) it computes the convex hull of the point set with a
-    /// small modification to Andrew's algorithm, following Skiena's changes in
-    /// Sec. 20.3 of his catalogue. It builds up the triangulation by adding to
-    /// the adjacency matrix that is created for it all edges from the hull that
-    /// end up discarded. Then, post-hull construction (lower and upper hull,)
-    /// it uses the resulting hulls to add whichever boundary edges are not yet
-    /// part of the triangulation because they never got the chance to be
-    /// discarded in the first place.
+    /// This follows the method of local maxima outlined in Sec. 9.1, de Berg
+    /// et. al., 2008.
     ///
-    /// Then, for the resulting triangulation, it computes the best
-    /// angle-optimal triangulation by following the method of local maxima
-    /// outlined by de Berg, et. al., Sec. 9.1. It's not efficient, but I wanted
-    /// to attempt building a Delauney triangulation without just using an
-    /// algorithm that gets me the best angle-optimal triangulation from the get
-    /// go. The algorithm follows that so long as an edge flipping operation is
-    /// determined viable because there's some convex quadrilateral for which
-    /// the edge connecting the only two _non_-adjacent vertices yields an
-    /// angle-vector for the two triangles incident to such an edge that is
-    /// lexicographically larger than the prior edge's incident triangles'
-    /// angle-vector, then edge-flipping is possible. This is performed in an
-    /// infinite loop because the number of triangulations for a point set is
-    /// unknown but finite.
-    fn triangulate(&mut self, points: Vec<Point2d>) {
-        #![expect(unused, reason = "Testing is taking place in separate steps.")]
-
-        // Follows Andrew's algorithm.
-        fn build_hull(
-            mut triangulation: &mut [Vec<GeoEdge>],
-            hull: &mut Vec<(usize, Point2d)>,
-            compare: impl Fn(Point2d, Point2d, Point2d) -> bool,
-            points: &[(usize, Point2d)],
-            edge_src: &[Vec<GeoEdge>],
-        ) {
-            for &(vertex, point) in points {
-                while hull.len() > 1
-                    && let Some((rm, _)) = {
-                        let (_, prev_last) = hull[hull.len() - 2];
-
-                        hull.pop_if(|(_, last)| compare(prev_last, *last, point))
-                    }
-                {
-                    let (&(prev, _), post) = (
-                        hull.last()
-                            .expect("The hull should have at least two points here."),
-                        vertex,
-                    );
-
-                    (
-                        triangulation[prev][rm],
-                        triangulation[post][rm],
-                        triangulation[rm][prev],
-                        triangulation[rm][post],
-                    ) = (
-                        edge_src[prev][rm].clone(),
-                        edge_src[post][rm].clone(),
-                        edge_src[rm][prev].clone(),
-                        edge_src[rm][post].clone(),
-                    );
-                }
-
-                hull.push((vertex, point));
-            }
-        }
-
-        // See Lemma 1.3.1 in O'Rourke, 2001.
-        const fn compute_triangle_area(t: (Point2d, Point2d, Point2d)) -> f64 {
-            compute_raw_triangle_area(t).abs() / 2.
-        }
-
-        const fn compute_raw_triangle_area((a, b, c): (Point2d, Point2d, Point2d)) -> f64 {
-            (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)
-        }
-
-        const fn check_point_ownership(
-            (a, b, c): (Point2d, Point2d, Point2d),
-            p_to_check: Point2d,
-        ) -> bool {
-            #![expect(
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                reason = "The absolute value is always taken and `floor` gets me a \"floating \
-                         point integer\"."
-            )]
-
-            let container_area = compute_triangle_area((a, b, c));
-            let (area_0, area_1, area_2) = {
-                let (t_0, t_1, t_2) = ((a, b, p_to_check), (a, c, p_to_check), (c, b, p_to_check));
-
-                (
-                    compute_triangle_area(t_0),
-                    compute_triangle_area(t_1),
-                    compute_triangle_area(t_2),
-                )
-            };
-
-            (container_area - (area_0 + area_1 + area_2)).abs().floor() as usize == 0
-        }
-
-        // This follows from the fact that for some three points to lie in the
-        // same ring, the same segment (radius of the ring) must join those
-        // points to the unknown. Thus, this becomes a problem of finding the
-        // endpoint of the segment making up the edge incident to the two
-        // triangles formed from joining the known points as the bases and
-        // having the unknown as the remaining vertex in each triangle. Such
-        // edge is a segment whose length will be the same for all three
-        // segments going from each of the known points to the ring's center
-        // point (the unknown.) Pp. 67-70 of my notes contain the developed
-        // argument.
-        fn find_ring((a, b, c): (Point2d, Point2d, Point2d)) -> Option<Point2d> {
-            #![expect(
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                reason = "The absolute value is always taken and `floor` gets me a \"floating \
-                         point integer\"."
-            )]
-
-            ((-b.x + a.x).abs().floor() as usize == 0
-                && (-b.y + c.y).abs().floor() as usize == 0
-                && (((b.y - a.y) / (-b.x + a.x)) * ((b.x - c.x) / (-b.y + c.y))).floor() as usize
-                    != 1)
-                .then(|| {
-                    let (c0, c1, c2, c3) = (
-                        (a.x.powi(2) + a.y.powi(2) - b.x.powi(2) - b.y.powi(2))
-                            / (2. * (-b.x + a.x)),
-                        (b.x - c.x) / (-b.y + c.y),
-                        (c.x.powi(2) + c.y.powi(2) - b.x.powi(2) - b.y.powi(2))
-                            / (2. * (-b.y + c.y)),
-                        (b.y - a.y) / (-b.x + a.x),
-                    );
-                    let y_component = (c0 * c1 + c2) / (1. - c3 * c1);
-                    let x_component = y_component * c3 + c0;
-
-                    Point2d {
-                        x: x_component,
-                        y: y_component,
-                    }
-                })
-        }
-
-        let mut points: Vec<_> = points.into_iter().enumerate().collect();
-        let (mut upper_hull, mut lower_hull, mut triangulation) = (
-            Vec::with_capacity(points.len().div_ceil(2)),
-            Vec::with_capacity(points.len().div_ceil(2)),
-            Vec::with_capacity(points.len()),
-        );
-
-        triangulation.resize_with(points.len(), || {
-            let mut output = Vec::with_capacity(points.len());
-            output.resize(points.len(), GeoEdge::NonExistent);
-
-            output
-        });
-
-        points.sort_unstable_by(
-            |(_, Point2d { x: x1, y: y1 }), (_, Point2d { x: x2, y: y2 })| match x1.total_cmp(x2) {
-                Ordering::Equal => y1.total_cmp(y2),
-                other => other,
-            },
-        );
-        {
-            #![expect(
-                clippy::float_cmp,
-                reason = "`signum()` always returns -1., 1. or NaN; I am sure it will never be NaN."
-            )]
-
-            build_hull(
-                &mut triangulation,
-                &mut upper_hull,
-                |prev_last, last, point| {
-                    // If the area is negative, then `last` lies to the right of
-                    // directed segment (`prev_last`, `point`), and it must be
-                    // removed because it's a reflex vertex. See Sec. 1.2.1 in
-                    // O'Rourke, 2001.
-                    compute_raw_triangle_area((prev_last, point, last)).signum() == -1.
-                },
-                &points,
-                &self.0,
-            );
-            build_hull(
-                &mut triangulation,
-                &mut lower_hull,
-                |prev_last, last, point| {
-                    compute_raw_triangle_area((prev_last, point, last)).signum() == 1.
-                },
-                &points,
-                &self.0,
-            );
-        }
-
-        let mut triangulate_bounds_of = |collection: Vec<(usize, Point2d)>| {
-            collection
-                .windows(2)
-                .map(|inner| (inner[0].0, inner[1].0))
-                .for_each(|(src, dst)| {
-                    triangulation[src][dst] = self.0[src][dst].clone();
-                    triangulation[dst][src] = self.0[dst][src].clone();
-                });
-        };
-
-        triangulate_bounds_of(upper_hull);
-        triangulate_bounds_of(lower_hull);
-
-        // See Sec. 9.1 in de Berg et. al., 2008 for details on the terminology.
-        while let Some((src, dst)) = triangulation
+    /// The algorithm is inefficient but I wanted to try out building a Delauney
+    /// triangulation from a regular triangulation instead of going straight for
+    /// an angle-optimal triangulation.
+    ///
+    /// Provided there are a finite number of possible triangulations in a fixed
+    /// point set, we define an angle-optimal triangulation as one whose angle
+    /// vector is lexicographically larger than some other triangulation for the
+    /// same point set.
+    ///
+    /// To determine the optimality of an angle, we seek for non-bounding edges
+    /// in the triangulation that can be flipped. We define edge-flipping as an
+    /// operation whereby the quadrilateral formed from the two triangles
+    /// incident to some such edge has the original edge removed, and a new edge
+    /// added between the other two non-adjacent points in the quadrilateral.
+    ///
+    /// A consequence of the above is that the quadrilateral must be convex.
+    fn optimize_triangulation(&mut self, mut triangulation: Vec<Vec<GeoEdge>>) {
+        while let Some(((src, dst), (p1, p2))) = triangulation
             .iter()
             .enumerate()
-            // Only takes the edges above the main diagonal; The triangulation
-            // is stored as an adjacency matrix for an undirected, simple graph
-            // so all other edges (below the main diagonal) are only flipped,
-            // and the main diagonal is empty.
+            // Only takes edges above the main diagonal; The triangulation is
+            // stored as an adjacency matrix for an undirected, simple graph so
+            // all other edges (below the main diagonal) are only flipped, and
+            // the main diagonal is empty.
             .flat_map(|(src, row)| (0..row.len()).skip(src + 1).map(move |dst| (src, dst)))
             // Finds an edge in the triangulation that is determined to be
             // illegal by de Berg et. al.'s terminology.
@@ -1125,10 +1042,9 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
             // in the triangulation is a reflex vertex (i.e. you can find it
             // lying within the area of the triangle formed by the other three
             // vertices.) Then you check if there's a possibly better,
-            // angle-optimal-wise, triangulation by checking for a consequence
-            // of Thales' theorem (the `find_ring` at the end is part of that)
-            // and perform edge flipping if that's the case. See Sec. 9.1 in de
-            // Berg et. al., 2008 for an explanation on this last algorithm.
+            // angle-wise, triangulation by checking for a consequence of
+            // Thales' theorem (the `find_ring` at the end is part of that) and
+            // perform edge flipping if that's the case.
             .find_map(|(src, dst)| {
                 let GeoEdge::Weighted { coord: p_dst, .. } = &triangulation[src][dst] else {
                     return None;
@@ -1137,14 +1053,14 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                     return None;
                 };
 
-                // If we broke early, then we found (`p1`, `p2`); Otherwise,
-                // we may have found them at the end or not found them at
-                // all.
-                if let ControlFlow::Continue((Some(p1), Some(p2)))
-                | ControlFlow::Break((Some(p1), Some(p2))) = triangulation[src]
+                // If we broke early, then we found (`p1`, `p2`); Otherwise, we
+                // may have found them at the end or not found them at all.
+                if let ControlFlow::Continue((Some((p1, p1_idx)), Some((p2, p2_idx))))
+                | ControlFlow::Break((Some((p1, p1_idx)), Some((p2, p2_idx)))) = triangulation
+                    [src]
                     .iter()
                     .enumerate()
-                    .try_fold((None, None), |(mut p1, mut p2), (idx, edge)| {
+                    .try_fold((None, None), |(p1, p2), (idx, edge)| {
                         let GeoEdge::Weighted { coord, .. } = edge else {
                             return ControlFlow::Continue((p1, p2));
                         };
@@ -1175,12 +1091,12 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                                                 }
                                             })
                                             .all(|p_to_check| {
-                                                !check_point_ownership(
+                                                !Self::check_point_ownership(
                                                     (*p_src, *p_dst, *coord),
                                                     *p_to_check,
                                                 )
                                             }))
-                                    .then_some(coord) // The outside `coord`.
+                                    .then_some((coord, idx))
                                 },
                             )
                         };
@@ -1193,9 +1109,9 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                             other => ControlFlow::Break(other),
                         }
                     })
-                    && !check_point_ownership((*p1, *p2, *p_src), *p_dst)
-                    && !check_point_ownership((*p1, *p2, *p_dst), *p_src)
-                    && let Some(ring_center) = find_ring((*p_src, *p_dst, *p1))
+                    && !Self::check_point_ownership((*p1, *p2, *p_src), *p_dst)
+                    && !Self::check_point_ownership((*p1, *p2, *p_dst), *p_src)
+                    && let Some(ring_center) = Self::find_ring((*p_src, *p_dst, *p1))
                     && {
                         let diff = seglen(ring_center, *p1) - seglen(ring_center, *p2);
 
@@ -1207,7 +1123,7 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                             clippy::cast_possible_truncation,
                             reason = "`signum()` always returns -1., 1. or NaN; I am sure it will \
                                      never be NaN. Truncation won't happen as the problem space \
-                                     doesn't allow for arbitrarily large values for `f64` and both \
+                                     doesn't allow for arbitrary values for `f64` and both \
                                      `ceil()` and `floor()` yield \"floating point integers\"."
                         )]
                         if diff.signum() == -1. {
@@ -1217,168 +1133,111 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                         }
                     }
                 {
-                    Some((src, dst))
+                    Some(((src, dst), (p1_idx, p2_idx)))
                 } else {
                     None
                 }
             })
         {
-            todo!("Flip the edge in `triangulation`.");
-        }
-
-        // Alternative, messier approach. The above should serve as a refactor.
-        let mut tracking_list = HashSet::with_capacity(triangulation.len().pow(2));
-        for (src, edges) in triangulation.iter().enumerate().map(|(src, edges)| {
-            (
-                src,
-                edges
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(dst, edge)| {
-                        if let GeoEdge::Weighted { coord, .. } = edge {
-                            (!tracking_list.contains(&(dst, src))).then(|| {
-                                tracking_list.insert((src, dst));
-
-                                (dst, coord)
-                            })
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        }) {
-            (src == 0).then(|| eprintln!("edges from {src}:\n{edges:#?}"));
-
-            'edge_loop: for &(dst, &dst_point) in &edges {
-                (dst == 3).then(|| eprintln!("state of the triangulation: {triangulation:#?}"));
-
-                let (p1, p2) = {
-                    let mut d1_adjacent_points = triangulation[src]
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(src_adjacent, src_adjacent_edge)| {
-                            if let GeoEdge::Weighted { coord, .. } = src_adjacent_edge
-                                && src_adjacent != dst
-                            {
-                                (dst == 3).then(|| eprintln!("filter call: {src_adjacent}"));
-
-                                Some((src_adjacent, coord))
-                            } else {
-                                None
-                            }
-                        })
-                        .filter(|&(src_adjacent, &src_adjacent_point)| {
-                            triangulation[src_adjacent].iter().enumerate().any(
-                                |(potential_dst, potential_dst_edge)| {
-                                    potential_dst == dst
-                                        && matches!(potential_dst_edge, GeoEdge::Weighted { .. })
-                                },
-                            ) && {
-                                let (a, &GeoEdge::Weighted { coord: b, .. }, c) =
-                                    (dst_point, &triangulation[dst][src], src_adjacent_point)
-                                else {
-                                    unreachable!(
-                                        "This destructuring pattern should not be refutable, \
-                                        because edge `src`->`dst` exists, and thus edge \
-                                        `dst`->`src` must exist; The triangulation is processed in \
-                                        terms of an undirected graph where an edge is represented \
-                                        by two arcs."
-                                    );
-                                };
-
-                                (dst == 3).then(|| eprintln!("past filter call: {src_adjacent}"));
-
-                                !triangulation[src]
-                                    .iter()
-                                    .enumerate()
-                                    .filter_map(|(other_src_adjacent, other_src_adjacent_edge)| {
-                                        if let GeoEdge::Weighted { coord, .. } =
-                                            other_src_adjacent_edge
-                                            && other_src_adjacent != dst
-                                            && other_src_adjacent != src_adjacent
-                                        {
-                                            Some(coord)
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                    .any(|&potential_miss| {
-                                        check_point_ownership((a, b, c), potential_miss)
-                                    })
-                            }
-                        });
-
-                    let count = d1_adjacent_points.clone().count();
-
-                    (dst == 3).then(|| eprintln!("{src}->{dst}, d1 adjacent points: {count}"));
-
-                    // This already accounts for the degenerate case where the
-                    // edge incident to the triangles forming some convex
-                    // qudrilateral is also incident to a third triangle whose
-                    // corresponding quadrilateral (with a different incident
-                    // edge) contains a reflex vertex.
-                    assert!(
-                        count == 1 || count == 2,
-                        "The edge under consideration can only ever be on the boundary of the \
-                        triangulation (with 1 adjacent, distance 1, vertex,) or be an inner edge \
-                        (with 2 adjacent, distance 1, vertices.)",
-                    );
-
-                    (d1_adjacent_points.next(), d1_adjacent_points.next())
-                };
-
-                (dst == 3).then(|| eprintln!("{src}->{dst}, {p1:?}, {p2:?}"));
-
-                if let Some((ex1, &p1)) = p1
-                    && let Some((ex2, &p2)) = p2
-                    && let p_dst = dst_point
-                    && let GeoEdge::Weighted { coord: p_src, .. } = triangulation[dst][src]
-                {
-                    eprintln!("Reached end of adjacent point scan: {p1:?}, {p2:?}");
-
-                    // Some vertex in the quadrilateral proved to be a reflex
-                    // vertex (i.e. angle > PI, see Sec. 1.1.2, Subsec.
-                    // Empirical Exploration in O'Rourke, 2001.)
-                    if check_point_ownership((p1, p2, p_src), p_dst)
-                        || check_point_ownership((p1, p2, p_dst), p_src)
-                    {
-                        continue 'edge_loop;
-                    }
-
-                    // Checking for the local edge yielding an optimal
-                    // triangulation is done by means of computing for a ring
-                    // that crosses three of the quadrilateral's vertices, and
-                    // evaluating whether the remaining vertex lies within the
-                    // inner area of that ring. The correctness of this argument
-                    // follows from Thales' theorem. See Section 9.1 in de Berg
-                    // et. al., 2008.
-                    if let Some(ring_center) = find_ring((p_src, p1, p_dst)) {
-                        let (center_to_p2, ring_radius) =
-                            (seglen(ring_center, p2), seglen(ring_center, p1));
-
-                        if (ring_radius - center_to_p2).abs().floor() as usize == 0 {
-                            (
-                                *RefCell::new(&triangulation[src][dst]).borrow_mut(),
-                                *RefCell::new(&triangulation[dst][src]).borrow_mut(),
-                                *RefCell::new(&triangulation[ex1][ex2]).borrow_mut(),
-                                *RefCell::new(&triangulation[ex2][ex1]).borrow_mut(),
-                            ) = (
-                                &GeoEdge::NonExistent,
-                                &GeoEdge::NonExistent,
-                                &self.0[ex1][ex2],
-                                &self.0[ex2][ex1],
-                            );
-                        }
-                    }
-                }
-            }
+            triangulation[src][dst] = GeoEdge::NonExistent;
+            triangulation[dst][src] = GeoEdge::NonExistent;
+            // Recall the adjacency matrix is outfit with edges between *any*
+            // pair of vertices that doesn't form a self-loop; It is the
+            // triangulation that only considers a subset of those edges.
+            triangulation[p1][p2] = self.0[p1][p2];
+            triangulation[p2][p1] = self.0[p2][p1];
         }
     }
-    fn mst(input: &Self) -> Vec<usize> {
+    /// Computes the Delauney trianguluation of a given point set and stores it
+    /// in the adjacency matrix `self`.
+    ///
+    /// The method follows that for some point set _already_ embedded into the
+    /// receiver, and a separate vector comprising only the point set (not
+    /// stored as a graph,) it computes the convex hull of the point set with a
+    /// small modification to Andrew's algorithm, following Skiena's changes in
+    /// Sec. 20.3 of his catalogue. It builds up the triangulation by adding to
+    /// the adjacency matrix that is created for it all edges from the hull that
+    /// end up discarded. Then, post-hull construction (lower and upper hull,)
+    /// it uses the resulting hulls to add whichever boundary edges are not yet
+    /// part of the triangulation because they never got the chance to be
+    /// discarded in the first place.
+    ///
+    /// Then, for the resulting triangulation, it computes the best
+    /// angle-optimal triangulation by following the method of local maxima
+    /// outlined by de Berg, et. al., Sec. 9.1. More details on the algorithm
+    /// can be found in the corresponding [function's documentation].
+    ///
+    /// [function's documentation]: Self::optimize_triangulation()
+    fn triangulate(&mut self, points: Vec<Point2d>) {
+        let mut points: Vec<_> = points.into_iter().enumerate().collect();
+        let (mut upper_hull, mut lower_hull, mut triangulation) = (
+            Vec::with_capacity(points.len().div_ceil(2)),
+            Vec::with_capacity(points.len().div_ceil(2)),
+            Vec::with_capacity(points.len()),
+        );
+
+        triangulation.resize_with(points.len(), || {
+            let mut output = Vec::with_capacity(points.len());
+            output.resize(points.len(), GeoEdge::NonExistent);
+
+            output
+        });
+
+        points.sort_unstable_by(
+            |(_, Point2d { x: x1, y: y1 }), (_, Point2d { x: x2, y: y2 })| match x1.total_cmp(x2) {
+                Ordering::Equal => y1.total_cmp(y2),
+                other => other,
+            },
+        );
+        {
+            #![expect(
+                clippy::float_cmp,
+                reason = "`signum()` always returns -1., 1. or NaN; I am sure it will never be NaN."
+            )]
+
+            Self::build_hull(
+                &mut triangulation,
+                &mut upper_hull,
+                |prev_last, last, point| {
+                    // If the area is negative, then `last` lies to the right of
+                    // directed segment (`prev_last`, `point`), and it must be
+                    // removed because it's a reflex vertex. See Sec. 1.2.1 in
+                    // O'Rourke, 2001.
+                    Self::compute_raw_triangle_area((prev_last, last, point)).signum() == -1.
+                },
+                &points,
+                &self.0,
+            );
+            Self::build_hull(
+                &mut triangulation,
+                &mut lower_hull,
+                |prev_last, last, point| {
+                    Self::compute_raw_triangle_area((prev_last, last, point)).signum() == 1.
+                },
+                &points,
+                &self.0,
+            );
+        }
+
+        let mut triangulate_bounds_of = |collection: Vec<(usize, Point2d)>| {
+            collection
+                .windows(2)
+                .map(|inner| (inner[0].0, inner[1].0))
+                .for_each(|(src, dst)| {
+                    triangulation[src][dst] = self.0[src][dst];
+                    triangulation[dst][src] = self.0[dst][src];
+                });
+        };
+
+        triangulate_bounds_of(upper_hull);
+        triangulate_bounds_of(lower_hull);
+
+        self.optimize_triangulation(triangulation);
+    }
+    fn mst(&self) -> Vec<usize> {
         todo!();
     }
-    fn dfs(input: &Self) -> Vec<usize> {
+    fn dfs(&self) -> Vec<usize> {
         todo!();
     }
 
