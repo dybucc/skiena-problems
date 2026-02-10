@@ -2964,3 +2964,16 @@ Cartesian products")).
   $
     d_"all packets" = N dot L / R + (P - 1) dot L / R = L / R (N - P - 1).
   $
+
+/ Intermission problem. Sec. 1.4.2: \
+  The average number of packets in a burst connection can be expressed in terms of the sum of the
+  tranmission rate of all packets divided by the total number of packets participating in the
+  tranmission.
+
+  $
+    (sum_(i = 1)^(n - 1) i dot L/R) / n & = (sum_(i = 1)^n (i dot L/R) - n dot L/R) / n \
+                                        & = L/R dot sum_(i = 1)^n (i) - n dot L/R / n = \
+                                        & = L/R dot (sum_(i = 1)^n (i) - n) / n = \
+                                        & = (L/R dot (n (n + 1)) / 2 - n) / n = \
+                                        & = (L/R dot (n^2 + n - 2n) / 2) / n.
+  $
