@@ -2810,7 +2810,7 @@ Cartesian products")).
 
   $
     sum_(i = 0)^n n - i & = n dot sum_(i = 0)^n 1 - sum_(i = 0)^n i
-                          = n dot sum_(i = 1)^n (1) + 1 - sum_(i = 1)^n i = \
+                          = n dot (sum_(i = 1)^n (1) + 1) - sum_(i = 1)^n i = \
                         & = n dot (n + 1) - (n (n + 1)) / 2
                           = n^2 + n - (n^2 + n) / 2 \
                         & = 1 / 2 (n^2 + n) \

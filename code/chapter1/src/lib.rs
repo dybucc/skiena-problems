@@ -7,6 +7,8 @@
 //! The goal is to simply group under a single umbrella the methods required to
 //! implement a certain algorithm for a specific instance of a specific problem.
 
+#![feature(stmt_expr_attributes, float_algebraic)]
+
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
@@ -270,7 +272,12 @@ impl From<PairsErrorType> for PairsError {
 /// triangle and solves through Pythagoras' Theorem.
 #[must_use]
 pub fn seglen(Point2d { x: x1, y: y1 }: Point2d, Point2d { x: x2, y: y2 }: Point2d) -> f64 {
-    ((x1 - x2).abs().powi(2) + (y1 - y2).abs().powi(2)).sqrt()
+    let (x_res, y_res) = ((x1.algebraic_sub(x2)).abs(), (y1.algebraic_sub(y2)).abs());
+
+    x_res
+        .algebraic_mul(x_res)
+        .algebraic_add(y_res.algebraic_mul(y_res))
+        .sqrt()
 }
 
 impl AdjacencyMatrix {
@@ -772,10 +779,12 @@ impl GeoAdjacencyMatrix {
                                 #[expect(
                                     clippy::cast_possible_truncation,
                                     clippy::cast_sign_loss,
-                                    reason = "`seglen()` always produces positive numbers."
+                                    reason = "`seglen()` always produces positive numbers, and the \
+                                             problem space doesn't allow for arbitrary `f64` \
+                                             values."
                                 )]
-                                weight: ((seglen(points[row], points[col]) * 100.)
-                                    / largest_distance)
+                                weight: (seglen(points[row], points[col]).algebraic_mul(100.))
+                                    .algebraic_div(largest_distance)
                                     .floor() as usize,
                                 coord: *coord,
                             },
@@ -848,35 +857,53 @@ pub trait TspTriMstDfs {
     }
     #[must_use]
     fn compute_triangle_area(t: (Point2d, Point2d, Point2d)) -> f64 {
-        Self::compute_raw_triangle_area(t).abs() / 2.
+        Self::compute_raw_triangle_area(t)
+            .abs()
+            .algebraic_div(2.0_f64)
     }
     #[must_use]
     fn compute_raw_triangle_area((a, b, c): (Point2d, Point2d, Point2d)) -> f64 {
-        (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)
+        b.x.algebraic_sub(a.x)
+            .algebraic_mul(c.y.algebraic_sub(a.y))
+            .algebraic_sub(c.x.algebraic_sub(a.x).algebraic_mul(b.y.algebraic_sub(a.y)))
     }
     #[must_use]
     fn find_ring((a, b, c): (Point2d, Point2d, Point2d)) -> Option<Point2d> {
         #![expect(
             clippy::cast_possible_truncation,
             clippy::cast_sign_loss,
-            reason = "The absolute value is always taken and `floor` gets me a \"floating \
-                         point integer\"; The problem space doesn't allow for arbitrarily large \
-                         values for the elements of the point set and I assume all point are given \
-                         with respect to an axes-aligned box that considers only positive values."
+            reason = "The absolute value is always taken and `floor()` gets me a \"floating point \
+                     integer\"; The problem space doesn't allow for arbitrarily large values for \
+                     the elements of the point set and I assume all point are given with respect \
+                     to an axes-aligned box that considers only positive values."
         )]
 
-        ((-b.x + a.x).abs().floor() as usize == 0
-            && (-b.y + c.y).abs().floor() as usize == 0
-            && (((b.y - a.y) / (-b.x + a.x)) * ((b.x - c.x) / (-b.y + c.y))).floor() as usize != 1)
+        (a.x.algebraic_sub(b.x).abs().floor() as usize == 0_usize
+            && c.y.algebraic_sub(b.y).abs().floor() as usize == 0_usize
+            && b.y
+                .algebraic_sub(a.y)
+                .algebraic_div(a.x.algebraic_sub(b.x))
+                .algebraic_mul(b.x.algebraic_sub(c.x).algebraic_div(c.y.algebraic_sub(b.y)))
+                .floor() as usize
+                != 1_usize)
             .then(|| {
                 let (c0, c1, c2, c3) = (
-                    (a.x.powi(2) + a.y.powi(2) - b.x.powi(2) - b.y.powi(2)) / (2. * (-b.x + a.x)),
-                    (b.x - c.x) / (-b.y + c.y),
-                    (c.x.powi(2) + c.y.powi(2) - b.x.powi(2) - b.y.powi(2)) / (2. * (-b.y + c.y)),
-                    (b.y - a.y) / (-b.x + a.x),
+                    a.x.algebraic_mul(a.x)
+                        .algebraic_add(a.y.algebraic_mul(a.y))
+                        .algebraic_sub(b.x.algebraic_mul(b.x).algebraic_sub(b.y.algebraic_mul(b.y)))
+                        .algebraic_div(2.0_f64.algebraic_mul(a.x.algebraic_sub(b.x))),
+                    b.x.algebraic_sub(c.x).algebraic_div(c.y.algebraic_sub(b.y)),
+                    c.x.algebraic_mul(c.x)
+                        .algebraic_add(c.y.algebraic_mul(c.y))
+                        .algebraic_sub(b.x.algebraic_mul(b.x).algebraic_sub(b.y.algebraic_mul(b.y)))
+                        .algebraic_div(2.0_f64.algebraic_mul(c.y.algebraic_sub(b.y))),
+                    b.y.algebraic_sub(a.y).algebraic_div(a.x.algebraic_sub(b.x)),
                 );
-                let y_component = (c0 * c1 + c2) / (1. - c3 * c1);
-                let x_component = y_component * c3 + c0;
+                let y_component = c0
+                    .algebraic_mul(c1)
+                    .algebraic_add(c2)
+                    .algebraic_div(1.0_f64.algebraic_sub(c3.algebraic_mul(c1)));
+                let x_component = y_component.algebraic_mul(c3).algebraic_add(c0);
 
                 Point2d {
                     x: x_component,
@@ -905,10 +932,15 @@ pub trait TspTriMstDfs {
             )
         };
 
-        (container_area - (area_0 + area_1 + area_2)).abs().floor() as usize == 0
+        container_area
+            .algebraic_sub(area_0.algebraic_add(area_1).algebraic_add(area_2))
+            .abs()
+            .floor() as usize
+            == 0_usize
     }
     fn optimize_triangulation(&mut self, triangulation: Vec<Vec<GeoEdge>>);
     fn triangulate(&mut self, points: Vec<Point2d>);
+
     fn mst(&self) -> Vec<usize>;
     fn dfs(&self) -> Vec<usize>;
 
@@ -1013,15 +1045,18 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
     /// Provided there are a finite number of possible triangulations in a fixed
     /// point set, we define an angle-optimal triangulation as one whose angle
     /// vector is lexicographically larger than some other triangulation for the
-    /// same point set.
+    /// same point set. The angle vector of some triangulation is denoted by the
+    /// multiset of angles for each of the vertices in any one of the two
+    /// triangles that a quadrilateral can be broken down into. When a
+    /// quadrilateral is convex, two such possible combinations of triangles
+    /// exist; It is in the optimality of one of these that a better
+    /// triangulation can be found.
     ///
     /// To determine the optimality of an angle, we seek for non-bounding edges
     /// in the triangulation that can be flipped. We define edge-flipping as an
     /// operation whereby the quadrilateral formed from the two triangles
     /// incident to some such edge has the original edge removed, and a new edge
     /// added between the other two non-adjacent points in the quadrilateral.
-    ///
-    /// A consequence of the above is that the quadrilateral must be convex.
     fn optimize_triangulation(&mut self, mut triangulation: Vec<Vec<GeoEdge>>) {
         while let Some(((src, dst), (p1, p2))) = triangulation
             .iter()
@@ -1043,7 +1078,7 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
             // lying within the area of the triangle formed by the other three
             // vertices.) Then you check if there's a possibly better,
             // angle-wise, triangulation by checking for a consequence of
-            // Thales' theorem (the `find_ring` at the end is part of that) and
+            // Thales' theorem (`find_ring()` at the end is part of that) and
             // perform edge flipping if that's the case.
             .find_map(|(src, dst)| {
                 let GeoEdge::Weighted { coord: p_dst, .. } = &triangulation[src][dst] else {
@@ -1069,8 +1104,8 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                         // neighbor of `src` that is equivalent to `dst`, while
                         // also making sure we are not choosing a point that
                         // stems from `src` but can contain an actually valid
-                        // point (because there's a different quadrilateral
-                        // nearby with a reflex vertex.)
+                        // point (because there's a different, non-convex
+                        // quadrilateral nearby.)
                         let find_p = || {
                             triangulation[idx].iter().enumerate().find_map(
                                 |(inner_idx, inner_edge)| {
@@ -1109,27 +1144,28 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                             other => ControlFlow::Break(other),
                         }
                     })
-                    && !Self::check_point_ownership((*p1, *p2, *p_src), *p_dst)
-                    && !Self::check_point_ownership((*p1, *p2, *p_dst), *p_src)
+                    && !(Self::check_point_ownership((*p1, *p2, *p_src), *p_dst)
+                        || Self::check_point_ownership((*p1, *p2, *p_dst), *p_src))
                     && let Some(ring_center) = Self::find_ring((*p_src, *p_dst, *p1))
-                    && {
+                    && #[expect(
+                        clippy::float_cmp,
+                        clippy::cast_possible_truncation,
+                        reason = "`signum()` always returns -1., 1. or NaN; I am sure it will \
+                                 never be NaN. Truncation won't happen as the problem space \
+                                 doesn't allow for arbitrary `f64` values and both `ceil()` and \
+                                 `floor()` yield \"floating point integers\"."
+                    )]
+                    {
                         let diff = seglen(ring_center, *p1) - seglen(ring_center, *p2);
 
-                        // Floating point imprecission could cause p2 to lie
-                        // inside the ring by lying on the boundary, but still
-                        // turn out a tad bit negative; We allow up to -0.99...
-                        #[expect(
-                            clippy::float_cmp,
-                            clippy::cast_possible_truncation,
-                            reason = "`signum()` always returns -1., 1. or NaN; I am sure it will \
-                                     never be NaN. Truncation won't happen as the problem space \
-                                     doesn't allow for arbitrary values for `f64` and both \
-                                     `ceil()` and `floor()` yield \"floating point integers\"."
-                        )]
+                        // TODO: maybe this is wrong.
+                        // Floating point imprecission could cause p2 to lie on
+                        // the boundary of the ring, but still turn out a tad
+                        // bit negative; We allow up to -0.99...
                         if diff.signum() == -1. {
-                            diff.ceil() as isize >= 0
+                            diff.ceil() as isize > 0
                         } else {
-                            diff.floor() as isize >= 0
+                            diff.floor() as isize > 0
                         }
                     }
                 {
@@ -1141,9 +1177,10 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
         {
             triangulation[src][dst] = GeoEdge::NonExistent;
             triangulation[dst][src] = GeoEdge::NonExistent;
-            // Recall the adjacency matrix is outfit with edges between *any*
-            // pair of vertices that doesn't form a self-loop; It is the
-            // triangulation that only considers a subset of those edges.
+
+            // Recall `self` is outfit with edges between *any* pair of vertices
+            // that don't form a self-loop; It is `triangulation` that only
+            // considers a subset of those edges.
             triangulation[p1][p2] = self.0[p1][p2];
             triangulation[p2][p1] = self.0[p2][p1];
         }
@@ -1234,6 +1271,7 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
 
         self.optimize_triangulation(triangulation);
     }
+
     fn mst(&self) -> Vec<usize> {
         todo!();
     }
