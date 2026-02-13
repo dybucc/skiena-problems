@@ -6,6 +6,9 @@
 //!
 //! The goal is to simply group under a single umbrella the methods required to
 //! implement a certain algorithm for a specific instance of a specific problem.
+//!
+//! The use of errors is also very much unidiomatic and overall not what you
+//! would go for in a real library.
 
 #![feature(stmt_expr_attributes, float_algebraic)]
 
@@ -628,7 +631,8 @@ impl GeoAdjacencyMatrix {
     ///    commented on the prior failure condition.
     pub fn new(inner: &[Vec<GeoEdge>]) -> Result<Self, AdjacencyMatrixError> {
         ensure_or!(inner.len() > 1, NonSquareMatrix)?;
-        for (vertex, edges) in inner.iter().enumerate() {
+
+        inner.iter().enumerate().try_for_each(|(vertex, edges)| {
             ensure_or!(edges.len() == inner.len(), NonSquareMatrix)?;
 
             let row_vec: Vec<_> = edges
@@ -688,31 +692,38 @@ impl GeoAdjacencyMatrix {
 
             // Square matrices with dimensionality 2 don't have any other
             // elements in the same column that are not `GeoEdge::NonExistent`.
-            if vertex == 0 && inner.len() > 2 {
-                ensure_or!(
-                    row_vec.iter().all(|&(vertex, (_, &point))| {
-                        inner
-                            .iter()
-                            .skip(1)
-                            .flat_map(|elem| {
-                                elem.iter().enumerate().filter_map(|(idx, elem)| {
-                                    if let GeoEdge::Weighted { coord, .. } = elem
-                                        && idx == vertex
-                                    {
-                                        Some(*coord)
-                                    } else {
-                                        None
-                                    }
+            (vertex == 0 && inner.len() > 2)
+                .then_some(())
+                .into_iter()
+                .try_for_each(|()| {
+                    ensure_or!(
+                        row_vec.iter().all(|&(vertex, (_, &point))| {
+                            inner
+                                .iter()
+                                .skip(1)
+                                .filter_map(|elem| {
+                                    elem.iter().enumerate().find_map(|(idx, elem)| {
+                                        if let GeoEdge::Weighted { coord, .. } = elem
+                                            && idx == vertex
+                                        {
+                                            Some(*coord)
+                                        } else {
+                                            None
+                                        }
+                                    })
                                 })
-                            })
-                            .eq(iter::repeat_n(point, inner.len() - 1))
-                    }),
-                    UnequalSamePoints,
-                )?;
-            }
-        }
+                                .eq(iter::repeat_n(point, inner.len() - 2))
+                        }),
+                        UnequalSamePoints,
+                    )?;
 
-        Ok(Self(inner.to_owned()))
+                    Ok::<_, AdjacencyMatrixError>(())
+                })?;
+
+            Ok::<_, AdjacencyMatrixError>(())
+        })?;
+
+        Ok(Self(inner.into()))
     }
 
     /// # Panics
@@ -749,14 +760,11 @@ impl GeoAdjacencyMatrix {
             .iter()
             .enumerate()
             .filter_map(|(idx, &point)| {
-                let target = points
+                points
                     .iter()
                     .skip(idx + 1)
                     .map(|&other_point| seglen(point, other_point))
                     .max_by(f64::total_cmp)
-                    .unwrap_or_default(); // We've either hit the end or not.
-
-                (target != 0.).then_some(target)
             })
             .max_by(f64::total_cmp)
             .expect(
@@ -783,9 +791,10 @@ impl GeoAdjacencyMatrix {
                                              problem space doesn't allow for arbitrary `f64` \
                                              values."
                                 )]
-                                weight: (seglen(points[row], points[col]).algebraic_mul(100.))
+                                weight: seglen(points[row], points[col])
+                                    .algebraic_mul(100.)
                                     .algebraic_div(largest_distance)
-                                    .floor() as usize,
+                                    as usize,
                                 coord: *coord,
                             },
                         })
@@ -818,43 +827,6 @@ pub trait TspClosestPair {
 }
 
 pub trait TspTriMstDfs {
-    fn build_hull(
-        triangulation: &mut [Vec<GeoEdge>],
-        hull: &mut Vec<(usize, Point2d)>,
-        compare: impl Fn(Point2d, Point2d, Point2d) -> bool,
-        points: &[(usize, Point2d)],
-        edge_src: &[Vec<GeoEdge>],
-    ) {
-        for &(vertex, point) in points {
-            while hull.len() > 1
-                && let Some((rm, _)) = {
-                    let (_, prev_last) = hull[hull.len() - 2];
-
-                    hull.pop_if(|(_, last)| compare(prev_last, *last, point))
-                }
-            {
-                let (&(prev, _), post) = (
-                    hull.last()
-                        .expect("The hull should have at least two points here."),
-                    vertex,
-                );
-
-                (
-                    triangulation[prev][rm],
-                    triangulation[post][rm],
-                    triangulation[rm][prev],
-                    triangulation[rm][post],
-                ) = (
-                    edge_src[prev][rm],
-                    edge_src[post][rm],
-                    edge_src[rm][prev],
-                    edge_src[rm][post],
-                );
-            }
-
-            hull.push((vertex, point));
-        }
-    }
     #[must_use]
     fn compute_triangle_area(t: (Point2d, Point2d, Point2d)) -> f64 {
         Self::compute_raw_triangle_area(t)
@@ -938,7 +910,14 @@ pub trait TspTriMstDfs {
             .floor() as usize
             == 0_usize
     }
-    fn optimize_triangulation(&mut self, triangulation: Vec<Vec<GeoEdge>>);
+    fn build_hull(
+        &self,
+        triangulation: &mut [Vec<GeoEdge>],
+        hull: &mut Vec<(usize, Point2d)>,
+        compare: impl Fn(Point2d, Point2d, Point2d) -> bool,
+        points: &[(usize, Point2d)],
+    );
+    fn optimize_triangulation(&self, triangulation: Vec<Vec<GeoEdge>>);
     fn triangulate(&mut self, points: Vec<Point2d>);
 
     fn mst(&self) -> Vec<usize>;
@@ -1032,11 +1011,68 @@ impl TspClosestPair for AdjacencyMatrix {
 }
 
 impl TspTriMstDfs for GeoAdjacencyMatrix {
+    /// Builds any one of the upper or lower convex hulls of a point set
+    /// provided a corresponding comparison function, and builds an accompanying
+    /// triangulation from the edges that got removed from the hull.
+    ///
+    /// The algorithm follows [Andrew, 1979]'s approach, with [Skiena, 2020]'s
+    /// algorithm for building a triangulation from the points that are removed
+    /// from the convex hull during construction.
+    ///
+    /// To determine which of the upper or lower hull to construct at a time,
+    /// the function accepts a custom comparison function that should determine
+    /// whether the last three points in the hull's boundary are "turning right"
+    /// or "turning left." The use of trivial terminology is due to the
+    /// possibility for such a comparison function to be determined in one of
+    /// multiple ways. For the one used in [`triangulate()`], see
+    /// Sec. 1.2.1 in [O'Rourke, 2001].
+    ///
+    /// [Andrew, 1979]: https://doi.org/10.1016/0020-0190(79)90072-3
+    /// [Skiena, 2020]: https://doi.org/10.1007/978-3-030-54256-6
+    /// [`triangulate()`]: Self::triangulate()
+    /// [O'Rourke, 2001]: https://doi.org/10.1017/CBO9780511804120
+    fn build_hull(
+        &self,
+        triangulation: &mut [Vec<GeoEdge>],
+        hull: &mut Vec<(usize, Point2d)>,
+        compare: impl Fn(Point2d, Point2d, Point2d) -> bool,
+        points: &[(usize, Point2d)],
+    ) {
+        for &(vertex, point) in points {
+            while hull.len() > 1
+                && let Some((rm, _)) = {
+                    let (_, prev_last) = hull[hull.len() - 2];
+
+                    hull.pop_if(|(_, last)| compare(prev_last, *last, point))
+                }
+            {
+                let (&(prev, _), post) = (
+                    hull.last()
+                        .expect("The hull should have at least two points here."),
+                    vertex,
+                );
+
+                (
+                    triangulation[prev][rm],
+                    triangulation[post][rm],
+                    triangulation[rm][prev],
+                    triangulation[rm][post],
+                ) = (
+                    self.0[prev][rm],
+                    self.0[post][rm],
+                    self.0[rm][prev],
+                    self.0[rm][post],
+                );
+            }
+
+            hull.push((vertex, point));
+        }
+    }
     /// Finds the best angle-optimal triangulation for a point set `self` given
     /// a starting triangulation `triangulation`.
     ///
-    /// This follows the method of local maxima outlined in Sec. 9.1, de Berg
-    /// et. al., 2008.
+    /// This follows the method of local maxima outlined in Sec. 9.1,
+    /// [de Berg et. al., 2008].
     ///
     /// The algorithm is inefficient but I wanted to try out building a Delauney
     /// triangulation from a regular triangulation instead of going straight for
@@ -1057,7 +1093,9 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
     /// operation whereby the quadrilateral formed from the two triangles
     /// incident to some such edge has the original edge removed, and a new edge
     /// added between the other two non-adjacent points in the quadrilateral.
-    fn optimize_triangulation(&mut self, mut triangulation: Vec<Vec<GeoEdge>>) {
+    ///
+    /// [de Berg et. al., 2008]: https://doi.org/10.1007/978-3-540-77974-2
+    fn optimize_triangulation(&self, mut triangulation: Vec<Vec<GeoEdge>>) {
         while let Some(((src, dst), (p1, p2))) = triangulation
             .iter()
             .enumerate()
@@ -1148,26 +1186,13 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                         || Self::check_point_ownership((*p1, *p2, *p_dst), *p_src))
                     && let Some(ring_center) = Self::find_ring((*p_src, *p_dst, *p1))
                     && #[expect(
-                        clippy::float_cmp,
                         clippy::cast_possible_truncation,
                         reason = "`signum()` always returns -1., 1. or NaN; I am sure it will \
                                  never be NaN. Truncation won't happen as the problem space \
                                  doesn't allow for arbitrary `f64` values and both `ceil()` and \
                                  `floor()` yield \"floating point integers\"."
                     )]
-                    {
-                        let diff = seglen(ring_center, *p1) - seglen(ring_center, *p2);
-
-                        // TODO: maybe this is wrong.
-                        // Floating point imprecission could cause p2 to lie on
-                        // the boundary of the ring, but still turn out a tad
-                        // bit negative; We allow up to -0.99...
-                        if diff.signum() == -1. {
-                            diff.ceil() as isize > 0
-                        } else {
-                            diff.floor() as isize > 0
-                        }
-                    }
+                    ((seglen(ring_center, *p1) - seglen(ring_center, *p2)).ceil() as isize > 0)
                 {
                     Some(((src, dst), (p1_idx, p2_idx)))
                 } else {
@@ -1175,14 +1200,20 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                 }
             })
         {
-            triangulation[src][dst] = GeoEdge::NonExistent;
-            triangulation[dst][src] = GeoEdge::NonExistent;
-
             // Recall `self` is outfit with edges between *any* pair of vertices
             // that don't form a self-loop; It is `triangulation` that only
-            // considers a subset of those edges.
-            triangulation[p1][p2] = self.0[p1][p2];
-            triangulation[p2][p1] = self.0[p2][p1];
+            // considers a *proper subset* of those edges.
+            (
+                triangulation[src][dst],
+                triangulation[dst][src],
+                triangulation[p1][p2],
+                triangulation[p2][p1],
+            ) = (
+                GeoEdge::NonExistent,
+                GeoEdge::NonExistent,
+                self.0[p1][p2],
+                self.0[p2][p1],
+            );
         }
     }
     /// Computes the Delauney trianguluation of a given point set and stores it
@@ -1190,21 +1221,20 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
     ///
     /// The method follows that for some point set _already_ embedded into the
     /// receiver, and a separate vector comprising only the point set (not
-    /// stored as a graph,) it computes the convex hull of the point set with a
-    /// small modification to Andrew's algorithm, following Skiena's changes in
-    /// Sec. 20.3 of his catalogue. It builds up the triangulation by adding to
-    /// the adjacency matrix that is created for it all edges from the hull that
+    /// stored as a graph,) it computes the convex hull of the point set and
+    /// builds up the triangulation by adding to it all edges from the hull that
     /// end up discarded. Then, post-hull construction (lower and upper hull,)
     /// it uses the resulting hulls to add whichever boundary edges are not yet
     /// part of the triangulation because they never got the chance to be
-    /// discarded in the first place.
+    /// discarded in the first place. See [`build_hull()`] for more information
+    /// on convex hull construction.
     ///
-    /// Then, for the resulting triangulation, it computes the best
-    /// angle-optimal triangulation by following the method of local maxima
-    /// outlined by de Berg, et. al., Sec. 9.1. More details on the algorithm
-    /// can be found in the corresponding [function's documentation].
+    /// Then it computes the best angle-optimal triangulation from the above
+    /// triangulation. See [`optimize_triangulation()`] for more information on
+    /// the method to obtain an angle optimal triangulation.
     ///
-    /// [function's documentation]: Self::optimize_triangulation()
+    /// [`build_hull()`]: Self::build_hull()
+    /// [`optimize_triangulation()`]: Self::optimize_triangulation()
     fn triangulate(&mut self, points: Vec<Point2d>) {
         let mut points: Vec<_> = points.into_iter().enumerate().collect();
         let (mut upper_hull, mut lower_hull, mut triangulation) = (
@@ -1232,7 +1262,7 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                 reason = "`signum()` always returns -1., 1. or NaN; I am sure it will never be NaN."
             )]
 
-            Self::build_hull(
+            self.build_hull(
                 &mut triangulation,
                 &mut upper_hull,
                 |prev_last, last, point| {
@@ -1243,16 +1273,14 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                     Self::compute_raw_triangle_area((prev_last, last, point)).signum() == -1.
                 },
                 &points,
-                &self.0,
             );
-            Self::build_hull(
+            self.build_hull(
                 &mut triangulation,
                 &mut lower_hull,
                 |prev_last, last, point| {
                     Self::compute_raw_triangle_area((prev_last, last, point)).signum() == 1.
                 },
                 &points,
-                &self.0,
             );
         }
 
@@ -1311,7 +1339,7 @@ mod tests {
             }
             .is_ok(),
             "should've been an ok graph with 2 nodes layed out like the defining vertices of a \
-            rectangle",
+            quadrilateral",
         )
     }
 
@@ -1346,7 +1374,7 @@ mod tests {
     }
 
     #[test]
-    fn malformed_matrix_graph() {
+    fn malformed_matrix() {
         assert!(
             matrix! {
                 0, 2, 3;
@@ -1362,7 +1390,7 @@ mod tests {
     }
 
     #[test]
-    fn malformed_geometric_matrix_graph() {
+    fn malformed_geometric_matrix() {
         assert!(
             geomatrix! {
                 (0., 0., 0), (0., 0., 2), (0., 0., 3);
@@ -1533,6 +1561,9 @@ mod tests {
         Ok(())
     }
 
+    // TODO: update all the `points_macro*` tests and/or see into floating point
+    //       imprecision in `GeoAdjacencyMatrix::from_point_set()`.
+
     #[test]
     fn points_macro1() -> Result<(), AdjacencyMatrixError> {
         assert_eq!(
@@ -1545,7 +1576,7 @@ mod tests {
             geomatrix! {
                 (0.,   0., 0),   (1.3, 5., 100), (1.5, 3.5, 50);
                 (1.25, 2., 100), (0.,  0., 0),   (1.5, 3.5, 50);
-                (1.25, 2., 50),  (1.3, 5., 50),  (0.,  0., 0);
+                (1.25, 2., 50),  (1.3, 5., 50),  (0.,  0.,  0);
             }?
         );
 
@@ -1564,7 +1595,7 @@ mod tests {
             geomatrix! {
                 (0., 0., 0),   (1.3, 5., 100), (1.5, 3.5, 73);
                 (0., 0., 100), (0.,  0., 0),   (1.5, 3.5, 29);
-                (0., 0., 73),  (1.3, 5., 29),  (0.,  0., 0);
+                (0., 0., 73),  (1.3, 5., 29),  (0.,  0.,  0);
             }?
         );
 
