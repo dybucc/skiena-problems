@@ -2817,6 +2817,16 @@ Cartesian products")).
                         & approx Theta(n^2).
   $
 
+  // TODO: get the `triangulate` method working on the WASM plugin.
+  #let points = triangulate(
+    (x: 1.25, y: 2),
+    (x: 1.3, y: 5),
+    (x: 1.5, y: 3.5),
+    (x: 2, y: 3.6),
+    (x: 3, y: 0.75),
+    (x: 3.75, y: 3.7),
+  )
+
 #pagebreak()
 
 === LeetCode problems

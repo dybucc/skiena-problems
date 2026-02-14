@@ -1,12 +1,14 @@
 [workspace]
 resolver = "3"
-members = ["chapter1", "macros"]
+members = ["chapter1", "macros", "visualizer"]
 
 [workspace.lints.clippy]
 pedantic = "warn"
 cargo = "warn"
 
 [workspace.package]
+version = "0.1.0"
+edition = "2024"
 description = "Problems from Skiena's The Algorithm Design Manual, 3rd ed."
 readme = "./README.md"
 repository = "https://github.com/dybucc/skiena-problems"

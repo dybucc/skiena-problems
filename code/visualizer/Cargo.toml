@@ -1,0 +1,20 @@
+[package]
+name = "visualizer"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+readme.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+ciborium = "0.2.2"
+wasm-minimal-protocol = "0.1.0"
+
+[lints]
+workspace = true

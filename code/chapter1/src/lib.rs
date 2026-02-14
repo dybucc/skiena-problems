@@ -1,4 +1,4 @@
-//! Problems in _The Algorithm Design Manual_, by S. Skiena, 3rd ed., chapter 1.
+//! Problems in Chap. 1, [Skiena, 2020].
 //!
 //! The use of traits in this crate is not idiomatic; In a real library, the
 //! associated functions would've probably been free functions taking in some
@@ -9,6 +9,8 @@
 //!
 //! The use of errors is also very much unidiomatic and overall not what you
 //! would go for in a real library.
+//!
+//! [Skiena, 2020]: https://doi.org/10.1007/978-3-030-54256-6
 
 #![feature(stmt_expr_attributes, float_algebraic)]
 
@@ -140,12 +142,17 @@ pub enum Edge {
     Weighted(usize),
 }
 
-#[expect(
-    dead_code,
-    reason = "This works alongside the `build_error!` macro, so it's actually used."
-)]
 #[derive(Debug)]
-pub struct AdjacencyMatrixError(AdjacencyMatrixErrorType);
+pub struct AdjacencyMatrixError(
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "This works alongside the `build_error!` macro, so it's actually used."
+        )
+    )]
+    AdjacencyMatrixErrorType,
+);
 
 #[derive(Debug)]
 pub enum AdjacencyMatrixErrorType {
@@ -827,6 +834,19 @@ pub trait TspClosestPair {
 }
 
 pub trait TspTriMstDfs {
+    /// Computes the area of a triangle in terms of the determinant of the
+    /// 2-dimensional simplical complex.
+    ///
+    /// Follows Lemma 1.3.1, [O'Rourke, 2001]. The result is twice the area of
+    /// the simplicial complex, and can be generalized to d-dimensions, so this
+    /// function delegates computing the triangle area to
+    /// [`compute_raw_triangle_area()`], and then simply fetches the absolute
+    /// value (as per the advice given in Sec. 20.1, [Skiena, 2020]) and divides
+    /// by 2.
+    ///
+    /// [O'Rourke, 2001]: https://doi.org/10.1017/CBO9780511804120
+    /// [`compute_raw_triangle_area()`]: Self::compute_raw_triangle_area()
+    /// [Skiena, 2020]: https://doi.org/10.1007/978-3-030-54256-6
     #[must_use]
     fn compute_triangle_area(t: (Point2d, Point2d, Point2d)) -> f64 {
         Self::compute_raw_triangle_area(t)
@@ -839,6 +859,15 @@ pub trait TspTriMstDfs {
             .algebraic_mul(c.y.algebraic_sub(a.y))
             .algebraic_sub(c.x.algebraic_sub(a.x).algebraic_mul(b.y.algebraic_sub(a.y)))
     }
+    /// Computes the center of a ring that crosses three points in 2-dimensional
+    /// Euclidean space, if possible.
+    ///
+    /// This follows that for some three points to lie on the boundary of a
+    /// circumference, such three points will all have to share the same segment
+    /// lengths towards the center of such ring. Thus, this can be modeled as a
+    /// problem to find the segment length of any of three equal segments
+    /// knowing one of the endpoints for all three and having the unknown be the
+    /// the other endpoint for all three.
     #[must_use]
     fn find_ring((a, b, c): (Point2d, Point2d, Point2d)) -> Option<Point2d> {
         #![expect(
@@ -883,6 +912,7 @@ pub trait TspTriMstDfs {
                 }
             })
     }
+    /// Checks if some point `p_to_check` lies within some triangle (`a`, `b`, `c`).
     #[must_use]
     fn check_point_ownership((a, b, c): (Point2d, Point2d, Point2d), p_to_check: Point2d) -> bool {
         #![expect(
@@ -1192,7 +1222,8 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                                  doesn't allow for arbitrary `f64` values and both `ceil()` and \
                                  `floor()` yield \"floating point integers\"."
                     )]
-                    ((seglen(ring_center, *p1) - seglen(ring_center, *p2)).ceil() as isize > 0)
+                    (seglen(ring_center, *p1).algebraic_sub(seglen(ring_center, *p2)) as isize
+                        > 0)
                 {
                     Some(((src, dst), (p1_idx, p2_idx)))
                 } else {
