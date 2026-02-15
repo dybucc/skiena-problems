@@ -55,7 +55,7 @@ pub struct Pairs<'a> {
 }
 
 #[derive(Debug)]
-pub struct AdjacencyList(HashMap<usize, HashSet<usize>>);
+pub struct AdjacencyList(pub HashMap<usize, HashSet<usize>>);
 
 impl AdjacencyList {
     /// # Panics
@@ -97,7 +97,7 @@ impl AdjacencyList {
 }
 
 #[derive(Debug)]
-pub struct GeoAdjacencyMatrix(Vec<Vec<GeoEdge>>);
+pub struct GeoAdjacencyMatrix(pub Vec<Vec<GeoEdge>>);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum GeoEdge {
@@ -486,7 +486,7 @@ impl Pairs<'_> {
             .enumerate()
             .filter_map(|(node, &parent)| (node == parent).then_some(node));
 
-        assert_eq!(
+        debug_assert_eq!(
             root.clone().count(),
             1,
             "this method should be called only once there's a single tree left in the forest"
@@ -947,8 +947,8 @@ pub trait TspTriMstDfs {
         compare: impl Fn(Point2d, Point2d, Point2d) -> bool,
         points: &[(usize, Point2d)],
     );
-    fn optimize_triangulation(&self, triangulation: Vec<Vec<GeoEdge>>);
-    fn triangulate(&mut self, points: Vec<Point2d>);
+    fn optimize_triangulation(&self, triangulation: &mut Vec<Vec<GeoEdge>>);
+    fn triangulate(&self, points: Vec<Point2d>) -> GeoAdjacencyMatrix;
 
     fn mst(&self) -> Vec<usize>;
     fn dfs(&self) -> Vec<usize>;
@@ -1027,8 +1027,8 @@ impl TspClosestPair for AdjacencyMatrix {
                 pairs_iter.forest[node2] = node2;
             }
             pairs_iter.unite(node1, node2).expect(
-                "the node indices are sourced directly from the iterator itself so the \
-                operation should be infallible",
+                "the node indices are sourced directly from the iterator itself so the operation \
+                should be infallible",
             );
 
             // Resets the state of the iterator to force cycling with updated
@@ -1125,7 +1125,7 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
     /// added between the other two non-adjacent points in the quadrilateral.
     ///
     /// [de Berg et. al., 2008]: https://doi.org/10.1007/978-3-540-77974-2
-    fn optimize_triangulation(&self, mut triangulation: Vec<Vec<GeoEdge>>) {
+    fn optimize_triangulation(&self, triangulation: &mut Vec<Vec<GeoEdge>>) {
         while let Some(((src, dst), (p1, p2))) = triangulation
             .iter()
             .enumerate()
@@ -1266,7 +1266,7 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
     ///
     /// [`build_hull()`]: Self::build_hull()
     /// [`optimize_triangulation()`]: Self::optimize_triangulation()
-    fn triangulate(&mut self, points: Vec<Point2d>) {
+    fn triangulate(&self, points: Vec<Point2d>) -> GeoAdjacencyMatrix {
         let mut points: Vec<_> = points.into_iter().enumerate().collect();
         let (mut upper_hull, mut lower_hull, mut triangulation) = (
             Vec::with_capacity(points.len().div_ceil(2)),
@@ -1328,7 +1328,9 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
         triangulate_bounds_of(upper_hull);
         triangulate_bounds_of(lower_hull);
 
-        self.optimize_triangulation(triangulation);
+        self.optimize_triangulation(&mut triangulation);
+
+        Self(triangulation)
     }
 
     fn mst(&self) -> Vec<usize> {
@@ -1646,12 +1648,23 @@ mod tests {
             }
             .1,
             geomatrix! {
-                (0.,   0., 0),  (1.3, 5., 65),  (1.5, 3.5, 33), (2., 3.6, 38), (3., 0.75, 46),  (3.75, 3.7, 66);
-                (1.25, 2., 65), (0.,  0., 0),   (1.5, 3.5, 33), (2., 3.6, 34), (3., 0.75, 100), (3.75, 3.7, 60);
-                (1.25, 2., 33), (1.3, 5., 33),  (0.,  0.,  0),  (2., 3.6, 11), (3., 0.75, 68),  (3.75, 3.7, 49);
-                (1.25, 2., 38), (1.3, 5., 34),  (1.5, 3.5, 11), (0., 0.,  0),  (3., 0.75, 65),  (3.75, 3.7, 38);
-                (1.25, 2., 46), (1.3, 5., 100), (1.5, 3.5, 68), (2., 3.6, 65), (0., 0.,   0),   (3.75, 3.7, 66);
-                (1.25, 2., 66), (1.3, 5., 60),  (1.5, 3.5, 49), (2., 3.6, 38), (3., 0.75, 66),  (0.,   0.,  0);
+                (0., 0.,  0),    (1.3, 5.,   65),  (1.5,  3.5, 33),
+                (2., 3.6, 38),   (3.,  0.75, 46),  (3.75, 3.7, 66);
+
+                (1.25, 2.,  65), (0.,  0.,   0),   (1.5,  3.5, 33),
+                (2.,   3.6, 34), (3.,  0.75, 100), (3.75, 3.7, 60);
+
+                (1.25, 2.,  33), (1.3, 5.,   33),  (0.,   0.,  0),
+                (2.,   3.6, 11), (3.,  0.75, 68),  (3.75, 3.7, 49);
+
+                (1.25, 2., 38),  (1.3, 5.,   34),  (1.5,  3.5, 11),
+                (0.,   0., 0),   (3.,  0.75, 65),  (3.75, 3.7, 38);
+
+                (1.25, 2.,  46), (1.3, 5., 100),   (1.5,  3.5, 68),
+                (2.,   3.6, 65), (0.,  0., 0),     (3.75, 3.7, 66);
+
+                (1.25, 2.,  66), (1.3, 5.,   60),  (1.5, 3.5, 49),
+                (2.,   3.6, 38), (3.,  0.75, 66),  (0.,  0.,  0);
             }?
         );
 
@@ -1659,9 +1672,8 @@ mod tests {
     }
 
     #[test]
-    #[should_panic = "Reached end"]
     fn triangulation1() {
-        let (points, mut matrix) = points! {
+        let (points, matrix) = points! {
             (x: 1.25, y: 2),
             (x: 1.3, y: 5),
             (x: 1.5, y: 3.5),
@@ -1674,9 +1686,8 @@ mod tests {
     }
 
     #[test]
-    #[should_panic = "Reached end"]
     fn triangulation2() {
-        let (points, mut matrix) = points! {
+        let (points, matrix) = points! {
             (x: 0, y: 1),
             (x: 0, y: 2.5),
             (x: 1, y: 2),
@@ -1699,7 +1710,7 @@ mod tests {
     #[ignore = "I need to sample the workings of the `triangulate()` method with a smaller input \
                set."]
     fn triangulation3() {
-        let (points, mut matrix) = points! {
+        let (points, matrix) = points! {
             (x: 1.25, y: 2),
             (x: 1.3, y: 5),
             (x: 1.5, y: 3.5),

@@ -147,7 +147,9 @@ dependencies = [
 name = "visualizer"
 version = "0.1.0"
 dependencies = [
+ "chapter1",
  "ciborium",
+ "serde",
  "wasm-minimal-protocol",
 ]
 

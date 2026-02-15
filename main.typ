@@ -448,9 +448,9 @@
   well-defined range of values, we can model this after a sum.
 
   $
-    -2n dot abs(b) = -2n dot sum_(i = 1)^(n - 1) i = -2n dot (sum_(i = 1)^n (i) - 1) &= -2n dot ((n dot (n + 1)) / 2 - 1) \
-    &= -(n^2 dot (n + 1)) + 2n \
-    &= -n^3 - n^2 + 2n.
+    -2n dot abs(b) = -2n dot sum_(i = 1)^(n - 1) i = -2n dot (sum_(i = 1)^n (i) - 1) & = -2n dot ((n dot (n + 1)) / 2 - 1) \
+    & = -(n^2 dot (n + 1)) + 2n \
+    & = -n^3 - n^2 + 2n.
   $ <p113-ks>
 
   Having found the total sum of each expansion's term for $k = 1$, we can reformulate
@@ -513,9 +513,9 @@
   For the sake of clarity and space, I will treat each individual term of the sum separately.
 
   $
-    sum_(j = 0)^(n - 1) 3! / (0!(3 - 0)!) dot (n + 1)^(3 - 0) dot (j - n)^0 &=
+    sum_(j = 0)^(n - 1) 3! / (0!(3 - 0)!) dot (n + 1)^(3 - 0) dot (j - n)^0 & =
     sum_(j = 0)^(n - 1) (n + 1)^3 \
-    &= (n + 1)^3 dot n.
+    & = (n + 1)^3 dot n.
   $
 
   $
@@ -552,19 +552,19 @@
   statement $sum_(i = 1)^n i^2 = (n dot (n + 1) dot (2n + 1)) / 6$.
 
   $
-    sum_(j = 0)^(n - 1) 2! / (0!(2 - 0)!) dot j^(2 - 0) dot (-n)^0 &= sum_(j = 0)^(n - 1) j^2 \
-    &= sum_(j = 1)^n (j^2) - n^2 \
-    &= (n dot (n + 1) dot (2n + 1)) / 6 - n^2 \
-    &= ((n^2 + n) dot (2n + 1) - 6n^2) / 6 \
-    &= (2n^3 + n^2 + 2n^2 + n - 6n^2) / 6 \
-    &= (2n^3 - 3n^2 + n) / 6.
+    sum_(j = 0)^(n - 1) 2! / (0!(2 - 0)!) dot j^(2 - 0) dot (-n)^0 & = sum_(j = 0)^(n - 1) j^2 \
+    & = sum_(j = 1)^n (j^2) - n^2 \
+    & = (n dot (n + 1) dot (2n + 1)) / 6 - n^2 \
+    & = ((n^2 + n) dot (2n + 1) - 6n^2) / 6 \
+    & = (2n^3 + n^2 + 2n^2 + n - 6n^2) / 6 \
+    & = (2n^3 - 3n^2 + n) / 6.
   $
 
   $
-    sum_(j = 0)^(n - 1) 2! / (1!(2 - 1)!) dot j^(2 - 1) dot (-n)^1 &= sum_(j = 0)^(n - 1) -2n j \
-    &= -2n dot ((n dot (n + 1)) / 2 - n) \
-    &= -2n dot (n^2 - n) / 2 \
-    &= -n^3 + n^2.
+    sum_(j = 0)^(n - 1) 2! / (1!(2 - 1)!) dot j^(2 - 1) dot (-n)^1 & = sum_(j = 0)^(n - 1) -2n j \
+    & = -2n dot ((n dot (n + 1)) / 2 - n) \
+    & = -2n dot (n^2 - n) / 2 \
+    & = -n^3 + n^2.
   $
 
   $
@@ -1452,11 +1452,11 @@ Cartesian products")).
   This would model the $k$-term of @p130-initialformula as follows.
 
   $
-    &k && = i dot (n - i) + (n - i) dot n, space.punct "such that" \
-    &sum_(i = 1)^(n - 1) n dot (n dot k) && =
+    & k && = i dot (n - i) + (n - i) dot n, space.punct "such that" \
+    & sum_(i = 1)^(n - 1) n dot (n dot k) && =
     sum_(i = 1)^(n - 1) n dot (n dot (i dot (n - i) + (n - i) dot n)) \
-    &&& = sum_(i = 1)^(n - 1) n dot (n dot ((n - i) dot (n + i))) \
-    &&& = sum_(i = 1)^(n - 1) n dot (n dot (n^2 - i^2)).
+    & && = sum_(i = 1)^(n - 1) n dot (n dot ((n - i) dot (n + i))) \
+    & && = sum_(i = 1)^(n - 1) n dot (n dot (n^2 - i^2)).
   $ <p130-secondformula>
 
   This is incorrect. The behavior in the first iteration is flawed, as
@@ -1713,13 +1713,12 @@ Cartesian products")).
   which one it moves to next is of great importance, but at the tree level, this is not so much the
   case. Thus, because the abstraction seems to be leaning further towards the latter (and because
   I've spent too much time on this problem,) we will ignore the improvements that could be made
-  from, off the top of my head, #l-enum(
-    numbering: "(a)",
-  )[performing the inherent conversion into a binary tree that is possible with any simple DAG and
-    then more easily implementing a pre-order traversal iterator such that the child nodes are
-    actually modelled after an equivalent, embedded graph, or][keep track of the original nodes from
-    the `Pairs` tree such that the stack can decide which of the equivalently possible nodes to move
-    on to `current_iter` should actually move on to].
+  from, off the top of my head, #l-enum(numbering: "(a)")[performing the inherent conversion into a
+    binary tree that is possible with any simple DAG and then more easily implementing a pre-order
+    traversal iterator such that the child nodes are actually modelled after an equivalent, embedded
+    graph, or][keep track of the original nodes from the `Pairs` tree such that the stack can decide
+    which of the equivalently possible nodes to move on to `current_iter` should actually move on
+    to].
 
   To recap the high-level sequence of steps that this execution branch should go through: Update the
   stack by pushing to it the vertices adjacent to `current_iter`, then fetch the top of the stack
@@ -2651,162 +2650,11 @@ Cartesian products")).
 
   And it works.
 
-  The following includes a small set of utilities to more easily compute the test suite for my
-  accompanying Rust programs.
-
-  #let proc-input = ()
-  #canvas({
-    import draw: *
-
-    let seglen(a, b) = calc.sqrt(
-      calc.pow(calc.abs(a.x - b.x), 2) + calc.pow(calc.abs(a.y - b.y), 2),
-    )
-
-    let input-set-0 = (
-      (x: 1.25, y: 2),
-      (x: 1.3, y: 5),
-      (x: 1.5, y: 3.5),
-      (x: 2, y: 3.6),
-      (x: 3, y: 0.75),
-      (x: 3.75, y: 3.7),
-    )
-    let input-set-1 = (
-      (x: 0, y: 1),
-      (x: 0, y: 2.5),
-      (x: 1, y: 2),
-      (x: 2, y: 2.5),
-      (x: 2, y: 5),
-      (x: 3, y: 2.5),
-      (x: 4, y: 0),
-      (x: 4, y: 1),
-      (x: 4, y: 3.25),
-      (x: 5, y: 2.5),
-      (x: 6, y: 2),
-      (x: 6, y: 3.25),
-      (x: 7, y: 2),
-    )
-
-    set-style(
-      circle: (
-        radius: 1pt,
-        fill: black,
-        stroke: .5pt + black,
-      ),
-      line: (
-        fill: black,
-        stroke: .5pt + black,
-      ),
-    )
-
-    for (i, (x, y)) in input-set-0.enumerate() {
-      circle(
-        (x, y),
-        name: str(i),
-      )
-      content(
-        str(i),
-        $#i$,
-      )
-    }
-
-    line(
-      "0",
-      "1",
-    )
-    line(
-      "0",
-      "2",
-    )
-    line(
-      "0",
-      "3",
-    )
-    line(
-      "0",
-      "4",
-    )
-
-    line(
-      "1",
-      "2",
-    )
-    line(
-      "1",
-      "3",
-    )
-    line(
-      "1",
-      "5",
-    )
-
-    line(
-      "2",
-      "3",
-    )
-
-    line(
-      "3",
-      "4",
-    )
-    line(
-      "3",
-      "5",
-    )
-
-    line(
-      "4",
-      "5",
-    )
-
-    for (i, point) in input-set-1.enumerate() {
-      for (j, other) in input-set-1.enumerate().filter(((j, _)) => j > i) {
-        proc-input.push((str(i) + str(j), calc.round(seglen(point, other), digits: 2)))
-
-        // line(
-        //   str(i),
-        //   str(j),
-        //   name: str(i) + str(j),
-        // )
-      }
-    }
-
-    // let (upper-hull, lower-hull) = ((0, 1, 4, 11, 12), (0, 6, 12))
-
-    // for (idx, point) in upper-hull.enumerate().filter(((i, _)) => i != upper-hull.len() - 1) {
-    //   line(
-    //     str(point),
-    //     str(upper-hull.at(idx + 1)),
-    //   )
-    // }
-    // for (idx, point) in lower-hull.enumerate().filter(((i, _)) => i != lower-hull.len() - 1) {
-    //   line(
-    //     str(point),
-    //     str(lower-hull.at(idx + 1)),
-    //   )
-    // }
-
-    let largest = calc.max(..proc-input.map(((_, it)) => it))
-    proc-input = proc-input.map(((idx, val)) => (idx, val, calc.floor(val * 100 / largest)))
-
-    hide({
-      circle(
-        (10, 5),
-        name: "content",
-      )
-    })
-
-    // content(
-    //   "content",
-    //   [
-    //     - Largest: (#raw(proc-input.find(((_, it, _)) => it == largest).first()), #largest),
-    //     #for (str, _, proc) in proc-input { [- #raw(str): #proc] }
-    //   ],
-    // )
-  })
-
-  #metadata(proc-input)
-
   Quick analysis of the cost of the `from_point_set` computations.
+
+  Something is going on right now. #align(block[
+  Something is going on right now.
+  ])
 
   $
     sum_(i = 0)^n n - i & = n dot sum_(i = 0)^n 1 - sum_(i = 0)^n i
@@ -2817,15 +2665,82 @@ Cartesian products")).
                         & approx Theta(n^2).
   $
 
-  // TODO: get the `triangulate` method working on the WASM plugin.
-  #let points = triangulate(
-    (x: 1.25, y: 2),
-    (x: 1.3, y: 5),
-    (x: 1.5, y: 3.5),
-    (x: 2, y: 3.6),
-    (x: 3, y: 0.75),
-    (x: 3.75, y: 3.7),
-  )
+  #{
+    import plugin("./code/target/wasm32-unknown-unknown/release/visualizer.wasm"): (
+      triangulate as __triangulate,
+    )
+
+    let triangulate(input) = cbor(__triangulate(cbor.encode(input.map(((x, y)) => (
+      x: float(x),
+      y: float(y),
+    )))))
+
+    let points-0 = (
+      (x: 1.25, y: 2.),
+      (x: 1.3, y: 5.),
+      (x: 1.5, y: 3.5),
+      (x: 2., y: 3.6),
+      (x: 3., y: 0.75),
+      (x: 3.75, y: 3.7),
+    )
+    let points-1 = (
+      (x: 0., y: 1.),
+      (x: 0., y: 2.5),
+      (x: 1., y: 2.),
+      (x: 2., y: 2.5),
+      (x: 2., y: 5.),
+      (x: 3., y: 2.5),
+      (x: 4., y: 0.),
+      (x: 4., y: 1.),
+      (x: 4., y: 3.25),
+      (x: 5., y: 2.5),
+      (x: 6., y: 2.),
+      (x: 6., y: 3.25),
+      (x: 7., y: 2.),
+    )
+    let points-2 = (
+      (x: 1.25, y: 2),
+      (x: 1.3, y: 5),
+      (x: 1.5, y: 3.5),
+      (x: 2, y: 3.6),
+      (x: 3, y: 0.75),
+      (x: 3.75, y: 3.7),
+      (x: 4.25, y: 3),
+      (x: 4.3, y: 1.7),
+      (x: 4.5, y: 5),
+      (x: 5.8, y: 3.45),
+      (x: 6, y: 1),
+      (x: 6.2, y: 4.7),
+      (x: 7, y: 3.45),
+    )
+    let triangulation-0 = triangulate(points-0)
+    let triangulation-1 = triangulate(points-1)
+    let triangulation-2 = triangulate(points-2)
+
+    canvas({
+      import draw: *
+
+      set-style(
+        circle: (
+          radius: 1.5pt,
+          fill: black,
+          stroke: none,
+        ),
+        line: (
+          stroke: .5pt + black,
+        ),
+      )
+
+      for (idx, point) in points-2.map(it => (it.x, it.y)).enumerate() {
+        circle(point, name: str(idx))
+      }
+      for (idx, adlist) in triangulation-2.enumerate() {
+        for (inner_idx, (weight, x, y)) in adlist
+          .enumerate()
+          .filter(((inner_idx, it)) => it != none and inner_idx > idx) { line(str(idx), (x, y)) }
+      }
+    })
+  }
 
 #pagebreak()
 
