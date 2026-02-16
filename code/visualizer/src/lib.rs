@@ -1,11 +1,17 @@
+//! This serves as a way of exposing some of the functionality exposed in the
+//! library chapters as Typst plugins.
+//!
+//! For problems like ones where a triangulation is involved, this allows to
+//! more easily view the end result from the Rust side in a PDF/SVG.
+//! Most utilities here are only a `serde`-compatible version of the same types
+//! as those exposed in the `chapter*` crates.
+
 use std::{collections::HashMap, result};
 
 use chapter1::{GeoAdjacencyMatrix, GeoEdge, Point2d, TspTriMstDfs};
 use serde::Serialize;
-#[cfg(target_arch = "wasm32")]
 use wasm_minimal_protocol::{initiate_protocol, wasm_func};
 
-#[cfg(target_arch = "wasm32")]
 initiate_protocol!();
 
 type Result<T> = result::Result<T, String>;
@@ -68,7 +74,7 @@ impl From<GeoAdjacencyMatrix> for SeralizedGeoAdjacencyMatrix {
 ///
 /// May fail if the input from the Typst side is not an array of key-value pairs
 /// (`x`: <value>, `y`: <value>).
-#[cfg_attr(target_arch = "wasm32", wasm_func)]
+#[wasm_func]
 pub fn triangulate(points: &[u8]) -> Result<Vec<u8>> {
     let (points, adjacency_matrix) =
         init(&ciborium::from_reader::<Vec<_>, _>(points).map_err(|e| e.to_string())?).ok_or(
@@ -94,12 +100,4 @@ fn init(raw_points: &[HashMap<String, f64>]) -> Option<(Vec<Point2d>, GeoAdjacen
             },
         )?,
     ))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {}
 }

@@ -11,6 +11,8 @@
 //! would go for in a real library.
 //!
 //! [Skiena, 2020]: https://doi.org/10.1007/978-3-030-54256-6
+// TODO: change the `must_use` attributes with a lint expectation; See the
+// std-dev guide for info on it
 
 #![feature(stmt_expr_attributes, float_algebraic)]
 
@@ -282,7 +284,7 @@ impl From<PairsErrorType> for PairsError {
 /// triangle and solves through Pythagoras' Theorem.
 #[must_use]
 pub fn seglen(Point2d { x: x1, y: y1 }: Point2d, Point2d { x: x2, y: y2 }: Point2d) -> f64 {
-    let (x_res, y_res) = ((x1.algebraic_sub(x2)).abs(), (y1.algebraic_sub(y2)).abs());
+    let (x_res, y_res) = (x1.algebraic_sub(x2).abs(), y1.algebraic_sub(y2).abs());
 
     x_res
         .algebraic_mul(x_res)
@@ -1217,11 +1219,11 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                     && let Some(ring_center) = Self::find_ring((*p_src, *p_dst, *p1))
                     && #[expect(
                         clippy::cast_possible_truncation,
-                        reason = "`signum()` always returns -1., 1. or NaN; I am sure it will \
-                                 never be NaN. Truncation won't happen as the problem space \
-                                 doesn't allow for arbitrary `f64` values and both `ceil()` and \
-                                 `floor()` yield \"floating point integers\"."
+                        reason = "Truncation won't happen as the problem space doesn't allow for \
+                                  arbitrary `f64` values."
                     )]
+                    // Even if it lies on the boundary or just near it, we want
+                    // to discard it; `p2` is either in or not.
                     (seglen(ring_center, *p1).algebraic_sub(seglen(ring_center, *p2)) as isize
                         > 0)
                 {

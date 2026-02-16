@@ -2652,10 +2652,6 @@ Cartesian products")).
 
   Quick analysis of the cost of the `from_point_set` computations.
 
-  Something is going on right now. #align(block[
-  Something is going on right now.
-  ])
-
   $
     sum_(i = 0)^n n - i & = n dot sum_(i = 0)^n 1 - sum_(i = 0)^n i
                           = n dot (sum_(i = 1)^n (1) + 1) - sum_(i = 1)^n i = \
@@ -2670,10 +2666,13 @@ Cartesian products")).
       triangulate as __triangulate,
     )
 
-    let triangulate(input) = cbor(__triangulate(cbor.encode(input.map(((x, y)) => (
-      x: float(x),
-      y: float(y),
-    )))))
+    let triangulate(input) = {
+      assert.eq(type(input), array)
+      cbor(__triangulate(cbor.encode(input.map(((x, y)) => (
+        x: float(x),
+        y: float(y),
+      )))))
+    }
 
     let points-0 = (
       (x: 1.25, y: 2.),
@@ -2732,7 +2731,8 @@ Cartesian products")).
       )
 
       for (idx, point) in points-2.map(it => (it.x, it.y)).enumerate() {
-        circle(point, name: str(idx))
+        hide(circle(point, name: str(idx)))
+        content(str(idx), [#str(idx)])
       }
       for (idx, adlist) in triangulation-2.enumerate() {
         for (inner_idx, (weight, x, y)) in adlist
