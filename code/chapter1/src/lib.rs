@@ -11,10 +11,6 @@
 //! would go for in a real library.
 //!
 //! [Skiena, 2020]: https://doi.org/10.1007/978-3-030-54256-6
-// TODO: change the `must_use` attributes with a lint expectation; See the
-// std-dev guide for info on it
-
-#![feature(stmt_expr_attributes, float_algebraic)]
 
 use std::{
     cmp::Ordering,
@@ -64,7 +60,10 @@ impl AdjacencyList {
     ///
     /// Can't really panic because all elements of the forest are guaranteed to
     /// at least have themselves as their ancestors.
-    #[must_use]
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the result of this method."
+    )]
     pub fn from_pairs(pairs: &Pairs) -> Self {
         let mut output = Self(HashMap::with_capacity(pairs.forest.len()));
         for ancestors in (0..pairs.forest.len()).filter_map(|node| {
@@ -282,14 +281,12 @@ impl From<PairsErrorType> for PairsError {
 /// This then exploits the R^2 elements (ordered pairs resulting from the
 /// cartesian product of R x R) of each point to compute the sides of such a
 /// triangle and solves through Pythagoras' Theorem.
-#[must_use]
+#[expect(
+    clippy::must_use_candidate,
+    reason = "It's not a bug not to use the result of this function."
+)]
 pub fn seglen(Point2d { x: x1, y: y1 }: Point2d, Point2d { x: x2, y: y2 }: Point2d) -> f64 {
-    let (x_res, y_res) = (x1.algebraic_sub(x2).abs(), y1.algebraic_sub(y2).abs());
-
-    x_res
-        .algebraic_mul(x_res)
-        .algebraic_add(y_res.algebraic_mul(y_res))
-        .sqrt()
+    ((x1 - x2).abs().powi(2) + (y1 - y2).abs().powi(2)).sqrt()
 }
 
 impl AdjacencyMatrix {
@@ -340,7 +337,10 @@ impl AdjacencyMatrix {
 }
 
 impl<'a> Pairs<'a> {
-    #[must_use]
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the result of this associated function."
+    )]
     pub fn new(src: &'a AdjacencyMatrix) -> Self {
         Self {
             forest: (0..src.0.len()).collect(),
@@ -480,7 +480,10 @@ impl Pairs<'_> {
     ///
     /// Panics if the method is called before the underlying UFDS isn't made up
     /// of a single tree (contrary to multiple trees in the initial forest.)
-    #[must_use]
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the result of this method."
+    )]
     pub fn dfs(&self) -> Dfs {
         let mut root = self
             .forest
@@ -800,9 +803,8 @@ impl GeoAdjacencyMatrix {
                                              problem space doesn't allow for arbitrary `f64` \
                                              values."
                                 )]
-                                weight: seglen(points[row], points[col])
-                                    .algebraic_mul(100.)
-                                    .algebraic_div(largest_distance)
+                                weight: ((seglen(points[row], points[col]) * 100.)
+                                    / largest_distance)
                                     as usize,
                                 coord: *coord,
                             },
@@ -849,17 +851,19 @@ pub trait TspTriMstDfs {
     /// [O'Rourke, 2001]: https://doi.org/10.1017/CBO9780511804120
     /// [`compute_raw_triangle_area()`]: Self::compute_raw_triangle_area()
     /// [Skiena, 2020]: https://doi.org/10.1007/978-3-030-54256-6
-    #[must_use]
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the result of this associated function."
+    )]
     fn compute_triangle_area(t: (Point2d, Point2d, Point2d)) -> f64 {
-        Self::compute_raw_triangle_area(t)
-            .abs()
-            .algebraic_div(2.0_f64)
+        Self::compute_raw_triangle_area(t).abs() / 2.
     }
-    #[must_use]
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the result of this associated function."
+    )]
     fn compute_raw_triangle_area((a, b, c): (Point2d, Point2d, Point2d)) -> f64 {
-        b.x.algebraic_sub(a.x)
-            .algebraic_mul(c.y.algebraic_sub(a.y))
-            .algebraic_sub(c.x.algebraic_sub(a.x).algebraic_mul(b.y.algebraic_sub(a.y)))
+        (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)
     }
     /// Computes the center of a ring that crosses three points in 2-dimensional
     /// Euclidean space, if possible.
@@ -870,7 +874,10 @@ pub trait TspTriMstDfs {
     /// problem to find the segment length of any of three equal segments
     /// knowing one of the endpoints for all three and having the unknown be the
     /// the other endpoint for all three.
-    #[must_use]
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the result of this associated function."
+    )]
     fn find_ring((a, b, c): (Point2d, Point2d, Point2d)) -> Option<Point2d> {
         #![expect(
             clippy::cast_possible_truncation,
@@ -881,32 +888,21 @@ pub trait TspTriMstDfs {
                      to an axes-aligned box that considers only positive values."
         )]
 
-        (a.x.algebraic_sub(b.x).abs().floor() as usize == 0_usize
-            && c.y.algebraic_sub(b.y).abs().floor() as usize == 0_usize
-            && b.y
-                .algebraic_sub(a.y)
-                .algebraic_div(a.x.algebraic_sub(b.x))
-                .algebraic_mul(b.x.algebraic_sub(c.x).algebraic_div(c.y.algebraic_sub(b.y)))
+        ((-b.x + a.x).abs().floor() as usize != 0
+            && (-b.y + c.y).abs().floor() as usize != 0
+            && (1. - ((b.x - a.y) / (-b.x + a.x)) * ((b.x - c.x) / (-b.y + c.y)))
+                .abs()
                 .floor() as usize
-                != 1_usize)
+                != 0)
             .then(|| {
                 let (c0, c1, c2, c3) = (
-                    a.x.algebraic_mul(a.x)
-                        .algebraic_add(a.y.algebraic_mul(a.y))
-                        .algebraic_sub(b.x.algebraic_mul(b.x).algebraic_sub(b.y.algebraic_mul(b.y)))
-                        .algebraic_div(2.0_f64.algebraic_mul(a.x.algebraic_sub(b.x))),
-                    b.x.algebraic_sub(c.x).algebraic_div(c.y.algebraic_sub(b.y)),
-                    c.x.algebraic_mul(c.x)
-                        .algebraic_add(c.y.algebraic_mul(c.y))
-                        .algebraic_sub(b.x.algebraic_mul(b.x).algebraic_sub(b.y.algebraic_mul(b.y)))
-                        .algebraic_div(2.0_f64.algebraic_mul(c.y.algebraic_sub(b.y))),
-                    b.y.algebraic_sub(a.y).algebraic_div(a.x.algebraic_sub(b.x)),
+                    (a.x.powi(2) + a.y.powi(2) - b.x.powi(2) - b.y.powi(2)) / (2. * (-b.x + a.x)),
+                    (b.x - c.x) / (-b.y + c.y),
+                    (c.x.powi(2) + c.y.powi(2) - b.x.powi(2) - b.y.powi(2)) / (2. * (-b.y + c.y)),
+                    (b.y - a.y) / (-b.x + a.x),
                 );
-                let y_component = c0
-                    .algebraic_mul(c1)
-                    .algebraic_add(c2)
-                    .algebraic_div(1.0_f64.algebraic_sub(c3.algebraic_mul(c1)));
-                let x_component = y_component.algebraic_mul(c3).algebraic_add(c0);
+                let y_component = (c0 * c1 + c2) / (1. - c3 * c1);
+                let x_component = y_component * c3 + c0;
 
                 Point2d {
                     x: x_component,
@@ -915,7 +911,10 @@ pub trait TspTriMstDfs {
             })
     }
     /// Checks if some point `p_to_check` lies within some triangle (`a`, `b`, `c`).
-    #[must_use]
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the result of this associated function."
+    )]
     fn check_point_ownership((a, b, c): (Point2d, Point2d, Point2d), p_to_check: Point2d) -> bool {
         #![expect(
             clippy::cast_possible_truncation,
@@ -936,11 +935,7 @@ pub trait TspTriMstDfs {
             )
         };
 
-        container_area
-            .algebraic_sub(area_0.algebraic_add(area_1).algebraic_add(area_2))
-            .abs()
-            .floor() as usize
-            == 0_usize
+        (container_area - (area_0 + area_1 + area_2)).abs().floor() as usize == 0
     }
     fn build_hull(
         &self,
@@ -1128,6 +1123,12 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
     ///
     /// [de Berg et. al., 2008]: https://doi.org/10.1007/978-3-540-77974-2
     fn optimize_triangulation(&self, triangulation: &mut Vec<Vec<GeoEdge>>) {
+        #![expect(
+            clippy::cast_possible_truncation,
+            reason = "Truncation won't happen as the problem space doesn't allow for \
+                     arbitrary `f64` values."
+        )]
+
         while let Some(((src, dst), (p1, p2))) = triangulation
             .iter()
             .enumerate()
@@ -1217,15 +1218,11 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                     && !(Self::check_point_ownership((*p1, *p2, *p_src), *p_dst)
                         || Self::check_point_ownership((*p1, *p2, *p_dst), *p_src))
                     && let Some(ring_center) = Self::find_ring((*p_src, *p_dst, *p1))
-                    && #[expect(
-                        clippy::cast_possible_truncation,
-                        reason = "Truncation won't happen as the problem space doesn't allow for \
-                                  arbitrary `f64` values."
-                    )]
-                    // Even if it lies on the boundary or just near it, we want
-                    // to discard it; `p2` is either in or not.
-                    (seglen(ring_center, *p1).algebraic_sub(seglen(ring_center, *p2)) as isize
-                        > 0)
+                    && {
+                        // Even if it lies on the boundary or just near it, we
+                        // want to discard it; `p2` is either in or not.
+                        (seglen(ring_center, *p1) - seglen(ring_center, *p2)) as isize > 0
+                    }
                 {
                     Some(((src, dst), (p1_idx, p2_idx)))
                 } else {
@@ -1375,7 +1372,7 @@ mod tests {
             .is_ok(),
             "should've been an ok graph with 2 nodes layed out like the defining vertices of a \
             quadrilateral",
-        )
+        );
     }
 
     #[test]
@@ -1520,7 +1517,7 @@ mod tests {
             )),
             "should've thrown an error about the graph having multiple vertices in the same row \
             with the same coordinates in euclidean space",
-        )
+        );
     }
 
     #[test]
@@ -1537,7 +1534,7 @@ mod tests {
             )),
             "should've thrown an error about the graph having multiple vertices in the same column \
             that are not equal",
-        )
+        );
     }
 
     #[test]
@@ -1709,8 +1706,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "I need to sample the workings of the `triangulate()` method with a smaller input \
-               set."]
     fn triangulation3() {
         let (points, matrix) = points! {
             (x: 1.25, y: 2),
@@ -1734,7 +1729,7 @@ mod tests {
     #[test]
     #[ignore = "The algorithm is a WIP, and the test sample case is not ready yet."]
     #[allow(unreachable_code, reason = "Ibid.")]
-    fn tsp_mst_dfs1() -> Result<(), AdjacencyMatrixError> {
+    fn tsp_tri_mst_dfs1() -> Result<(), AdjacencyMatrixError> {
         todo!();
 
         Ok(())
@@ -1743,7 +1738,7 @@ mod tests {
     #[test]
     #[ignore = "The algorithm is a WIP, and the test sample case is not ready yet."]
     #[allow(unreachable_code, reason = "Ibid.")]
-    fn tsp_mst_dfs2() -> Result<(), AdjacencyMatrixError> {
+    fn tsp_tri_mst_dfs2() -> Result<(), AdjacencyMatrixError> {
         todo!();
 
         Ok(())
