@@ -1,0 +1,15 @@
+set quiet := true
+set shell := ["fish", "-c"]
+
+alias bw := build-wasm
+
+cargo := require("cargo")
+
+[default]
+[private]
+default:
+    {{ just_executable() }} -u --list --justfile {{ justfile() }}
+
+build-wasm:
+    cd {{ justfile_directory() }}
+    {{ cargo }} b -p visualizer --release --target wasm32-unknown-unknown

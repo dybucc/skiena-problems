@@ -2721,7 +2721,7 @@ Cartesian products")).
 
       set-style(
         circle: (
-          radius: 1.5pt,
+          radius: 0pt,
           fill: black,
           stroke: none,
         ),

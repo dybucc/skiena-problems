@@ -17,7 +17,7 @@ use std::{
     collections::{HashMap, HashSet},
     hash::{Hash, Hasher},
     iter,
-    ops::ControlFlow,
+    ops::{ControlFlow, Not},
     sync::LazyLock,
 };
 
@@ -901,13 +901,10 @@ pub trait TspTriMstDfs {
                     (c.x.powi(2) + c.y.powi(2) - b.x.powi(2) - b.y.powi(2)) / (2. * (-b.y + c.y)),
                     (b.y - a.y) / (-b.x + a.x),
                 );
-                let y_component = (c0 * c1 + c2) / (1. - c3 * c1);
-                let x_component = y_component * c3 + c0;
+                let y = (c0 * c1 + c2) / (1. - c3 * c1);
+                let x = y * c3 + c0;
 
-                Point2d {
-                    x: x_component,
-                    y: y_component,
-                }
+                Point2d { x, y }
             })
     }
     /// Checks if some point `p_to_check` lies within some triangle (`a`, `b`, `c`).
@@ -1125,8 +1122,8 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
     fn optimize_triangulation(&self, triangulation: &mut Vec<Vec<GeoEdge>>) {
         #![expect(
             clippy::cast_possible_truncation,
-            reason = "Truncation won't happen as the problem space doesn't allow for \
-                     arbitrary `f64` values."
+            reason = "Truncation won't happen as the problem space doesn't allow for arbitrary \
+                     `f64` values."
         )]
 
         while let Some(((src, dst), (p1, p2))) = triangulation
@@ -1159,6 +1156,8 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                     return None;
                 };
 
+                eprintln!("for (src, dst):\t\t(({p_src:?}, {src}), ({p_dst:?}, {dst}))");
+
                 // If we broke early, then we found (`p1`, `p2`); Otherwise, we
                 // may have found them at the end or not found them at all.
                 if let ControlFlow::Continue((Some((p1, p1_idx)), Some((p2, p2_idx))))
@@ -1171,48 +1170,91 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                             return ControlFlow::Continue((p1, p2));
                         };
 
+                        eprintln!("for (idx, coord):\t({idx}, {coord:?})");
+
                         // Checks if there's any neighbor to the current
                         // neighbor of `src` that is equivalent to `dst`, while
                         // also making sure we are not choosing a point that
                         // stems from `src` but can contain an actually valid
-                        // point (because there's a different, non-convex
+                        // point (because there's a different, concave
                         // quadrilateral nearby.)
                         let find_p = || {
                             triangulation[idx].iter().enumerate().find_map(
                                 |(inner_idx, inner_edge)| {
                                     (inner_idx == dst
                                         && matches!(inner_edge, GeoEdge::Weighted { .. })
-                                        && triangulation[src]
-                                            .iter()
-                                            .filter_map(|elem| {
-                                                if let GeoEdge::Weighted {
-                                                    coord: p_to_check, ..
-                                                } = elem
-                                                    && p_to_check != coord
-                                                    && p_to_check != p_dst
-                                                {
-                                                    Some(p_to_check)
-                                                } else {
-                                                    None
-                                                }
-                                            })
-                                            .all(|p_to_check| {
-                                                !Self::check_point_ownership(
-                                                    (*p_src, *p_dst, *coord),
-                                                    *p_to_check,
-                                                )
-                                            }))
+                                        && {
+                                            let output = triangulation[src]
+                                                .iter()
+                                                .enumerate()
+                                                .filter_map(|(src_idx, elem)| {
+                                                    if let GeoEdge::Weighted {
+                                                        coord: p_to_check,
+                                                        ..
+                                                    } = elem
+                                                        && p_to_check != coord
+                                                        && p_to_check != p_dst
+                                                    {
+                                                        Some((src_idx, p_to_check))
+                                                    } else {
+                                                        None
+                                                    }
+                                                })
+                                                .all(|(src_idx, p_to_check)| {
+                                                    // TODO: maybe
+                                                    // `check_point_ownership`
+                                                    // is wrong.
+                                                    let output = Self::check_point_ownership(
+                                                        (*p_src, *p_dst, *coord),
+                                                        *p_to_check,
+                                                    );
+
+                                                    if src == 0 && idx == 4 {
+                                                        eprintln!(
+                                                            "third condition check for {src_idx}: \
+                                                            {output}"
+                                                        );
+                                                    }
+
+                                                    output.not()
+                                                });
+                                            if src == 0 && idx == 4 {
+                                                eprintln!("result of third condition: {output}");
+                                            }
+                                            output
+                                        })
+                                    // Yes, the outer `coord` and `idx`.
                                     .then_some((coord, idx))
                                 },
                             )
                         };
 
                         match (p1, p2) {
-                            (None, p2) => ControlFlow::Continue((find_p(), p2)),
-                            (p1, None) => ControlFlow::Continue((p1, find_p())),
+                            (None, p2) => {
+                                let p1 = find_p();
+
+                                if p1.is_some() {
+                                    eprintln!("for (p1, p2):\t\t({p1:?}, {p2:?})");
+                                }
+
+                                ControlFlow::Continue((p1, p2))
+                            }
+                            (p1, None) => {
+                                let p2 = find_p();
+
+                                if p2.is_some() {
+                                    eprintln!("found them:\t\t({p1:?}, {p2:?})\n");
+                                    ControlFlow::Break((p1, p2))
+                                } else {
+                                    ControlFlow::Continue((p1, p2))
+                                }
+                            }
                             // None of the points are `None` so we've found all
                             // we needed.
-                            other => ControlFlow::Break(other),
+                            other => {
+                                eprintln!("found them:\t\t({p1:?}, {p2:?})\n");
+                                ControlFlow::Break(other)
+                            }
                         }
                     })
                     && !(Self::check_point_ownership((*p1, *p2, *p_src), *p_dst)
