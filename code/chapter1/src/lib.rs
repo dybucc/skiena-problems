@@ -12,6 +12,8 @@
 //!
 //! [Skiena, 2020]: https://doi.org/10.1007/978-3-030-54256-6
 
+#![feature(bool_to_result)]
+
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
@@ -690,10 +692,7 @@ impl GeoAdjacencyMatrix {
                 row_vec
                     .iter()
                     .fold(HashSet::new(), |mut accum, &(_, (_, point))| {
-                        if !accum.contains(&point) {
-                            accum.insert(point);
-                            return accum;
-                        }
+                        accum.contains(&point).not().then(|| accum.insert(point));
 
                         accum
                     })
@@ -805,7 +804,7 @@ impl GeoAdjacencyMatrix {
                                 )]
                                 weight: ((seglen(points[row], points[col]) * 100.)
                                     / largest_distance)
-                                    as usize,
+                                    .round() as usize,
                                 coord: *coord,
                             },
                         })
@@ -838,8 +837,7 @@ pub trait TspClosestPair {
 }
 
 pub trait TspTriMstDfs {
-    /// Computes the area of a triangle in terms of the determinant of the
-    /// 2-dimensional simplical complex.
+    /// Computes the area of a triangle in terms of its determinant.
     ///
     /// Follows Lemma 1.3.1, [O'Rourke, 2001]. The result is twice the area of
     /// the simplicial complex, and can be generalized to d-dimensions, so this
@@ -907,32 +905,37 @@ pub trait TspTriMstDfs {
                 Point2d { x, y }
             })
     }
-    /// Checks if some point `p_to_check` lies within some triangle (`a`, `b`, `c`).
+    /// Checks if some point `p_to_check` lies within some triangle (`a`, `b`,
+    /// `c`).
+    ///
+    /// This follows Sec. 1.5.3, O'Rourke, 2001. A point is said to lie within a
+    /// convex polgyon if such point always lies to the left or right of each
+    /// directed segment of such polygon.
+    ///
+    /// Irrespective of the "clockwiseness" of the directed segments (the
+    /// determinant for whether we check for left-ness or right-ness,) it holds
+    /// that the ultimate condition checked for is always that of same sign for
+    /// all left or right checks; Thus we perform the check (computing the area
+    /// of the triangle formed form the directed segment and the query point in
+    /// terms of the determinant of the simplicial complex,) and make sure the
+    /// same sign holds for all results.
+    ///
+    /// Yes, IEEE 754 considers both -0. and +0., but the applications I found
+    /// for this library did not require checking for points that lied on the
+    /// boundary of the polygon.
     #[expect(
         clippy::must_use_candidate,
         reason = "It's not a bug not to use the result of this associated function."
     )]
     fn check_point_ownership((a, b, c): (Point2d, Point2d, Point2d), p_to_check: Point2d) -> bool {
-        #![expect(
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "The value won't be truncted because it's already a \"floating point \
-                     integer\" thanks to `floor()`, and the known positive values (thanks to \
-                     `abs()`) are well within bounds of `usize`."
-        )]
-
-        let container_area = Self::compute_triangle_area((a, b, c));
-        let (area_0, area_1, area_2) = {
-            let (t_0, t_1, t_2) = ((a, b, p_to_check), (a, c, p_to_check), (b, c, p_to_check));
-
-            (
-                Self::compute_triangle_area(t_0),
-                Self::compute_triangle_area(t_1),
-                Self::compute_triangle_area(t_2),
-            )
-        };
-
-        (container_area - (area_0 + area_1 + area_2)).abs().floor() as usize == 0
+        [(a, b, p_to_check), (b, c, p_to_check), (c, a, p_to_check)]
+            .iter()
+            .map(|t| Self::compute_raw_triangle_area(*t).signum())
+            .try_fold(None, |sign_state: Option<f64>, sign| match sign_state {
+                None => Ok(Some(sign)),
+                Some(sign_state) => sign_state.eq(&sign).ok_or(()).map(|()| Some(sign_state)),
+            })
+            .is_ok()
     }
     fn build_hull(
         &self,
@@ -1146,13 +1149,14 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
             // lying within the area of the triangle formed by the other three
             // vertices.) Then you check if there's a possibly better,
             // angle-wise, triangulation by checking for a consequence of
-            // Thales' theorem (`find_ring()` at the end is part of that) and
-            // perform edge flipping if that's the case.
+            // Thales' theorem (see Sec. 9.1, de Berg et. al., 2008) and perform
+            // edge flipping if that's the case.
             .find_map(|(src, dst)| {
-                let GeoEdge::Weighted { coord: p_dst, .. } = &triangulation[src][dst] else {
-                    return None;
-                };
-                let GeoEdge::Weighted { coord: p_src, .. } = &triangulation[dst][src] else {
+                let (
+                    GeoEdge::Weighted { coord: p_dst, .. },
+                    GeoEdge::Weighted { coord: p_src, .. },
+                ) = (&triangulation[src][dst], &triangulation[dst][src])
+                else {
                     return None;
                 };
 
@@ -1183,46 +1187,27 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                                 |(inner_idx, inner_edge)| {
                                     (inner_idx == dst
                                         && matches!(inner_edge, GeoEdge::Weighted { .. })
-                                        && {
-                                            let output = triangulation[src]
-                                                .iter()
-                                                .enumerate()
-                                                .filter_map(|(src_idx, elem)| {
-                                                    if let GeoEdge::Weighted {
-                                                        coord: p_to_check,
-                                                        ..
-                                                    } = elem
-                                                        && p_to_check != coord
-                                                        && p_to_check != p_dst
-                                                    {
-                                                        Some((src_idx, p_to_check))
-                                                    } else {
-                                                        None
-                                                    }
-                                                })
-                                                .all(|(src_idx, p_to_check)| {
-                                                    // TODO: maybe
-                                                    // `check_point_ownership`
-                                                    // is wrong.
-                                                    let output = Self::check_point_ownership(
-                                                        (*p_src, *p_dst, *coord),
-                                                        *p_to_check,
-                                                    );
-
-                                                    if src == 0 && idx == 4 {
-                                                        eprintln!(
-                                                            "third condition check for {src_idx}: \
-                                                            {output}"
-                                                        );
-                                                    }
-
-                                                    output.not()
-                                                });
-                                            if src == 0 && idx == 4 {
-                                                eprintln!("result of third condition: {output}");
-                                            }
-                                            output
-                                        })
+                                        && triangulation[src]
+                                            .iter()
+                                            .filter_map(|elem| {
+                                                if let GeoEdge::Weighted {
+                                                    coord: p_to_check, ..
+                                                } = elem
+                                                    && p_to_check != coord
+                                                    && p_to_check != p_dst
+                                                {
+                                                    Some(p_to_check)
+                                                } else {
+                                                    None
+                                                }
+                                            })
+                                            .all(|p_to_check| {
+                                                Self::check_point_ownership(
+                                                    (*p_src, *p_dst, *coord),
+                                                    *p_to_check,
+                                                )
+                                                .not()
+                                            }))
                                     // Yes, the outer `coord` and `idx`.
                                     .then_some((coord, idx))
                                 },
@@ -1230,20 +1215,12 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                         };
 
                         match (p1, p2) {
-                            (None, p2) => {
-                                let p1 = find_p();
-
-                                if p1.is_some() {
-                                    eprintln!("for (p1, p2):\t\t({p1:?}, {p2:?})");
-                                }
-
-                                ControlFlow::Continue((p1, p2))
-                            }
+                            (None, p2) => ControlFlow::Continue((find_p(), p2)),
                             (p1, None) => {
                                 let p2 = find_p();
 
                                 if p2.is_some() {
-                                    eprintln!("found them:\t\t({p1:?}, {p2:?})\n");
+                                    eprintln!("\nfound them:\t\t({p1:?}, {p2:?})\n");
                                     ControlFlow::Break((p1, p2))
                                 } else {
                                     ControlFlow::Continue((p1, p2))
@@ -1252,14 +1229,32 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                             // None of the points are `None` so we've found all
                             // we needed.
                             other => {
-                                eprintln!("found them:\t\t({p1:?}, {p2:?})\n");
+                                eprintln!("\nfound them:\t\t({p1:?}, {p2:?})\n");
                                 ControlFlow::Break(other)
                             }
                         }
                     })
-                    && !(Self::check_point_ownership((*p1, *p2, *p_src), *p_dst)
-                        || Self::check_point_ownership((*p1, *p2, *p_dst), *p_src))
-                    && let Some(ring_center) = Self::find_ring((*p_src, *p_dst, *p1))
+                    && {
+                        // Checks for convexity of the quadrilateral by making
+                        // sure no point in it lies within the area denoted by
+                        // any one of the two incident triangles making it up.
+                        (Self::check_point_ownership((*p1, *p2, *p_src), *p_dst)
+                            || Self::check_point_ownership((*p1, *p2, *p_dst), *p_src))
+                        .not()
+                    }
+                    && let Some(ring_center) = {
+                        // Checks if one can find a ring that crosses the two
+                        // points denoting the segment-edge incident to both
+                        // triangles and, because this is symmetric, any one of
+                        // `p1` or `p2`. If so, edge-flipping is feasible.
+                        // Correctness follows from Thales' Theorem.
+                        let output = Self::find_ring((*p_src, *p_dst, *p1));
+
+                        eprintln!("hit ring condition\n");
+                        debug_assert_eq!(output, Self::find_ring((*p_src, *p_dst, *p2)));
+
+                        output
+                    }
                     && {
                         // Even if it lies on the boundary or just near it, we
                         // want to discard it; `p2` is either in or not.
@@ -1770,7 +1765,7 @@ mod tests {
 
     #[test]
     #[ignore = "The algorithm is a WIP, and the test sample case is not ready yet."]
-    #[allow(unreachable_code, reason = "Ibid.")]
+    #[expect(unreachable_code, reason = "Ibid.")]
     fn tsp_tri_mst_dfs1() -> Result<(), AdjacencyMatrixError> {
         todo!();
 
@@ -1779,7 +1774,7 @@ mod tests {
 
     #[test]
     #[ignore = "The algorithm is a WIP, and the test sample case is not ready yet."]
-    #[allow(unreachable_code, reason = "Ibid.")]
+    #[expect(unreachable_code, reason = "Ibid.")]
     fn tsp_tri_mst_dfs2() -> Result<(), AdjacencyMatrixError> {
         todo!();
 

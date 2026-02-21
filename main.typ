@@ -2668,34 +2668,32 @@ Cartesian products")).
 
     let triangulate(input) = {
       assert.eq(type(input), array)
-      cbor(__triangulate(cbor.encode(input.map(((x, y)) => (
-        x: float(x),
-        y: float(y),
-      )))))
+
+      cbor(__triangulate(cbor.encode(input.map(((x, y)) => (x: float(x), y: float(y))))))
     }
 
     let points-0 = (
-      (x: 1.25, y: 2.),
-      (x: 1.3, y: 5.),
+      (x: 1.25, y: 2),
+      (x: 1.3, y: 5),
       (x: 1.5, y: 3.5),
-      (x: 2., y: 3.6),
-      (x: 3., y: 0.75),
+      (x: 2, y: 3.6),
+      (x: 3, y: .75),
       (x: 3.75, y: 3.7),
     )
     let points-1 = (
-      (x: 0., y: 1.),
-      (x: 0., y: 2.5),
-      (x: 1., y: 2.),
-      (x: 2., y: 2.5),
-      (x: 2., y: 5.),
-      (x: 3., y: 2.5),
-      (x: 4., y: 0.),
-      (x: 4., y: 1.),
-      (x: 4., y: 3.25),
-      (x: 5., y: 2.5),
-      (x: 6., y: 2.),
-      (x: 6., y: 3.25),
-      (x: 7., y: 2.),
+      (x: 0, y: 1.),
+      (x: 0, y: 2.5),
+      (x: 1, y: 2.),
+      (x: 2, y: 2.5),
+      (x: 2, y: 5.),
+      (x: 3, y: 2.5),
+      (x: 4, y: 0.),
+      (x: 4, y: 1.),
+      (x: 4, y: 3.25),
+      (x: 5, y: 2.5),
+      (x: 6, y: 2.),
+      (x: 6, y: 3.25),
+      (x: 7, y: 2.),
     )
     let points-2 = (
       (x: 1.25, y: 2),
@@ -2725,9 +2723,7 @@ Cartesian products")).
           fill: black,
           stroke: none,
         ),
-        line: (
-          stroke: .5pt + black,
-        ),
+        line: (stroke: .5pt + black),
       )
 
       for (idx, point) in points-2.map(it => (it.x, it.y)).enumerate() {
