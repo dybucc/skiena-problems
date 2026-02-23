@@ -23,6 +23,8 @@ use std::{
     sync::LazyLock,
 };
 
+use itertools::Itertools;
+
 #[derive(Debug)]
 pub struct AdjacencyMatrix(Vec<Vec<Edge>>);
 
@@ -108,7 +110,7 @@ pub enum GeoEdge {
     Weighted { weight: usize, coord: Point2d },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Point2d {
     pub x: f64,
     pub y: f64,
@@ -877,21 +879,9 @@ pub trait TspTriMstDfs {
         reason = "It's not a bug not to use the result of this associated function."
     )]
     fn find_ring((a, b, c): (Point2d, Point2d, Point2d)) -> Option<Point2d> {
-        #![expect(
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "The absolute value is always taken and `floor()` gets me a \"floating point \
-                     integer\"; The problem space doesn't allow for arbitrarily large values for \
-                     the elements of the point set and I assume all point are given with respect \
-                     to an axes-aligned box that considers only positive values."
-        )]
-
-        ((-b.x + a.x).abs().floor() as usize != 0
-            && (-b.y + c.y).abs().floor() as usize != 0
-            && (1. - ((b.x - a.y) / (-b.x + a.x)) * ((b.x - c.x) / (-b.y + c.y)))
-                .abs()
-                .floor() as usize
-                != 0)
+        (-b.x + a.x != 0.
+            && -b.y + c.y != 0.
+            && 1. - ((b.y - a.y) / (-b.x + a.x)) * ((b.x - c.x) / (-b.y + c.y)) != 0.)
             .then(|| {
                 let (c0, c1, c2, c3) = (
                     (a.x.powi(2) + a.y.powi(2) - b.x.powi(2) - b.y.powi(2)) / (2. * (-b.x + a.x)),
@@ -1123,12 +1113,6 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
     ///
     /// [de Berg et. al., 2008]: https://doi.org/10.1007/978-3-540-77974-2
     fn optimize_triangulation(&self, triangulation: &mut Vec<Vec<GeoEdge>>) {
-        #![expect(
-            clippy::cast_possible_truncation,
-            reason = "Truncation won't happen as the problem space doesn't allow for arbitrary \
-                     `f64` values."
-        )]
-
         while let Some(((src, dst), (p1, p2))) = triangulation
             .iter()
             .enumerate()
@@ -1248,17 +1232,57 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                         // triangles and, because this is symmetric, any one of
                         // `p1` or `p2`. If so, edge-flipping is feasible.
                         // Correctness follows from Thales' Theorem.
-                        let output = Self::find_ring((*p_src, *p_dst, *p1));
+                        // TODO: escape with the first result of the permutation
+                        // that yields a Some(_) with `find_ring`; and apply the
+                        // same reasoning below with p1 inside `debug_assert!`.
+                        let output = [*p_src, *p2, *p_dst].iter().permutations(3).try_fold(
+                            Point2d::default(),
+                            |mut find_ring_result, points_vector| {
+                                let [p_a, p_b, p_c] = points_vector[..] else {
+                                    return ControlFlow::Break(find_ring_result);
+                                };
+
+                                if let Some(result) = Self::find_ring((*p_a, *p_b, *p_c)) {
+                                    find_ring_result = result;
+                                    ControlFlow::Break(find_ring_result)
+                                } else {
+                                    ControlFlow::Continue(find_ring_result)
+                                }
+                            },
+                        );
+                        let output = Self::find_ring((*p_src, *p2, *p_dst));
 
                         eprintln!("hit ring condition\n");
-                        debug_assert_eq!(output, Self::find_ring((*p_src, *p_dst, *p2)));
+                        if output.is_some() {
+                            debug_assert!(
+                                matches!(
+                                    (output, Self::find_ring((*p_src, *p1, *p_dst))),
+                                    (Some(_), Some(_))
+                                ) || matches!(
+                                    (output, Self::find_ring((*p_dst, *p1, *p_src))),
+                                    (Some(_), Some(_))
+                                ) || matches!(
+                                    (output, Self::find_ring((*p1, *p_src, *p_dst))),
+                                    (Some(_), Some(_))
+                                ) || matches!(
+                                    (output, Self::find_ring((*p1, *p_dst, *p_src))),
+                                    (Some(_), Some(_))
+                                ) || matches!(
+                                    (output, Self::find_ring((*p_src, *p_dst, *p1))),
+                                    (Some(_), Some(_))
+                                ) || matches!(
+                                    (output, Self::find_ring((*p_dst, *p_src, *p1))),
+                                    (Some(_), Some(_))
+                                )
+                            );
+                        }
 
                         output
                     }
                     && {
                         // Even if it lies on the boundary or just near it, we
                         // want to discard it; `p2` is either in or not.
-                        (seglen(ring_center, *p1) - seglen(ring_center, *p2)) as isize > 0
+                        seglen(ring_center, *p2) - seglen(ring_center, *p1) > 0.
                     }
                 {
                     Some(((src, dst), (p1_idx, p2_idx)))

@@ -2726,11 +2726,11 @@ Cartesian products")).
         line: (stroke: .5pt + black),
       )
 
-      for (idx, point) in points-2.map(it => (it.x, it.y)).enumerate() {
+      for (idx, point) in points-1.map(it => (it.x, it.y)).enumerate() {
         hide(circle(point, name: str(idx)))
         content(str(idx), [#str(idx)])
       }
-      for (idx, adlist) in triangulation-2.enumerate() {
+      for (idx, adlist) in triangulation-1.enumerate() {
         for (inner_idx, (weight, x, y)) in adlist
           .enumerate()
           .filter(((inner_idx, it)) => it != none and inner_idx > idx) { line(str(idx), (x, y)) }
