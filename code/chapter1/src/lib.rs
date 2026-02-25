@@ -12,11 +12,12 @@
 //!
 //! [Skiena, 2020]: https://doi.org/10.1007/978-3-030-54256-6
 
-#![feature(bool_to_result)]
+#![feature(bool_to_result, control_flow_into_value)]
 
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
+    debug_assert_matches,
     hash::{Hash, Hasher},
     iter,
     ops::{ControlFlow, Not},
@@ -817,6 +818,326 @@ impl GeoAdjacencyMatrix {
 
         (points, output)
     }
+
+    /// Validates some neighboring point to edge (`src`, `dst`) in
+    /// `triangulation` by checking if it's one of the points forming the
+    /// triangles incident to such edge.
+    ///
+    /// For some quadrilateral of whose two conforming triangles the edge
+    /// incident to both is known, namely (`src`, `dst`), it follows that the
+    /// function will check if the neighboring point denoted in `triangulation`
+    /// by index `neighbor_idx`, and coordinates `neighbor_coord`, is, indeed,
+    /// any one of the two points that form such triangles.
+    fn validate_neighboring_point(
+        triangulation: &[Vec<GeoEdge>],
+        (neighbor_idx, neighbor_coord): (usize, Point2d),
+        (src, p_src): (usize, Point2d),
+        (dst, p_dst): (usize, Point2d),
+    ) -> Option<(Point2d, usize)> {
+        // Checks if there's any neighbor to the current neighbor of `src` that
+        // is equivalent to `dst`, while also making sure we are not choosing a
+        // point that stems from `src` but can contain an actually valid point
+        // (because there's a different, concave quadrilateral nearby.)
+        triangulation[neighbor_idx]
+            .iter()
+            .enumerate()
+            .find_map(|(inner_idx, inner_edge)| {
+                (inner_idx == dst
+                    && matches!(inner_edge, GeoEdge::Weighted { .. })
+                    && triangulation[src]
+                        .iter()
+                        .filter_map(|elem| {
+                            if let GeoEdge::Weighted {
+                                coord: p_to_check, ..
+                            } = elem
+                                && *p_to_check != neighbor_coord
+                                && *p_to_check != p_dst
+                            {
+                                Some(p_to_check)
+                            } else {
+                                None
+                            }
+                        })
+                        .all(|p_to_check| {
+                            Self::check_point_ownership((p_src, p_dst, neighbor_coord), *p_to_check)
+                                .not()
+                        }))
+                .then_some((neighbor_coord, neighbor_idx))
+            })
+    }
+}
+
+/// Utilities related to the algorithm implemented in [`TspTriMstDfs`].
+///
+/// [`TspTriMstDfs`]: crate::TspTriMstDfs
+impl GeoAdjacencyMatrix {
+    /// Builds any one of the upper or lower convex hulls of a point set
+    /// provided a corresponding comparison function, and builds an accompanying
+    /// triangulation from the edges that got removed from the hull.
+    ///
+    /// The algorithm follows [Andrew, 1979]'s approach, with [Skiena, 2020]'s
+    /// algorithm for building a triangulation from the points that are removed
+    /// from the convex hull during construction.
+    ///
+    /// To determine which of the upper or lower hull to construct at a time,
+    /// the function accepts a custom comparison function that should determine
+    /// whether the last three points in the hull's boundary are "turning right"
+    /// or "turning left." The use of trivial terminology is due to the
+    /// possibility for such a comparison function to be determined in one of
+    /// multiple ways. For the one used in [`triangulate()`], see
+    /// Sec. 1.2.1, [O'Rourke, 2001].
+    ///
+    /// [Andrew, 1979]: https://doi.org/10.1016/0020-0190(79)90072-3
+    /// [Skiena, 2020]: https://doi.org/10.1007/978-3-030-54256-6
+    /// [`triangulate()`]: Self::triangulate()
+    /// [O'Rourke, 2001]: https://doi.org/10.1017/CBO9780511804120
+    pub fn build_hull(
+        &self,
+        triangulation: &mut [Vec<GeoEdge>],
+        hull: &mut Vec<(usize, Point2d)>,
+        compare: impl Fn(Point2d, Point2d, Point2d) -> bool,
+        points: &[(usize, Point2d)],
+    ) {
+        for &(vertex, point) in points {
+            while hull.len() > 1
+                && let Some((rm, _)) = {
+                    let (_, prev_last) = hull[hull.len() - 2];
+
+                    hull.pop_if(|(_, last)| compare(prev_last, *last, point))
+                }
+            {
+                // SAFETY: The loop is only entered if the hull's length is
+                // larger than 1, and thus if popping happens, there's still one
+                // element in the vector.
+                let (&(prev, _), post) = (unsafe { hull.last().unwrap_unchecked() }, vertex);
+
+                (
+                    triangulation[prev][rm],
+                    triangulation[post][rm],
+                    triangulation[rm][prev],
+                    triangulation[rm][post],
+                ) = (
+                    self.0[prev][rm],
+                    self.0[post][rm],
+                    self.0[rm][prev],
+                    self.0[rm][post],
+                );
+            }
+
+            hull.push((vertex, point));
+        }
+    }
+
+    /// Finds the best angle-optimal triangulation for a point set `self` given
+    /// a starting triangulation `triangulation`.
+    ///
+    /// This follows the method of local maxima outlined in Sec. 9.1,
+    /// [de Berg et. al., 2008].
+    ///
+    /// The algorithm is inefficient but I wanted to try out building a Delauney
+    /// triangulation from a regular triangulation instead of going straight for
+    /// an angle-optimal triangulation.
+    ///
+    /// Provided there are a finite number of possible triangulations in a fixed
+    /// point set, we define an angle-optimal triangulation as one whose angle
+    /// vector is lexicographically larger than some other triangulation for the
+    /// same point set. The angle vector of some triangulation is denoted by the
+    /// multiset of angles for each of the vertices in both of the two triangles
+    /// that a quadrilateral can be broken down into. When a quadrilateral is
+    /// convex, two such possible combinations of triangles exist; It is in the
+    /// optimality of one of these that a better triangulation can be found.
+    ///
+    /// To determine the optimality of an angle, we seek for non-bounding edges
+    /// in the triangulation that can be flipped. We define edge-flipping as an
+    /// operation whereby the quadrilateral formed from the two triangles
+    /// incident to some such edge has the original edge removed, and a new edge
+    /// added between the other two non-adjacent points in the quadrilateral.
+    ///
+    /// [de Berg et. al., 2008]: https://doi.org/10.1007/978-3-540-77974-2
+    pub fn optimize_triangulation(&self, triangulation: &mut [Vec<GeoEdge>]) {
+        while let Some(((src, dst), (p1, p2))) = Self::find_next_opt(triangulation) {
+            // Recall `self` is outfit with edges between *any* pair of vertices
+            // that don't form a self-loop; It is `triangulation` that only
+            // considers a *proper subset* of those edges.
+            (
+                triangulation[src][dst],
+                triangulation[dst][src],
+                triangulation[p1][p2],
+                triangulation[p2][p1],
+            ) = (
+                GeoEdge::NonExistent,
+                GeoEdge::NonExistent,
+                self.0[p1][p2],
+                self.0[p2][p1],
+            );
+        }
+    }
+
+    /// Scans the triangulation and returns the quadrilateral that can have an
+    /// edge-flip operation performed on it, if any.
+    ///
+    /// For an explanation of the purpose of an edge-flipping operation in a
+    /// quadrilateral within the context of a triangulation, see Sec. 9.1,
+    /// [de Berg et. al., 2008], and the relevant documentation in
+    /// [`triangulate()`] and [`optimize_triangulation()`].
+    ///
+    /// The return value consists of an ordered pair of ordered pairs, where the
+    /// first inner tuple denotes the points with the edge that can be flipped,
+    /// and the second inner tuple denotes the other two points forming the
+    /// quadrilateral, and thus also the points that will hold the new edge
+    /// upon flipping the current one.
+    ///
+    /// [de Berg et. al., 2008]: https://doi.org/10.1007/978-3-540-77974-2
+    /// [`triangulate()`]: Self::triangulate()
+    /// [`optimize_triangulation()`]: Self::optimize_triangulation()
+    pub fn find_next_opt(
+        triangulation: &mut [Vec<GeoEdge>],
+    ) -> Option<((usize, usize), (usize, usize))> {
+        triangulation
+            .iter()
+            .enumerate()
+            // Only takes edges above the main diagonal; The triangulation is
+            // stored as an adjacency matrix for an undirected, simple graph so
+            // all other edges (below the main diagonal) are only flipped, and
+            // the main diagonal is empty.
+            .flat_map(|(src, row)| (0..row.len()).skip(src + 1).map(move |dst| (src, dst)))
+            // Finds an edge in the triangulation that is determined to be
+            // illegal by de Berg et. al.'s terminology.
+            //
+            // It's failry straightforward; You try to find the two other points
+            // that would make up a quadrilateral alongside the edge at hand
+            // (denoted by (`src`, `dst`),) and then make sure the quadrilateral
+            // is convex. We could fail at the start if the edge is not an inner
+            // edge but rather a boundary edge of the convex hull, or we could
+            // fail in finding a convex quadrilateral because one of the points
+            // in the triangulation is a reflex vertex (i.e. you can find it
+            // lying within the area of the triangle formed by the other three
+            // vertices.) Then you check if there's a possibly better,
+            // angle-wise, triangulation by checking for a consequence of
+            // Thales' theorem (see Sec. 9.1, de Berg et. al., 2008) and perform
+            // edge flipping if that's the case.
+            .find_map(|(src, dst)| {
+                let (
+                    GeoEdge::Weighted { coord: p_dst, .. },
+                    GeoEdge::Weighted { coord: p_src, .. },
+                ) = (&triangulation[src][dst], &triangulation[dst][src])
+                else {
+                    return None;
+                };
+
+                // If we broke early, then we found (`p1`, `p2`); Otherwise, we may
+                // have found them at the end or not found them at all.
+                if let ControlFlow::Continue((Some((p1, p1_idx)), Some((p2, p2_idx))))
+                | ControlFlow::Break((Some((p1, p1_idx)), Some((p2, p2_idx)))) = triangulation
+                    [src]
+                    .iter()
+                    .enumerate()
+                    .try_fold((None, None), |(p1, p2), (idx, edge)| {
+                        let GeoEdge::Weighted { coord, .. } = edge else {
+                            return ControlFlow::Continue((p1, p2));
+                        };
+
+                        match (p1, p2) {
+                            (None, p2) => ControlFlow::Continue((
+                                Self::validate_neighboring_point(
+                                    triangulation,
+                                    (idx, *coord),
+                                    (src, *p_src),
+                                    (dst, *p_dst),
+                                ),
+                                p2,
+                            )),
+                            (p1, None) => {
+                                let p2 = Self::validate_neighboring_point(
+                                    triangulation,
+                                    (idx, *coord),
+                                    (src, *p_src),
+                                    (dst, *p_dst),
+                                );
+
+                                if p2.is_some() {
+                                    ControlFlow::Break((p1, p2))
+                                } else {
+                                    ControlFlow::Continue((p1, p2))
+                                }
+                            }
+                            // None of the points are `None` so we've found all
+                            // we needed.
+                            other => ControlFlow::Break(other),
+                        }
+                    })
+                    && {
+                        // Checks for convexity of the quadrilateral by making
+                        // sure no point in it lies within the area denoted by
+                        // any one of the two incident triangles making it up.
+                        (Self::check_point_ownership((p1, p2, *p_src), *p_dst)
+                            || Self::check_point_ownership((p1, p2, *p_dst), *p_src))
+                        .not()
+                    }
+                    && let Some(ring_center) = {
+                        // Checks if one can find a ring that crosses the two
+                        // points denoting the segment-edge incident to both
+                        // triangles and, because this is symmetric, any one of
+                        // `p1` or `p2`. If so, edge-flipping is feasible.
+                        // Correctness follows from Thales' Theorem.
+                        //
+                        // The implementation is inefficient because the routine
+                        // to compute the center of the ring can produce
+                        // different results depending on the order of its
+                        // inputs; Different in that it can return `Some(_)` for
+                        // some ordered triple (a, b, c), and `None` for some
+                        // other tuple (a, c, b), but it will never produce a
+                        // different value for the actual ring center provided
+                        // the same tuple elements.
+                        macro_rules! perms {
+                            ($p_src:expr, $p:expr, $p_dst:expr) => {{
+                                [*$p_src, $p, *$p_dst]
+                                    .iter()
+                                    .permutations(3)
+                                    .try_fold(
+                                        Point2d::default(),
+                                        |find_ring_result, points_vector| {
+                                            let p_a = points_vector[0];
+                                            let p_b = points_vector[1];
+                                            let p_c = points_vector[2];
+
+                                            if let Some(result) =
+                                                Self::find_ring((*p_a, *p_b, *p_c))
+                                            {
+                                                ControlFlow::Break(result)
+                                            } else {
+                                                ControlFlow::Continue(find_ring_result)
+                                            }
+                                        },
+                                    )
+                                    .map_break(Some)
+                                    .map_continue(|_| None)
+                                    .into_value()
+                            }};
+                        }
+
+                        let output = perms!(p_src, p2, p_dst);
+                        if output.is_some() {
+                            debug_assert_matches!(
+                                (output, perms!(p_src, p1, p_dst)),
+                                (Some(_), Some(_))
+                            );
+                        }
+
+                        output
+                    }
+                    && {
+                        // Even if it lies on the boundary or just near it, we
+                        // want to discard it; `p1` is either in or not.
+                        seglen(ring_center, p2) - seglen(ring_center, p1) > 0.
+                    }
+                {
+                    Some(((src, dst), (p1_idx, p2_idx)))
+                } else {
+                    None
+                }
+            })
+    }
 }
 
 impl PartialEq for GeoAdjacencyMatrix {
@@ -898,14 +1219,14 @@ pub trait TspTriMstDfs {
     /// Checks if some point `p_to_check` lies within some triangle (`a`, `b`,
     /// `c`).
     ///
-    /// This follows Sec. 1.5.3, O'Rourke, 2001. A point is said to lie within a
-    /// convex polgyon if such point always lies to the left or right of each
+    /// This follows Sec. 1.5.3, [O'Rourke, 2001]. A point is said to lie within
+    /// a convex polgyon if such point always lies to the left or right of each
     /// directed segment of such polygon.
     ///
     /// Irrespective of the "clockwiseness" of the directed segments (the
     /// determinant for whether we check for left-ness or right-ness,) it holds
     /// that the ultimate condition checked for is always that of same sign for
-    /// all left or right checks; Thus we perform the check (computing the area
+    /// all left or right turns; Thus we perform the check (computing the area
     /// of the triangle formed form the directed segment and the query point in
     /// terms of the determinant of the simplicial complex,) and make sure the
     /// same sign holds for all results.
@@ -913,6 +1234,8 @@ pub trait TspTriMstDfs {
     /// Yes, IEEE 754 considers both -0. and +0., but the applications I found
     /// for this library did not require checking for points that lied on the
     /// boundary of the polygon.
+    ///
+    /// [O'Rourke, 2001]: https://doi.org/10.1017/CBO9780511804120
     #[expect(
         clippy::must_use_candidate,
         reason = "It's not a bug not to use the result of this associated function."
@@ -927,15 +1250,11 @@ pub trait TspTriMstDfs {
             })
             .is_ok()
     }
-    fn build_hull(
-        &self,
-        triangulation: &mut [Vec<GeoEdge>],
-        hull: &mut Vec<(usize, Point2d)>,
-        compare: impl Fn(Point2d, Point2d, Point2d) -> bool,
-        points: &[(usize, Point2d)],
-    );
-    fn optimize_triangulation(&self, triangulation: &mut Vec<Vec<GeoEdge>>);
-    fn triangulate(&self, points: Vec<Point2d>) -> GeoAdjacencyMatrix;
+    #[expect(
+        clippy::return_self_not_must_use,
+        reason = "It's not a bug not to use the return value."
+    )]
+    fn triangulate(&self, points: Vec<Point2d>) -> Self;
 
     fn mst(&self) -> Vec<usize>;
     fn dfs(&self) -> Vec<usize>;
@@ -1028,285 +1347,6 @@ impl TspClosestPair for AdjacencyMatrix {
 }
 
 impl TspTriMstDfs for GeoAdjacencyMatrix {
-    /// Builds any one of the upper or lower convex hulls of a point set
-    /// provided a corresponding comparison function, and builds an accompanying
-    /// triangulation from the edges that got removed from the hull.
-    ///
-    /// The algorithm follows [Andrew, 1979]'s approach, with [Skiena, 2020]'s
-    /// algorithm for building a triangulation from the points that are removed
-    /// from the convex hull during construction.
-    ///
-    /// To determine which of the upper or lower hull to construct at a time,
-    /// the function accepts a custom comparison function that should determine
-    /// whether the last three points in the hull's boundary are "turning right"
-    /// or "turning left." The use of trivial terminology is due to the
-    /// possibility for such a comparison function to be determined in one of
-    /// multiple ways. For the one used in [`triangulate()`], see
-    /// Sec. 1.2.1 in [O'Rourke, 2001].
-    ///
-    /// [Andrew, 1979]: https://doi.org/10.1016/0020-0190(79)90072-3
-    /// [Skiena, 2020]: https://doi.org/10.1007/978-3-030-54256-6
-    /// [`triangulate()`]: Self::triangulate()
-    /// [O'Rourke, 2001]: https://doi.org/10.1017/CBO9780511804120
-    fn build_hull(
-        &self,
-        triangulation: &mut [Vec<GeoEdge>],
-        hull: &mut Vec<(usize, Point2d)>,
-        compare: impl Fn(Point2d, Point2d, Point2d) -> bool,
-        points: &[(usize, Point2d)],
-    ) {
-        for &(vertex, point) in points {
-            while hull.len() > 1
-                && let Some((rm, _)) = {
-                    let (_, prev_last) = hull[hull.len() - 2];
-
-                    hull.pop_if(|(_, last)| compare(prev_last, *last, point))
-                }
-            {
-                let (&(prev, _), post) = (
-                    hull.last()
-                        .expect("The hull should have at least two points here."),
-                    vertex,
-                );
-
-                (
-                    triangulation[prev][rm],
-                    triangulation[post][rm],
-                    triangulation[rm][prev],
-                    triangulation[rm][post],
-                ) = (
-                    self.0[prev][rm],
-                    self.0[post][rm],
-                    self.0[rm][prev],
-                    self.0[rm][post],
-                );
-            }
-
-            hull.push((vertex, point));
-        }
-    }
-    /// Finds the best angle-optimal triangulation for a point set `self` given
-    /// a starting triangulation `triangulation`.
-    ///
-    /// This follows the method of local maxima outlined in Sec. 9.1,
-    /// [de Berg et. al., 2008].
-    ///
-    /// The algorithm is inefficient but I wanted to try out building a Delauney
-    /// triangulation from a regular triangulation instead of going straight for
-    /// an angle-optimal triangulation.
-    ///
-    /// Provided there are a finite number of possible triangulations in a fixed
-    /// point set, we define an angle-optimal triangulation as one whose angle
-    /// vector is lexicographically larger than some other triangulation for the
-    /// same point set. The angle vector of some triangulation is denoted by the
-    /// multiset of angles for each of the vertices in any one of the two
-    /// triangles that a quadrilateral can be broken down into. When a
-    /// quadrilateral is convex, two such possible combinations of triangles
-    /// exist; It is in the optimality of one of these that a better
-    /// triangulation can be found.
-    ///
-    /// To determine the optimality of an angle, we seek for non-bounding edges
-    /// in the triangulation that can be flipped. We define edge-flipping as an
-    /// operation whereby the quadrilateral formed from the two triangles
-    /// incident to some such edge has the original edge removed, and a new edge
-    /// added between the other two non-adjacent points in the quadrilateral.
-    ///
-    /// [de Berg et. al., 2008]: https://doi.org/10.1007/978-3-540-77974-2
-    fn optimize_triangulation(&self, triangulation: &mut Vec<Vec<GeoEdge>>) {
-        while let Some(((src, dst), (p1, p2))) = triangulation
-            .iter()
-            .enumerate()
-            // Only takes edges above the main diagonal; The triangulation is
-            // stored as an adjacency matrix for an undirected, simple graph so
-            // all other edges (below the main diagonal) are only flipped, and
-            // the main diagonal is empty.
-            .flat_map(|(src, row)| (0..row.len()).skip(src + 1).map(move |dst| (src, dst)))
-            // Finds an edge in the triangulation that is determined to be
-            // illegal by de Berg et. al.'s terminology.
-            // It's failry straightforward; You try to find the two other points
-            // that would make up a quadrilateral alongside the edge at hand
-            // (denoted by (`src`, `dst`),) and then make sure the quadrilateral
-            // is convex. We could fail at the start if the edge is not an inner
-            // edge but rather a boundary edge of the convex hull, or we could
-            // fail in finding a convex quadrilateral because one of the points
-            // in the triangulation is a reflex vertex (i.e. you can find it
-            // lying within the area of the triangle formed by the other three
-            // vertices.) Then you check if there's a possibly better,
-            // angle-wise, triangulation by checking for a consequence of
-            // Thales' theorem (see Sec. 9.1, de Berg et. al., 2008) and perform
-            // edge flipping if that's the case.
-            .find_map(|(src, dst)| {
-                let (
-                    GeoEdge::Weighted { coord: p_dst, .. },
-                    GeoEdge::Weighted { coord: p_src, .. },
-                ) = (&triangulation[src][dst], &triangulation[dst][src])
-                else {
-                    return None;
-                };
-
-                eprintln!("for (src, dst):\t\t(({p_src:?}, {src}), ({p_dst:?}, {dst}))");
-
-                // If we broke early, then we found (`p1`, `p2`); Otherwise, we
-                // may have found them at the end or not found them at all.
-                if let ControlFlow::Continue((Some((p1, p1_idx)), Some((p2, p2_idx))))
-                | ControlFlow::Break((Some((p1, p1_idx)), Some((p2, p2_idx)))) = triangulation
-                    [src]
-                    .iter()
-                    .enumerate()
-                    .try_fold((None, None), |(p1, p2), (idx, edge)| {
-                        let GeoEdge::Weighted { coord, .. } = edge else {
-                            return ControlFlow::Continue((p1, p2));
-                        };
-
-                        eprintln!("for (idx, coord):\t({idx}, {coord:?})");
-
-                        // Checks if there's any neighbor to the current
-                        // neighbor of `src` that is equivalent to `dst`, while
-                        // also making sure we are not choosing a point that
-                        // stems from `src` but can contain an actually valid
-                        // point (because there's a different, concave
-                        // quadrilateral nearby.)
-                        let find_p = || {
-                            triangulation[idx].iter().enumerate().find_map(
-                                |(inner_idx, inner_edge)| {
-                                    (inner_idx == dst
-                                        && matches!(inner_edge, GeoEdge::Weighted { .. })
-                                        && triangulation[src]
-                                            .iter()
-                                            .filter_map(|elem| {
-                                                if let GeoEdge::Weighted {
-                                                    coord: p_to_check, ..
-                                                } = elem
-                                                    && p_to_check != coord
-                                                    && p_to_check != p_dst
-                                                {
-                                                    Some(p_to_check)
-                                                } else {
-                                                    None
-                                                }
-                                            })
-                                            .all(|p_to_check| {
-                                                Self::check_point_ownership(
-                                                    (*p_src, *p_dst, *coord),
-                                                    *p_to_check,
-                                                )
-                                                .not()
-                                            }))
-                                    // Yes, the outer `coord` and `idx`.
-                                    .then_some((coord, idx))
-                                },
-                            )
-                        };
-
-                        match (p1, p2) {
-                            (None, p2) => ControlFlow::Continue((find_p(), p2)),
-                            (p1, None) => {
-                                let p2 = find_p();
-
-                                if p2.is_some() {
-                                    eprintln!("\nfound them:\t\t({p1:?}, {p2:?})\n");
-                                    ControlFlow::Break((p1, p2))
-                                } else {
-                                    ControlFlow::Continue((p1, p2))
-                                }
-                            }
-                            // None of the points are `None` so we've found all
-                            // we needed.
-                            other => {
-                                eprintln!("\nfound them:\t\t({p1:?}, {p2:?})\n");
-                                ControlFlow::Break(other)
-                            }
-                        }
-                    })
-                    && {
-                        // Checks for convexity of the quadrilateral by making
-                        // sure no point in it lies within the area denoted by
-                        // any one of the two incident triangles making it up.
-                        (Self::check_point_ownership((*p1, *p2, *p_src), *p_dst)
-                            || Self::check_point_ownership((*p1, *p2, *p_dst), *p_src))
-                        .not()
-                    }
-                    && let Some(ring_center) = {
-                        // Checks if one can find a ring that crosses the two
-                        // points denoting the segment-edge incident to both
-                        // triangles and, because this is symmetric, any one of
-                        // `p1` or `p2`. If so, edge-flipping is feasible.
-                        // Correctness follows from Thales' Theorem.
-                        // TODO: escape with the first result of the permutation
-                        // that yields a Some(_) with `find_ring`; and apply the
-                        // same reasoning below with p1 inside `debug_assert!`.
-                        let output = [*p_src, *p2, *p_dst].iter().permutations(3).try_fold(
-                            Point2d::default(),
-                            |mut find_ring_result, points_vector| {
-                                let [p_a, p_b, p_c] = points_vector[..] else {
-                                    return ControlFlow::Break(find_ring_result);
-                                };
-
-                                if let Some(result) = Self::find_ring((*p_a, *p_b, *p_c)) {
-                                    find_ring_result = result;
-                                    ControlFlow::Break(find_ring_result)
-                                } else {
-                                    ControlFlow::Continue(find_ring_result)
-                                }
-                            },
-                        );
-                        let output = Self::find_ring((*p_src, *p2, *p_dst));
-
-                        eprintln!("hit ring condition\n");
-                        if output.is_some() {
-                            debug_assert!(
-                                matches!(
-                                    (output, Self::find_ring((*p_src, *p1, *p_dst))),
-                                    (Some(_), Some(_))
-                                ) || matches!(
-                                    (output, Self::find_ring((*p_dst, *p1, *p_src))),
-                                    (Some(_), Some(_))
-                                ) || matches!(
-                                    (output, Self::find_ring((*p1, *p_src, *p_dst))),
-                                    (Some(_), Some(_))
-                                ) || matches!(
-                                    (output, Self::find_ring((*p1, *p_dst, *p_src))),
-                                    (Some(_), Some(_))
-                                ) || matches!(
-                                    (output, Self::find_ring((*p_src, *p_dst, *p1))),
-                                    (Some(_), Some(_))
-                                ) || matches!(
-                                    (output, Self::find_ring((*p_dst, *p_src, *p1))),
-                                    (Some(_), Some(_))
-                                )
-                            );
-                        }
-
-                        output
-                    }
-                    && {
-                        // Even if it lies on the boundary or just near it, we
-                        // want to discard it; `p2` is either in or not.
-                        seglen(ring_center, *p2) - seglen(ring_center, *p1) > 0.
-                    }
-                {
-                    Some(((src, dst), (p1_idx, p2_idx)))
-                } else {
-                    None
-                }
-            })
-        {
-            // Recall `self` is outfit with edges between *any* pair of vertices
-            // that don't form a self-loop; It is `triangulation` that only
-            // considers a *proper subset* of those edges.
-            (
-                triangulation[src][dst],
-                triangulation[dst][src],
-                triangulation[p1][p2],
-                triangulation[p2][p1],
-            ) = (
-                GeoEdge::NonExistent,
-                GeoEdge::NonExistent,
-                self.0[p1][p2],
-                self.0[p2][p1],
-            );
-        }
-    }
     /// Computes the Delauney trianguluation of a given point set and stores it
     /// in the adjacency matrix `self`.
     ///
