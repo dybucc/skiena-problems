@@ -10,6 +10,13 @@
 //! The use of errors is also very much unidiomatic and overall not what you
 //! would go for in a real library.
 //!
+//! The use of tests is not meant to really provide anything but a way of
+//! checking how did the changes I made to the code have affected the final
+//! result. This is especially true of the TSP implementation that uses a
+//! triangulation, as tests only serve me to check if the resulting output
+//! matches the output of the `visualizer` Rust plugin for Typst when plot with
+//! the Typst `CeTZ` library.
+//!
 //! [Skiena, 2020]: https://doi.org/10.1007/978-3-030-54256-6
 
 #![feature(bool_to_result, control_flow_into_value)]
@@ -1159,6 +1166,12 @@ pub trait TspClosestPair {
     fn tsp(&self) -> Vec<usize>;
 }
 
+/// Solves a symmetric instance of the TSP by computing the MST and performing
+/// a DFS on the resulting tree.
+///
+/// To compute the MST, we build a Delauney triangulation, and run Kruskal's on
+/// it. Then we perform DFS on the resulting graph and record all arcs the
+/// second time we go through them.
 pub trait TspTriMstDfs {
     /// Computes the area of a triangle in terms of its determinant.
     ///
@@ -1231,9 +1244,9 @@ pub trait TspTriMstDfs {
     /// terms of the determinant of the simplicial complex,) and make sure the
     /// same sign holds for all results.
     ///
-    /// Yes, IEEE 754 considers both -0. and +0., but the applications I found
-    /// for this library did not require checking for points that lied on the
-    /// boundary of the polygon.
+    /// It also handles the cases where some floating point number is one of
+    /// `-0.` or `+0.` (i.e. when the query point lies in the boundary of the
+    /// triangle.)
     ///
     /// [O'Rourke, 2001]: https://doi.org/10.1017/CBO9780511804120
     #[expect(
@@ -1243,10 +1256,23 @@ pub trait TspTriMstDfs {
     fn check_point_ownership((a, b, c): (Point2d, Point2d, Point2d), p_to_check: Point2d) -> bool {
         [(a, b, p_to_check), (b, c, p_to_check), (c, a, p_to_check)]
             .iter()
-            .map(|t| Self::compute_raw_triangle_area(*t).signum())
-            .try_fold(None, |sign_state: Option<f64>, sign| match sign_state {
+            .map(|t| {
+                let output = Self::compute_raw_triangle_area(*t);
+                // Handle `-0.` by producing the same result as `0.0.signum()`.
+                if output == -0. {
+                    return 1.;
+                }
+
+                output.signum()
+            })
+            .try_fold(None, |sign_state, sign| match sign_state {
                 None => Ok(Some(sign)),
-                Some(sign_state) => sign_state.eq(&sign).ok_or(()).map(|()| Some(sign_state)),
+                #[expect(
+                    clippy::float_cmp,
+                    reason = "The sign is always one of `-0.`, `+0.` or `NaN`. I am sure it will \
+                             never be the latter."
+                )]
+                Some(sign_state) => (sign_state == sign).ok_or(()).map(|()| Some(sign_state)),
             })
             .is_ok()
     }
@@ -1347,8 +1373,7 @@ impl TspClosestPair for AdjacencyMatrix {
 }
 
 impl TspTriMstDfs for GeoAdjacencyMatrix {
-    /// Computes the Delauney trianguluation of a given point set and stores it
-    /// in the adjacency matrix `self`.
+    /// Computes the Delauney trianguluation of a given point set.
     ///
     /// The method follows that for some point set _already_ embedded into the
     /// receiver, and a separate vector comprising only the point set (not
@@ -1366,7 +1391,7 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
     ///
     /// [`build_hull()`]: Self::build_hull()
     /// [`optimize_triangulation()`]: Self::optimize_triangulation()
-    fn triangulate(&self, points: Vec<Point2d>) -> GeoAdjacencyMatrix {
+    fn triangulate(&self, points: Vec<Point2d>) -> Self {
         let mut points: Vec<_> = points.into_iter().enumerate().collect();
         let (mut upper_hull, mut lower_hull, mut triangulation) = (
             Vec::with_capacity(points.len().div_ceil(2)),
@@ -1433,6 +1458,8 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
         Self(triangulation)
     }
 
+    // TODO: finish reading the intro to the LEDA library, and look into their
+    // implementation of the MST.
     fn mst(&self) -> Vec<usize> {
         todo!();
     }
