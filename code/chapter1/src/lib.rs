@@ -32,6 +32,7 @@ use std::{
 };
 
 use itertools::Itertools;
+use serde_json::Value;
 
 #[derive(Debug)]
 pub struct AdjacencyMatrix(Vec<Vec<Edge>>);
@@ -175,6 +176,7 @@ pub enum AdjacencyMatrixErrorType {
     SelfLoops(String),
     MultipleEqualPoints(String),
     UnequalSamePoints(String),
+    InvalidJson(String),
 }
 
 #[macro_export]
@@ -197,6 +199,21 @@ macro_rules! matrix {
 macro_rules! geomatrix {
     ($($(($x:literal, $y:literal, $weight:literal)),+);+ $(;)?) => {{
         GeoAdjacencyMatrix::new(&[$(vec![$({
+            match $weight.cmp(&0) {
+                Ordering::Equal => GeoEdge::NonExistent,
+                Ordering::Greater => GeoEdge::Weighted {
+                    weight: $weight,
+                    coord: Point2d { x: $x, y: $y },
+                },
+                _ => unimplemented!(
+                    "edge weights are forced to be `usize` in the `Ordering::Greater` branch so \
+                    this cannot happen",
+                )
+            }
+        }),+]),+])
+    }};
+    (@nover $($(($x:literal, $y:literal, $weight:literal)),+);+ $(;)?) => {{
+        GeoAdjacencyMatrix::from(vec![$(vec![$({
             match $weight.cmp(&0) {
                 Ordering::Equal => GeoEdge::NonExistent,
                 Ordering::Greater => GeoEdge::Weighted {
@@ -764,7 +781,6 @@ impl GeoAdjacencyMatrix {
 
             output
         });
-
         output.iter_mut().enumerate().for_each(|(row, row_vec)| {
             row_vec.iter_mut().enumerate().for_each(|(col, edge)| {
                 if col == row {
@@ -774,7 +790,6 @@ impl GeoAdjacencyMatrix {
                 }
             });
         });
-
         // This finds the largest distance between any one point and any other,
         // different point, in the input set.
         let largest_distance = points
@@ -814,7 +829,7 @@ impl GeoAdjacencyMatrix {
                                 )]
                                 weight: ((seglen(points[row], points[col]) * 100.)
                                     / largest_distance)
-                                    .round() as usize,
+                                    .trunc() as usize,
                                 coord: *coord,
                             },
                         })
@@ -825,7 +840,12 @@ impl GeoAdjacencyMatrix {
 
         (points, output)
     }
+}
 
+/// Utilities related to the algorithm implemented in [`TspTriMstDfs`].
+///
+/// [`TspTriMstDfs`]: crate::TspTriMstDfs
+impl GeoAdjacencyMatrix {
     /// Validates some neighboring point to edge (`src`, `dst`) in
     /// `triangulation` by checking if it's one of the points forming the
     /// triangles incident to such edge.
@@ -872,12 +892,7 @@ impl GeoAdjacencyMatrix {
                 .then_some((neighbor_coord, neighbor_idx))
             })
     }
-}
 
-/// Utilities related to the algorithm implemented in [`TspTriMstDfs`].
-///
-/// [`TspTriMstDfs`]: crate::TspTriMstDfs
-impl GeoAdjacencyMatrix {
     /// Builds any one of the upper or lower convex hulls of a point set
     /// provided a corresponding comparison function, and builds an accompanying
     /// triangulation from the edges that got removed from the hull.
@@ -1153,6 +1168,105 @@ impl PartialEq for GeoAdjacencyMatrix {
             .iter()
             .enumerate()
             .all(|(idx, row)| row.iter().eq(other.0[idx].iter()))
+    }
+}
+
+impl From<Vec<Vec<GeoEdge>>> for GeoAdjacencyMatrix {
+    fn from(value: Vec<Vec<GeoEdge>>) -> Self {
+        Self(value)
+    }
+}
+
+fn process_rows(inner: &[Value]) -> Result<GeoAdjacencyMatrix, AdjacencyMatrixError> {
+    let inner = inner
+        .iter()
+        .try_fold(Vec::with_capacity(inner.len()), |mut output, row| {
+            if let Value::Array(row) = row {
+                output.push(row);
+                return Ok(output);
+            }
+
+            Err(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                "expected the adjacency matrix as a json array",
+            )))
+        })?;
+    let mut outer_output = Vec::with_capacity(inner.len());
+    for row in inner {
+        let mut output = Vec::with_capacity(row.len());
+        for value in row {
+            match value {
+                Value::Null => output.push(GeoEdge::NonExistent),
+                Value::Object(coords) => output.push(GeoEdge::Weighted {
+                    #[expect(
+                        clippy::cast_possible_truncation,
+                        reason = "This only ever runs on my machine."
+                    )]
+                    weight: coords
+                        .get("weight")
+                        .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                            "expected every coordinate point to have a `weight` key",
+                        )))?
+                        .as_u64()
+                        .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                            "expected every coordinate point to have a numeric `weight` key",
+                        )))? as usize,
+                    coord: Point2d {
+                        x: coords
+                            .get("x")
+                            .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                                "expected every coordinate point to have an `x` key",
+                            )))?
+                            .as_f64()
+                            .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                                "expected every coordinate point to have a numeric `x` key",
+                            )))?,
+                        y: coords
+                            .get("y")
+                            .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                                "expected every coordinate point to have an `y` key",
+                            )))?
+                            .as_f64()
+                            .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                                "expected every coordinate point to have a numeric `y` key",
+                            )))?,
+                    },
+                }),
+                _ => {
+                    return Err(AdjacencyMatrixError(AdjacencyMatrixErrorType::InvalidJson(
+                        String::from(
+                            "expected each row of the matrix to be `null` or a map to an edge",
+                        ),
+                    )));
+                }
+            }
+        }
+        outer_output.push(output);
+    }
+
+    Ok(GeoAdjacencyMatrix(outer_output))
+}
+
+impl TryFrom<Value> for GeoAdjacencyMatrix {
+    type Error = AdjacencyMatrixError;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Array(inner) => {
+                match inner
+                    .first()
+                    .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                        "expected the adjacency matrix as a json array",
+                    )))? {
+                    Value::Array(inner) => process_rows(inner),
+                    _ => Err(AdjacencyMatrixError(AdjacencyMatrixErrorType::InvalidJson(
+                        String::from("expected a json array with the matrix array inside it"),
+                    ))),
+                }
+            }
+            _ => Err(AdjacencyMatrixError(AdjacencyMatrixErrorType::InvalidJson(
+                String::from("expected a json array with the matrix array inside it"),
+            ))),
+        }
     }
 }
 
@@ -1474,7 +1588,13 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        fs::File,
+        io::{BufReader, Read},
+    };
+
     use macros::points;
+    use serde_json::Value;
 
     use super::*;
 
@@ -1721,9 +1841,6 @@ mod tests {
         Ok(())
     }
 
-    // TODO: update all the `points_macro*` tests and/or see into floating point
-    //       imprecision in `GeoAdjacencyMatrix::from_point_set()`.
-
     #[test]
     fn points_macro1() -> Result<(), AdjacencyMatrixError> {
         assert_eq!(
@@ -1808,8 +1925,15 @@ mod tests {
             (x: 3, y: 0.75),
             (x: 3.75, y: 3.7),
         };
+        let file = File::open("../../triangulation-0.json").unwrap();
+        let mut buf = BufReader::new(file);
+        let mut file = String::new();
+        buf.read_to_string(&mut file).unwrap();
+        let input =
+            GeoAdjacencyMatrix::try_from(serde_json::from_str::<Value>(file.as_str()).unwrap())
+                .unwrap();
 
-        matrix.triangulate(points);
+        assert_eq!(matrix.triangulate(points), input);
     }
 
     #[test]
@@ -1829,8 +1953,15 @@ mod tests {
             (x: 6, y: 3.25),
             (x: 7, y: 2),
         };
+        let file = File::open("../../triangulation-1.json").unwrap();
+        let mut buf = BufReader::new(file);
+        let mut file = String::new();
+        buf.read_to_string(&mut file).unwrap();
+        let input =
+            GeoAdjacencyMatrix::try_from(serde_json::from_str::<Value>(file.as_str()).unwrap())
+                .unwrap();
 
-        matrix.triangulate(points);
+        assert_eq!(matrix.triangulate(points), input);
     }
 
     #[test]
@@ -1850,8 +1981,15 @@ mod tests {
             (x: 6.2, y: 4.7),
             (x: 7, y: 3.45),
         };
+        let file = File::open("../../triangulation-2.json").unwrap();
+        let mut buf = BufReader::new(file);
+        let mut file = String::new();
+        buf.read_to_string(&mut file).unwrap();
+        let input =
+            GeoAdjacencyMatrix::try_from(serde_json::from_str::<Value>(file.as_str()).unwrap())
+                .unwrap();
 
-        matrix.triangulate(points);
+        assert_eq!(matrix.triangulate(points), input);
     }
 
     #[test]

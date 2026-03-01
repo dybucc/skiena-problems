@@ -1,4 +1,4 @@
-#import "@local/typst-template:0.33.0": *
+#import "@local/typst-template:0.36.0": *
 
 #show: template.with(
   title: [DSA],
@@ -2713,6 +2713,10 @@ Cartesian products")).
     let triangulation-0 = triangulate(points-0)
     let triangulation-1 = triangulate(points-1)
     let triangulation-2 = triangulate(points-2)
+
+    [#metadata(triangulation-0) <triangulation-0>
+      #metadata(triangulation-1) <triangulation-1>
+      #metadata(triangulation-2) <triangulation-2>]
 
     canvas({
       import draw: *
