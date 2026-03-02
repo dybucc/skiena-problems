@@ -15,7 +15,7 @@
 //! result. This is especially true of the TSP implementation that uses a
 //! triangulation, as tests only serve me to check if the resulting output
 //! matches the output of the `visualizer` Rust plugin for Typst when plot with
-//! the Typst `CeTZ` library.
+//! Typst's `CeTZ` library.
 //!
 //! [Skiena, 2020]: https://doi.org/10.1007/978-3-030-54256-6
 
@@ -133,6 +133,8 @@ impl Hash for Point2d {
 }
 
 impl Eq for Point2d {}
+
+pub struct GeoAdjacencyList(Vec<GeoEdge>);
 
 #[derive(Debug)]
 pub struct Dfs {
@@ -1162,6 +1164,12 @@ impl GeoAdjacencyMatrix {
     }
 }
 
+impl From<GeoAdjacencyMatrix> for GeoAdjacencyList {
+    fn from(value: GeoAdjacencyMatrix) -> Self {
+        todo!()
+    }
+}
+
 impl PartialEq for GeoAdjacencyMatrix {
     fn eq(&self, other: &Self) -> bool {
         self.0
@@ -1174,99 +1182,6 @@ impl PartialEq for GeoAdjacencyMatrix {
 impl From<Vec<Vec<GeoEdge>>> for GeoAdjacencyMatrix {
     fn from(value: Vec<Vec<GeoEdge>>) -> Self {
         Self(value)
-    }
-}
-
-fn process_rows(inner: &[Value]) -> Result<GeoAdjacencyMatrix, AdjacencyMatrixError> {
-    let inner = inner
-        .iter()
-        .try_fold(Vec::with_capacity(inner.len()), |mut output, row| {
-            if let Value::Array(row) = row {
-                output.push(row);
-                return Ok(output);
-            }
-
-            Err(AdjacencyMatrixErrorType::InvalidJson(String::from(
-                "expected the adjacency matrix as a json array",
-            )))
-        })?;
-    let mut outer_output = Vec::with_capacity(inner.len());
-    for row in inner {
-        let mut output = Vec::with_capacity(row.len());
-        for value in row {
-            match value {
-                Value::Null => output.push(GeoEdge::NonExistent),
-                Value::Object(coords) => output.push(GeoEdge::Weighted {
-                    #[expect(
-                        clippy::cast_possible_truncation,
-                        reason = "This only ever runs on my machine."
-                    )]
-                    weight: coords
-                        .get("weight")
-                        .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
-                            "expected every coordinate point to have a `weight` key",
-                        )))?
-                        .as_u64()
-                        .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
-                            "expected every coordinate point to have a numeric `weight` key",
-                        )))? as usize,
-                    coord: Point2d {
-                        x: coords
-                            .get("x")
-                            .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
-                                "expected every coordinate point to have an `x` key",
-                            )))?
-                            .as_f64()
-                            .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
-                                "expected every coordinate point to have a numeric `x` key",
-                            )))?,
-                        y: coords
-                            .get("y")
-                            .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
-                                "expected every coordinate point to have an `y` key",
-                            )))?
-                            .as_f64()
-                            .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
-                                "expected every coordinate point to have a numeric `y` key",
-                            )))?,
-                    },
-                }),
-                _ => {
-                    return Err(AdjacencyMatrixError(AdjacencyMatrixErrorType::InvalidJson(
-                        String::from(
-                            "expected each row of the matrix to be `null` or a map to an edge",
-                        ),
-                    )));
-                }
-            }
-        }
-        outer_output.push(output);
-    }
-
-    Ok(GeoAdjacencyMatrix(outer_output))
-}
-
-impl TryFrom<Value> for GeoAdjacencyMatrix {
-    type Error = AdjacencyMatrixError;
-
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
-        match value {
-            Value::Array(inner) => {
-                match inner
-                    .first()
-                    .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
-                        "expected the adjacency matrix as a json array",
-                    )))? {
-                    Value::Array(inner) => process_rows(inner),
-                    _ => Err(AdjacencyMatrixError(AdjacencyMatrixErrorType::InvalidJson(
-                        String::from("expected a json array with the matrix array inside it"),
-                    ))),
-                }
-            }
-            _ => Err(AdjacencyMatrixError(AdjacencyMatrixErrorType::InvalidJson(
-                String::from("expected a json array with the matrix array inside it"),
-            ))),
-        }
     }
 }
 
@@ -1597,6 +1512,97 @@ mod tests {
     use serde_json::Value;
 
     use super::*;
+
+    fn process_rows(inner: &[Value]) -> Result<GeoAdjacencyMatrix, AdjacencyMatrixError> {
+        let inner = inner
+            .iter()
+            .try_fold(Vec::with_capacity(inner.len()), |mut output, row| {
+                if let Value::Array(row) = row {
+                    output.push(row);
+                    return Ok(output);
+                }
+
+                Err(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                    "expected the adjacency matrix as a json array",
+                )))
+            })?;
+        let mut outer_output = Vec::with_capacity(inner.len());
+        for row in inner {
+            let mut output = Vec::with_capacity(row.len());
+            for value in row {
+                match value {
+                    Value::Null => output.push(GeoEdge::NonExistent),
+                    Value::Object(coords) => output.push(GeoEdge::Weighted {
+                        #[expect(
+                            clippy::cast_possible_truncation,
+                            reason = "This only ever runs on my machine."
+                        )]
+                        weight: coords
+                            .get("weight")
+                            .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                                "expected every coordinate point to have a `weight` key",
+                            )))?
+                            .as_u64()
+                            .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                                "expected every coordinate point to have a numeric `weight` key",
+                            )))? as usize,
+                        coord: Point2d {
+                            x: coords
+                                .get("x")
+                                .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                                    "expected every coordinate point to have an `x` key",
+                                )))?
+                                .as_f64()
+                                .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                                    "expected every coordinate point to have a numeric `x` key",
+                                )))?,
+                            y: coords
+                                .get("y")
+                                .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                                    "expected every coordinate point to have an `y` key",
+                                )))?
+                                .as_f64()
+                                .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                                    "expected every coordinate point to have a numeric `y` key",
+                                )))?,
+                        },
+                    }),
+                    _ => {
+                        return Err(AdjacencyMatrixError(AdjacencyMatrixErrorType::InvalidJson(
+                            String::from(
+                                "expected each row of the matrix to be `null` or a map to an edge",
+                            ),
+                        )));
+                    }
+                }
+            }
+            outer_output.push(output);
+        }
+
+        Ok(GeoAdjacencyMatrix(outer_output))
+    }
+
+    impl TryFrom<Value> for GeoAdjacencyMatrix {
+        type Error = AdjacencyMatrixError;
+
+        fn try_from(value: Value) -> Result<Self, Self::Error> {
+            match value {
+                Value::Array(inner) => {
+                    match inner.first().ok_or(AdjacencyMatrixErrorType::InvalidJson(
+                        String::from("expected the adjacency matrix as a json array"),
+                    ))? {
+                        Value::Array(inner) => process_rows(inner),
+                        _ => Err(AdjacencyMatrixError(AdjacencyMatrixErrorType::InvalidJson(
+                            String::from("expected a json array with the matrix array inside it"),
+                        ))),
+                    }
+                }
+                _ => Err(AdjacencyMatrixError(AdjacencyMatrixErrorType::InvalidJson(
+                    String::from("expected a json array with the matrix array inside it"),
+                ))),
+            }
+        }
+    }
 
     #[test]
     fn basic_graph() {
@@ -1994,7 +2000,7 @@ mod tests {
 
     #[test]
     #[ignore = "The algorithm is a WIP, and the test sample case is not ready yet."]
-    #[expect(unreachable_code, reason = "Ibid.")]
+    #[expect(unreachable_code, reason = "WIP.")]
     fn tsp_tri_mst_dfs1() -> Result<(), AdjacencyMatrixError> {
         todo!();
 
@@ -2003,7 +2009,7 @@ mod tests {
 
     #[test]
     #[ignore = "The algorithm is a WIP, and the test sample case is not ready yet."]
-    #[expect(unreachable_code, reason = "Ibid.")]
+    #[expect(unreachable_code, reason = "WIP.")]
     fn tsp_tri_mst_dfs2() -> Result<(), AdjacencyMatrixError> {
         todo!();
 
