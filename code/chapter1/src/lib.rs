@@ -32,7 +32,6 @@ use std::{
 };
 
 use itertools::Itertools;
-use serde_json::Value;
 
 #[derive(Debug)]
 pub struct AdjacencyMatrix(Vec<Vec<Edge>>);
@@ -133,8 +132,6 @@ impl Hash for Point2d {
 }
 
 impl Eq for Point2d {}
-
-pub struct GeoAdjacencyList(Vec<GeoEdge>);
 
 #[derive(Debug)]
 pub struct Dfs {
@@ -844,6 +841,22 @@ impl GeoAdjacencyMatrix {
     }
 }
 
+impl GeoAdjacencyMatrix {
+    fn to_edge_list(&self) -> Vec<&GeoEdge> {
+        self.0.iter().enumerate().fold(
+            Vec::with_capacity((0..self.0.len()).sum()),
+            |mut output, (row_idx, adjacency_list)| {
+                adjacency_list
+                    .iter()
+                    .skip(row_idx + 1)
+                    .for_each(|edge| output.push(edge));
+
+                output
+            },
+        )
+    }
+}
+
 /// Utilities related to the algorithm implemented in [`TspTriMstDfs`].
 ///
 /// [`TspTriMstDfs`]: crate::TspTriMstDfs
@@ -1164,24 +1177,12 @@ impl GeoAdjacencyMatrix {
     }
 }
 
-impl From<GeoAdjacencyMatrix> for GeoAdjacencyList {
-    fn from(value: GeoAdjacencyMatrix) -> Self {
-        todo!()
-    }
-}
-
 impl PartialEq for GeoAdjacencyMatrix {
     fn eq(&self, other: &Self) -> bool {
         self.0
             .iter()
             .enumerate()
             .all(|(idx, row)| row.iter().eq(other.0[idx].iter()))
-    }
-}
-
-impl From<Vec<Vec<GeoEdge>>> for GeoAdjacencyMatrix {
-    fn from(value: Vec<Vec<GeoEdge>>) -> Self {
-        Self(value)
     }
 }
 
@@ -2000,7 +2001,7 @@ mod tests {
 
     #[test]
     #[ignore = "The algorithm is a WIP, and the test sample case is not ready yet."]
-    #[expect(unreachable_code, reason = "WIP.")]
+    #[expect(unreachable_code, clippy::unnecessary_wraps, reason = "WIP.")]
     fn tsp_tri_mst_dfs1() -> Result<(), AdjacencyMatrixError> {
         todo!();
 
@@ -2009,7 +2010,7 @@ mod tests {
 
     #[test]
     #[ignore = "The algorithm is a WIP, and the test sample case is not ready yet."]
-    #[expect(unreachable_code, reason = "WIP.")]
+    #[expect(unreachable_code, clippy::unnecessary_wraps, reason = "WIP.")]
     fn tsp_tri_mst_dfs2() -> Result<(), AdjacencyMatrixError> {
         todo!();
 
