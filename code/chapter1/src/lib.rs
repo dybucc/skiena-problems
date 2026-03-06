@@ -118,6 +118,12 @@ pub enum GeoEdge {
     Weighted { weight: usize, coord: Point2d },
 }
 
+#[derive(Debug, PartialEq)]
+pub struct GeoArc {
+    src: GeoEdge,
+    dst: GeoEdge,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Point2d {
     pub x: f64,
@@ -841,22 +847,6 @@ impl GeoAdjacencyMatrix {
     }
 }
 
-impl GeoAdjacencyMatrix {
-    fn to_edge_list(&self) -> Vec<&GeoEdge> {
-        self.0.iter().enumerate().fold(
-            Vec::with_capacity((0..self.0.len()).sum()),
-            |mut output, (row_idx, adjacency_list)| {
-                adjacency_list
-                    .iter()
-                    .skip(row_idx + 1)
-                    .for_each(|edge| output.push(edge));
-
-                output
-            },
-        )
-    }
-}
-
 /// Utilities related to the algorithm implemented in [`TspTriMstDfs`].
 ///
 /// [`TspTriMstDfs`]: crate::TspTriMstDfs
@@ -1175,6 +1165,26 @@ impl GeoAdjacencyMatrix {
                 }
             })
     }
+
+    fn to_arc_list(&self) -> Vec<GeoArc> {
+        self.0.iter().enumerate().fold(
+            Vec::with_capacity((0..self.0.len()).sum()),
+            |mut output, (row_idx, edge_list)| {
+                edge_list
+                    .iter()
+                    .enumerate()
+                    .skip(row_idx + 1)
+                    .for_each(|(col_idx, edge)| {
+                        output.push(GeoArc {
+                            src: self.0[col_idx][row_idx],
+                            dst: *edge,
+                        });
+                    });
+
+                output
+            },
+        )
+    }
 }
 
 impl PartialEq for GeoAdjacencyMatrix {
@@ -1203,6 +1213,16 @@ pub trait TspClosestPair {
 /// it. Then we perform DFS on the resulting graph and record all arcs the
 /// second time we go through them.
 pub trait TspTriMstDfs {
+    type PointList<'a>
+    where
+        Self: 'a;
+    type Triangulation<'a>
+    where
+        Self: 'a;
+    type EdgeList<'a>
+    where
+        Self: 'a;
+
     /// Computes the area of a triangle in terms of its determinant.
     ///
     /// Follows Lemma 1.3.1, [O'Rourke, 2001]. The result is twice the area of
@@ -1274,8 +1294,8 @@ pub trait TspTriMstDfs {
     /// terms of the determinant of the simplicial complex,) and make sure the
     /// same sign holds for all results.
     ///
-    /// It also handles the cases where some floating point number is one of
-    /// `-0.` or `+0.` (i.e. when the query point lies in the boundary of the
+    /// It also handles cases where some floating point number is one of `-0.`
+    /// or `+0.` (i.e. when the query point lies in the boundary of the
     /// triangle.)
     ///
     /// [O'Rourke, 2001]: https://doi.org/10.1017/CBO9780511804120
@@ -1288,7 +1308,7 @@ pub trait TspTriMstDfs {
             .iter()
             .map(|t| {
                 let output = Self::compute_raw_triangle_area(*t);
-                // Handle `-0.` by producing the same result as `0.0.signum()`.
+                // Handle `-0.` by producing the same result as `(0.).signum()`.
                 if output == -0. {
                     return 1.;
                 }
@@ -1306,16 +1326,12 @@ pub trait TspTriMstDfs {
             })
             .is_ok()
     }
-    #[expect(
-        clippy::return_self_not_must_use,
-        reason = "It's not a bug not to use the return value."
-    )]
-    fn triangulate(&self, points: Vec<Point2d>) -> Self;
+    fn triangulate(&self, points: Self::PointList<'_>) -> Self::Triangulation<'_>;
 
-    fn mst(&self) -> Vec<usize>;
-    fn dfs(&self) -> Vec<usize>;
+    fn mst(&self) -> Self::EdgeList<'_>;
+    fn dfs(&self);
 
-    fn tsp(&self) -> Vec<usize>;
+    fn tsp(&self);
 }
 
 impl TspNearestNeighbor for AdjacencyMatrix {
@@ -1403,6 +1419,19 @@ impl TspClosestPair for AdjacencyMatrix {
 }
 
 impl TspTriMstDfs for GeoAdjacencyMatrix {
+    type PointList<'a>
+        = Vec<Point2d>
+    where
+        Self: 'a;
+    type Triangulation<'a>
+        = Self
+    where
+        Self: 'a;
+    type EdgeList<'a>
+        = Vec<&'a GeoEdge>
+    where
+        Self: 'a;
+
     /// Computes the Delauney trianguluation of a given point set.
     ///
     /// The method follows that for some point set _already_ embedded into the
@@ -1421,7 +1450,7 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
     ///
     /// [`build_hull()`]: Self::build_hull()
     /// [`optimize_triangulation()`]: Self::optimize_triangulation()
-    fn triangulate(&self, points: Vec<Point2d>) -> Self {
+    fn triangulate(&self, points: Self::PointList<'_>) -> Self::Triangulation<'_> {
         let mut points: Vec<_> = points.into_iter().enumerate().collect();
         let (mut upper_hull, mut lower_hull, mut triangulation) = (
             Vec::with_capacity(points.len().div_ceil(2)),
@@ -1488,29 +1517,38 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
         Self(triangulation)
     }
 
-    // TODO: finish reading the intro to the LEDA library, and look into their
-    // implementation of the MST.
-    fn mst(&self) -> Vec<usize> {
-        todo!();
+    // TODO: finish implementing the LEDA MST.
+    fn mst(&self) -> Self::EdgeList<'_> {
+        let mut arc_list = self.to_arc_list();
+        arc_list.sort_unstable_by(|arc1, arc2| match (arc1.dst, arc2.dst) {
+            (GeoEdge::NonExistent, GeoEdge::NonExistent) => Ordering::Equal,
+            (GeoEdge::NonExistent, GeoEdge::Weighted { .. }) => Ordering::Less,
+            (GeoEdge::Weighted { .. }, GeoEdge::NonExistent) => Ordering::Greater,
+            (
+                GeoEdge::Weighted {
+                    weight: weight1, ..
+                },
+                GeoEdge::Weighted {
+                    weight: weight2, ..
+                },
+            ) => weight1.cmp(&weight2),
+        });
+
+        todo!()
     }
-    fn dfs(&self) -> Vec<usize> {
+    fn dfs(&self) {
         todo!();
     }
 
-    fn tsp(&self) -> Vec<usize> {
+    fn tsp(&self) {
         todo!();
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs::File,
-        io::{BufReader, Read},
-    };
-
     use macros::points;
-    use serde_json::Value;
+    use serde_json::{Value, json};
 
     use super::*;
 
@@ -1922,7 +1960,21 @@ mod tests {
         Ok(())
     }
 
+    // NOTE:
+    // The following tests use approval testing based off of observations on the
+    // optimality of the produced triangulation in a rendered document through
+    // the Typst `visualizer` plugin. If the code for the triangulation changes
+    // and yet doesn't satisfy the optimality requirements of the generated
+    // output from a prior (satisfying) run (pipelined through the Typst
+    // plugin,) then both the plugin must be rerun, and manual testing on the
+    // optimality of the new triangulation must be performed again.
+
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Embedding the json takes space, and this is a unit test so no additional \
+                 complexity is added."
+    )]
     fn triangulation1() {
         let (points, matrix) = points! {
             (x: 1.25, y: 2),
@@ -1932,18 +1984,157 @@ mod tests {
             (x: 3, y: 0.75),
             (x: 3.75, y: 3.7),
         };
-        let file = File::open("../../triangulation-0.json").unwrap();
-        let mut buf = BufReader::new(file);
-        let mut file = String::new();
-        buf.read_to_string(&mut file).unwrap();
-        let input =
-            GeoAdjacencyMatrix::try_from(serde_json::from_str::<Value>(file.as_str()).unwrap())
-                .unwrap();
+        let file = json! {[
+          [
+            [
+              null,
+              {
+                "weight": 65,
+                "x": 1.3,
+                "y": 5.0
+              },
+              {
+                "weight": 33,
+                "x": 1.5,
+                "y": 3.5
+              },
+              {
+                "weight": 38,
+                "x": 2.0,
+                "y": 3.6
+              },
+              {
+                "weight": 46,
+                "x": 3.0,
+                "y": 0.75
+              },
+              null
+            ],
+            [
+              {
+                "weight": 65,
+                "x": 1.25,
+                "y": 2.0
+              },
+              null,
+              {
+                "weight": 33,
+                "x": 1.5,
+                "y": 3.5
+              },
+              {
+                "weight": 34,
+                "x": 2.0,
+                "y": 3.6
+              },
+              null,
+              {
+                "weight": 60,
+                "x": 3.75,
+                "y": 3.7
+              }
+            ],
+            [
+              {
+                "weight": 33,
+                "x": 1.25,
+                "y": 2.0
+              },
+              {
+                "weight": 33,
+                "x": 1.3,
+                "y": 5.0
+              },
+              null,
+              {
+                "weight": 11,
+                "x": 2.0,
+                "y": 3.6
+              },
+              null,
+              null
+            ],
+            [
+              {
+                "weight": 38,
+                "x": 1.25,
+                "y": 2.0
+              },
+              {
+                "weight": 34,
+                "x": 1.3,
+                "y": 5.0
+              },
+              {
+                "weight": 11,
+                "x": 1.5,
+                "y": 3.5
+              },
+              null,
+              {
+                "weight": 65,
+                "x": 3.0,
+                "y": 0.75
+              },
+              {
+                "weight": 38,
+                "x": 3.75,
+                "y": 3.7
+              }
+            ],
+            [
+              {
+                "weight": 46,
+                "x": 1.25,
+                "y": 2.0
+              },
+              null,
+              null,
+              {
+                "weight": 65,
+                "x": 2.0,
+                "y": 3.6
+              },
+              null,
+              {
+                "weight": 66,
+                "x": 3.75,
+                "y": 3.7
+              }
+            ],
+            [
+              null,
+              {
+                "weight": 60,
+                "x": 1.3,
+                "y": 5.0
+              },
+              null,
+              {
+                "weight": 38,
+                "x": 2.0,
+                "y": 3.6
+              },
+              {
+                "weight": 66,
+                "x": 3.0,
+                "y": 0.75
+              },
+              null
+            ]
+          ]
+        ]};
+        let input = GeoAdjacencyMatrix::try_from(file).unwrap();
 
         assert_eq!(matrix.triangulate(points), input);
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Embedding the json takes space, and this is a unit test so no additional \
+                 complexity is added."
+    )]
     fn triangulation2() {
         let (points, matrix) = points! {
             (x: 0, y: 1),
@@ -1960,18 +2151,456 @@ mod tests {
             (x: 6, y: 3.25),
             (x: 7, y: 2),
         };
-        let file = File::open("../../triangulation-1.json").unwrap();
-        let mut buf = BufReader::new(file);
-        let mut file = String::new();
-        buf.read_to_string(&mut file).unwrap();
-        let input =
-            GeoAdjacencyMatrix::try_from(serde_json::from_str::<Value>(file.as_str()).unwrap())
-                .unwrap();
+        let file = json! {[
+          [
+            [
+              null,
+              {
+                "weight": 21,
+                "x": 0.0,
+                "y": 2.5
+              },
+              {
+                "weight": 20,
+                "x": 1.0,
+                "y": 2.0
+              },
+              null,
+              null,
+              null,
+              {
+                "weight": 58,
+                "x": 4.0,
+                "y": 0.0
+              },
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            [
+              {
+                "weight": 21,
+                "x": 0.0,
+                "y": 1.0
+              },
+              null,
+              {
+                "weight": 15,
+                "x": 1.0,
+                "y": 2.0
+              },
+              {
+                "weight": 28,
+                "x": 2.0,
+                "y": 2.5
+              },
+              {
+                "weight": 45,
+                "x": 2.0,
+                "y": 5.0
+              },
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            [
+              {
+                "weight": 20,
+                "x": 0.0,
+                "y": 1.0
+              },
+              {
+                "weight": 15,
+                "x": 0.0,
+                "y": 2.5
+              },
+              null,
+              {
+                "weight": 15,
+                "x": 2.0,
+                "y": 2.5
+              },
+              null,
+              null,
+              {
+                "weight": 50,
+                "x": 4.0,
+                "y": 0.0
+              },
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            [
+              null,
+              {
+                "weight": 28,
+                "x": 0.0,
+                "y": 2.5
+              },
+              {
+                "weight": 15,
+                "x": 1.0,
+                "y": 2.0
+              },
+              null,
+              {
+                "weight": 35,
+                "x": 2.0,
+                "y": 5.0
+              },
+              {
+                "weight": 14,
+                "x": 3.0,
+                "y": 2.5
+              },
+              {
+                "weight": 45,
+                "x": 4.0,
+                "y": 0.0
+              },
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            [
+              null,
+              {
+                "weight": 45,
+                "x": 0.0,
+                "y": 2.5
+              },
+              null,
+              {
+                "weight": 35,
+                "x": 2.0,
+                "y": 2.5
+              },
+              null,
+              {
+                "weight": 38,
+                "x": 3.0,
+                "y": 2.5
+              },
+              {
+                "weight": 76,
+                "x": 4.0,
+                "y": 0.0
+              },
+              {
+                "weight": 63,
+                "x": 4.0,
+                "y": 1.0
+              },
+              {
+                "weight": 37,
+                "x": 4.0,
+                "y": 3.25
+              },
+              null,
+              null,
+              {
+                "weight": 61,
+                "x": 6.0,
+                "y": 3.25
+              },
+              null
+            ],
+            [
+              null,
+              null,
+              null,
+              {
+                "weight": 14,
+                "x": 2.0,
+                "y": 2.5
+              },
+              {
+                "weight": 38,
+                "x": 2.0,
+                "y": 5.0
+              },
+              null,
+              {
+                "weight": 38,
+                "x": 4.0,
+                "y": 0.0
+              },
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            [
+              {
+                "weight": 58,
+                "x": 0.0,
+                "y": 1.0
+              },
+              null,
+              {
+                "weight": 50,
+                "x": 1.0,
+                "y": 2.0
+              },
+              {
+                "weight": 45,
+                "x": 2.0,
+                "y": 2.5
+              },
+              {
+                "weight": 76,
+                "x": 2.0,
+                "y": 5.0
+              },
+              {
+                "weight": 38,
+                "x": 3.0,
+                "y": 2.5
+              },
+              null,
+              {
+                "weight": 14,
+                "x": 4.0,
+                "y": 1.0
+              },
+              null,
+              null,
+              {
+                "weight": 40,
+                "x": 6.0,
+                "y": 2.0
+              },
+              null,
+              {
+                "weight": 50,
+                "x": 7.0,
+                "y": 2.0
+              }
+            ],
+            [
+              null,
+              null,
+              null,
+              null,
+              {
+                "weight": 63,
+                "x": 2.0,
+                "y": 5.0
+              },
+              null,
+              {
+                "weight": 14,
+                "x": 4.0,
+                "y": 0.0
+              },
+              null,
+              {
+                "weight": 31,
+                "x": 4.0,
+                "y": 3.25
+              },
+              {
+                "weight": 25,
+                "x": 5.0,
+                "y": 2.5
+              },
+              {
+                "weight": 31,
+                "x": 6.0,
+                "y": 2.0
+              },
+              null,
+              null
+            ],
+            [
+              null,
+              null,
+              null,
+              null,
+              {
+                "weight": 37,
+                "x": 2.0,
+                "y": 5.0
+              },
+              null,
+              null,
+              {
+                "weight": 31,
+                "x": 4.0,
+                "y": 1.0
+              },
+              null,
+              {
+                "weight": 17,
+                "x": 5.0,
+                "y": 2.5
+              },
+              null,
+              {
+                "weight": 28,
+                "x": 6.0,
+                "y": 3.25
+              },
+              null
+            ],
+            [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              {
+                "weight": 25,
+                "x": 4.0,
+                "y": 1.0
+              },
+              {
+                "weight": 17,
+                "x": 4.0,
+                "y": 3.25
+              },
+              null,
+              {
+                "weight": 15,
+                "x": 6.0,
+                "y": 2.0
+              },
+              {
+                "weight": 17,
+                "x": 6.0,
+                "y": 3.25
+              },
+              null
+            ],
+            [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              {
+                "weight": 40,
+                "x": 4.0,
+                "y": 0.0
+              },
+              {
+                "weight": 31,
+                "x": 4.0,
+                "y": 1.0
+              },
+              null,
+              {
+                "weight": 15,
+                "x": 5.0,
+                "y": 2.5
+              },
+              null,
+              {
+                "weight": 17,
+                "x": 6.0,
+                "y": 3.25
+              },
+              {
+                "weight": 14,
+                "x": 7.0,
+                "y": 2.0
+              }
+            ],
+            [
+              null,
+              null,
+              null,
+              null,
+              {
+                "weight": 61,
+                "x": 2.0,
+                "y": 5.0
+              },
+              null,
+              null,
+              null,
+              {
+                "weight": 28,
+                "x": 4.0,
+                "y": 3.25
+              },
+              {
+                "weight": 17,
+                "x": 5.0,
+                "y": 2.5
+              },
+              {
+                "weight": 17,
+                "x": 6.0,
+                "y": 2.0
+              },
+              null,
+              {
+                "weight": 22,
+                "x": 7.0,
+                "y": 2.0
+              }
+            ],
+            [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              {
+                "weight": 50,
+                "x": 4.0,
+                "y": 0.0
+              },
+              null,
+              null,
+              null,
+              {
+                "weight": 14,
+                "x": 6.0,
+                "y": 2.0
+              },
+              {
+                "weight": 22,
+                "x": 6.0,
+                "y": 3.25
+              },
+              null
+            ]
+          ]
+        ]};
+        let input = GeoAdjacencyMatrix::try_from(file).unwrap();
 
         assert_eq!(matrix.triangulate(points), input);
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Embedding the json takes space, and this is a unit test so no additional \
+                 complexity is added."
+    )]
     fn triangulation3() {
         let (points, matrix) = points! {
             (x: 1.25, y: 2),
@@ -1988,13 +2617,438 @@ mod tests {
             (x: 6.2, y: 4.7),
             (x: 7, y: 3.45),
         };
-        let file = File::open("../../triangulation-2.json").unwrap();
-        let mut buf = BufReader::new(file);
-        let mut file = String::new();
-        buf.read_to_string(&mut file).unwrap();
-        let input =
-            GeoAdjacencyMatrix::try_from(serde_json::from_str::<Value>(file.as_str()).unwrap())
-                .unwrap();
+        let file = json! {[
+          [
+            [
+              null,
+              {
+                "weight": 48,
+                "x": 1.3,
+                "y": 5.0
+              },
+              {
+                "weight": 24,
+                "x": 1.5,
+                "y": 3.5
+              },
+              {
+                "weight": 28,
+                "x": 2.0,
+                "y": 3.6
+              },
+              {
+                "weight": 34,
+                "x": 3.0,
+                "y": 0.75
+              },
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            [
+              {
+                "weight": 48,
+                "x": 1.25,
+                "y": 2.0
+              },
+              null,
+              {
+                "weight": 24,
+                "x": 1.5,
+                "y": 3.5
+              },
+              {
+                "weight": 25,
+                "x": 2.0,
+                "y": 3.6
+              },
+              null,
+              {
+                "weight": 44,
+                "x": 3.75,
+                "y": 3.7
+              },
+              null,
+              null,
+              {
+                "weight": 51,
+                "x": 4.5,
+                "y": 5.0
+              },
+              null,
+              null,
+              null,
+              null
+            ],
+            [
+              {
+                "weight": 24,
+                "x": 1.25,
+                "y": 2.0
+              },
+              {
+                "weight": 24,
+                "x": 1.3,
+                "y": 5.0
+              },
+              null,
+              {
+                "weight": 8,
+                "x": 2.0,
+                "y": 3.6
+              },
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            [
+              {
+                "weight": 28,
+                "x": 1.25,
+                "y": 2.0
+              },
+              {
+                "weight": 25,
+                "x": 1.3,
+                "y": 5.0
+              },
+              {
+                "weight": 8,
+                "x": 1.5,
+                "y": 3.5
+              },
+              null,
+              {
+                "weight": 48,
+                "x": 3.0,
+                "y": 0.75
+              },
+              {
+                "weight": 28,
+                "x": 3.75,
+                "y": 3.7
+              },
+              {
+                "weight": 37,
+                "x": 4.25,
+                "y": 3.0
+              },
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            [
+              {
+                "weight": 34,
+                "x": 1.25,
+                "y": 2.0
+              },
+              null,
+              null,
+              {
+                "weight": 48,
+                "x": 2.0,
+                "y": 3.6
+              },
+              null,
+              null,
+              {
+                "weight": 41,
+                "x": 4.25,
+                "y": 3.0
+              },
+              {
+                "weight": 26,
+                "x": 4.3,
+                "y": 1.7
+              },
+              null,
+              null,
+              {
+                "weight": 48,
+                "x": 6.0,
+                "y": 1.0
+              },
+              null,
+              null
+            ],
+            [
+              null,
+              {
+                "weight": 44,
+                "x": 1.3,
+                "y": 5.0
+              },
+              null,
+              {
+                "weight": 28,
+                "x": 2.0,
+                "y": 3.6
+              },
+              null,
+              null,
+              {
+                "weight": 13,
+                "x": 4.25,
+                "y": 3.0
+              },
+              null,
+              {
+                "weight": 24,
+                "x": 4.5,
+                "y": 5.0
+              },
+              {
+                "weight": 33,
+                "x": 5.8,
+                "y": 3.45
+              },
+              null,
+              null,
+              null
+            ],
+            [
+              null,
+              null,
+              null,
+              {
+                "weight": 37,
+                "x": 2.0,
+                "y": 3.6
+              },
+              {
+                "weight": 41,
+                "x": 3.0,
+                "y": 0.75
+              },
+              {
+                "weight": 13,
+                "x": 3.75,
+                "y": 3.7
+              },
+              null,
+              {
+                "weight": 21,
+                "x": 4.3,
+                "y": 1.7
+              },
+              null,
+              {
+                "weight": 26,
+                "x": 5.8,
+                "y": 3.45
+              },
+              null,
+              null,
+              null
+            ],
+            [
+              null,
+              null,
+              null,
+              null,
+              {
+                "weight": 26,
+                "x": 3.0,
+                "y": 0.75
+              },
+              null,
+              {
+                "weight": 21,
+                "x": 4.25,
+                "y": 3.0
+              },
+              null,
+              null,
+              {
+                "weight": 37,
+                "x": 5.8,
+                "y": 3.45
+              },
+              {
+                "weight": 29,
+                "x": 6.0,
+                "y": 1.0
+              },
+              null,
+              null
+            ],
+            [
+              null,
+              {
+                "weight": 51,
+                "x": 1.3,
+                "y": 5.0
+              },
+              null,
+              null,
+              null,
+              {
+                "weight": 24,
+                "x": 3.75,
+                "y": 3.7
+              },
+              null,
+              null,
+              null,
+              {
+                "weight": 32,
+                "x": 5.8,
+                "y": 3.45
+              },
+              null,
+              {
+                "weight": 27,
+                "x": 6.2,
+                "y": 4.7
+              },
+              null
+            ],
+            [
+              null,
+              null,
+              null,
+              null,
+              null,
+              {
+                "weight": 33,
+                "x": 3.75,
+                "y": 3.7
+              },
+              {
+                "weight": 26,
+                "x": 4.25,
+                "y": 3.0
+              },
+              {
+                "weight": 37,
+                "x": 4.3,
+                "y": 1.7
+              },
+              {
+                "weight": 32,
+                "x": 4.5,
+                "y": 5.0
+              },
+              null,
+              {
+                "weight": 39,
+                "x": 6.0,
+                "y": 1.0
+              },
+              {
+                "weight": 21,
+                "x": 6.2,
+                "y": 4.7
+              },
+              {
+                "weight": 19,
+                "x": 7.0,
+                "y": 3.45
+              }
+            ],
+            [
+              null,
+              null,
+              null,
+              null,
+              {
+                "weight": 48,
+                "x": 3.0,
+                "y": 0.75
+              },
+              null,
+              null,
+              {
+                "weight": 29,
+                "x": 4.3,
+                "y": 1.7
+              },
+              null,
+              {
+                "weight": 39,
+                "x": 5.8,
+                "y": 3.45
+              },
+              null,
+              null,
+              {
+                "weight": 42,
+                "x": 7.0,
+                "y": 3.45
+              }
+            ],
+            [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              {
+                "weight": 27,
+                "x": 4.5,
+                "y": 5.0
+              },
+              {
+                "weight": 21,
+                "x": 5.8,
+                "y": 3.45
+              },
+              null,
+              null,
+              {
+                "weight": 24,
+                "x": 7.0,
+                "y": 3.45
+              }
+            ],
+            [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              {
+                "weight": 19,
+                "x": 5.8,
+                "y": 3.45
+              },
+              {
+                "weight": 42,
+                "x": 6.0,
+                "y": 1.0
+              },
+              {
+                "weight": 24,
+                "x": 6.2,
+                "y": 4.7
+              },
+              null
+            ]
+          ]
+        ]};
+        let input = GeoAdjacencyMatrix::try_from(file).unwrap();
 
         assert_eq!(matrix.triangulate(points), input);
     }
