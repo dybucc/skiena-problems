@@ -15,7 +15,8 @@
 //! result. This is especially true of the TSP implementation that uses a
 //! triangulation, as tests only serve me to check if the resulting output
 //! matches the output of the `visualizer` Rust plugin for Typst when plot with
-//! Typst's `CeTZ` library.
+//! Typst's `CeTZ` library; That's the source of the JSON metadata that's
+//! embedded in the tests.
 //!
 //! [Skiena, 2020]: https://doi.org/10.1007/978-3-030-54256-6
 
@@ -118,7 +119,7 @@ pub enum GeoEdge {
     Weighted { weight: usize, coord: Point2d },
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct GeoArc {
     src: GeoEdge,
     dst: GeoEdge,
@@ -138,6 +139,8 @@ impl Hash for Point2d {
 }
 
 impl Eq for Point2d {}
+
+pub struct NodePartition(pub HashMap<usize, HashSet<usize>>);
 
 #[derive(Debug)]
 pub struct Dfs {
@@ -1166,13 +1169,26 @@ impl GeoAdjacencyMatrix {
             })
     }
 
-    fn to_arc_list(&self) -> Vec<GeoArc> {
+    fn to_node_partition(&self) -> NodePartition {
+        self.into()
+    }
+
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the result of this function."
+    )]
+    pub fn to_arc_list(&self) -> Vec<GeoArc> {
         self.0.iter().enumerate().fold(
+            // Must account only for unique edges, of which there are
+            // sum_(i = 0)^(n - 1) (i.e. the number of elements above or below
+            // the main diagonal of the adjacency matrix.)
             Vec::with_capacity((0..self.0.len()).sum()),
             |mut output, (row_idx, edge_list)| {
                 edge_list
                     .iter()
                     .enumerate()
+                    // Skips elements until it hits the first element past the
+                    // main diagonal, yielding only only elements above it.
                     .skip(row_idx + 1)
                     .for_each(|(col_idx, edge)| {
                         output.push(GeoArc {
@@ -1188,11 +1204,97 @@ impl GeoAdjacencyMatrix {
 }
 
 impl PartialEq for GeoAdjacencyMatrix {
+    /// Panics if the two matrices are not of equal dimensionality.
     fn eq(&self, other: &Self) -> bool {
         self.0
             .iter()
-            .enumerate()
-            .all(|(idx, row)| row.iter().eq(other.0[idx].iter()))
+            .zip_eq(other.0.iter())
+            .all(|(ours, theirs)| ours.eq(theirs))
+    }
+}
+
+impl NodePartition {
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the result of this function."
+    )]
+    pub fn new() -> Self {
+        Self(HashMap::new())
+    }
+
+    fn find_representative(&self, one: usize) -> usize {
+        let forest = &self.0;
+        debug_assert!((0..forest.len()).contains(&one));
+        // O(1) if the node is already the representative node of the block.
+        if forest.contains_key(&one) {
+            return one;
+        }
+
+        *forest
+            .iter()
+            .find_map(|(node, map)| map.contains(&one).then_some(node))
+            .expect(
+                "a given node should always be found within the node partition because no node is \
+                ever removed, only moved into a different partition",
+            )
+    }
+
+    /// Attempts to unite two node partitions if they don't already belong to
+    /// the same block.
+    ///
+    /// Returns `true` if the sets were disjoint and thus `other`'s block is now
+    /// merged with `one`'s block. Returns `false` otherwise.
+    pub fn union(&mut self, one: usize, other: usize) -> bool {
+        let (one, other) = (
+            self.find_representative(one),
+            self.find_representative(other),
+        );
+        let forest = &mut self.0;
+        if forest[&one].is_disjoint(&forest[&other]) {
+            let new = forest[&one].union(&forest[&other]).copied().collect();
+            if let Some(block) = forest.get_mut(&one) {
+                *block = new;
+            }
+            return true;
+        }
+
+        false
+    }
+}
+
+impl From<GeoAdjacencyMatrix> for NodePartition {
+    fn from(value: GeoAdjacencyMatrix) -> Self {
+        value.to_node_partition()
+    }
+}
+
+impl From<&GeoAdjacencyMatrix> for NodePartition {
+    fn from(value: &GeoAdjacencyMatrix) -> Self {
+        Self(
+            (0..value.0.len())
+                .map(|node| {
+                    // Eventually, one of the disjoint sets is going to hold all
+                    // vertices in the graph by virtue of composing a spanning
+                    // tree.
+                    let mut map = HashSet::with_capacity(value.0.len());
+                    map.insert(node);
+
+                    (node, map)
+                })
+                .collect(),
+        )
+    }
+}
+
+impl From<&mut GeoAdjacencyMatrix> for NodePartition {
+    fn from(value: &mut GeoAdjacencyMatrix) -> Self {
+        value.to_node_partition()
+    }
+}
+
+impl Default for NodePartition {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -1519,7 +1621,11 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
 
     // TODO: finish implementing the LEDA MST.
     fn mst(&self) -> Self::EdgeList<'_> {
+        let mut node_partition = self.to_node_partition();
         let mut arc_list = self.to_arc_list();
+        // Can't implement `Ord` nor `PartialOrd` on `GeoEdge` because the
+        // following implementation does not align with the `PartialEq`
+        // implementation of `GeoEdge`.
         arc_list.sort_unstable_by(|arc1, arc2| match (arc1.dst, arc2.dst) {
             (GeoEdge::NonExistent, GeoEdge::NonExistent) => Ordering::Equal,
             (GeoEdge::NonExistent, GeoEdge::Weighted { .. }) => Ordering::Less,
