@@ -132,8 +132,11 @@ impl Eq for Point2d {}
 
 #[derive(Debug)]
 pub struct NodePartition {
-    pub inner: HashMap<usize, HashSet<usize>>,
-    pub len:   usize,
+    pub inner:    HashMap<usize, HashSet<usize>>,
+    // Note the following is not a measure of the current amount of trees in the
+    // forest, but rather of the number of trees in the forest at the moment of
+    // creation; Namely, the total number of vertices at any time.
+    pub vertices: usize,
 }
 
 #[derive(Debug)]
@@ -1148,6 +1151,37 @@ impl GeoAdjacencyMatrix {
             })
             .collect()
     }
+
+    pub fn sort_by_weight(&self) -> impl FnMut(&(usize, usize), &(usize, usize)) -> Ordering {
+        |&(src1, dst1), &(src2, dst2)| match (self.0[src1][dst1], self.0[src2][dst2]) {
+            | (GeoEdge::NonExistent, GeoEdge::NonExistent) => Ordering::Equal,
+            | (GeoEdge::NonExistent, _) => Ordering::Less,
+            | (_, GeoEdge::NonExistent) => Ordering::Greater,
+            | (
+                GeoEdge::Weighted { weight: weight1, .. },
+                GeoEdge::Weighted { weight: weight2, .. },
+            ) => weight1.cmp(&weight2),
+        }
+    }
+
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the result of this function."
+    )]
+    pub fn kruskal(&self) -> Vec<(usize, usize)> { self.kruskal_on(&mut self.to_arc_list()) }
+
+    pub fn kruskal_on(&self, arc_list: &mut [(usize, usize)]) -> Vec<(usize, usize)> {
+        arc_list.sort_unstable_by(self.sort_by_weight());
+        let mut node_partition = self.to_node_partition();
+        let mut tree = Vec::with_capacity(arc_list.len());
+        for (src, dst) in arc_list.iter().copied() {
+            if node_partition.union(src, dst) {
+                tree.push((src, dst));
+            }
+        }
+
+        tree
+    }
 }
 
 impl PartialEq for GeoAdjacencyMatrix {
@@ -1158,25 +1192,32 @@ impl PartialEq for GeoAdjacencyMatrix {
 }
 
 impl NodePartition {
+    /// # Panics
+    ///
+    /// Panics if `one` does not denote an element index in the range of
+    /// elements with which the node partition was initially created.
     #[expect(
         clippy::must_use_candidate,
         reason = "It's not a bug not to use the result of this function."
     )]
-    pub fn new() -> Self { Self { inner: HashMap::new(), len: 0 } }
-
-    fn find_representative(&self, one: usize) -> usize {
+    pub fn find_representative(&self, one: usize) -> usize {
+        assert!((0..self.vertices).contains(&one));
         let forest = &self.inner;
-        debug_assert!((0..self.len).contains(&one));
         // `O(1)` if the node is already the representative node of the block.
         if forest.contains_key(&one) {
             return one;
         }
 
         // `O(n)` if the node ought be found in some tree of the forest.
-        *forest.iter().find_map(|(node, map)| map.contains(&one).then_some(node)).expect(
-            "a given node should always be found within the node partition because no node is ever \
-             removed, only moved into a different partition",
-        )
+        // SAFETY: a given node should always be found within the node partition
+        // because no node is ever removed, only moved into a different
+        // partition.
+        unsafe {
+            forest
+                .iter()
+                .find_map(|(node, map)| map.contains(&one).then_some(*node))
+                .unwrap_unchecked()
+        }
     }
 
     /// Attempts to unite two node partitions if they don't already belong to
@@ -1189,9 +1230,11 @@ impl NodePartition {
         if one != other {
             let forest = &mut self.inner;
             let new = forest[&one].union(&forest[&other]).copied().collect();
-            if let Some(block) = forest.get_mut(&one) {
-                *block = new;
-            }
+            // SAFETY: `find_representative()` would've panicked if any one of
+            // the passed `one` or `other` did not denote vertices of the
+            // partition. Thus, locals `one` and `other` must, indeed, be the
+            // representatives of such blocks.
+            *unsafe { forest.get_mut(&one).unwrap_unchecked() } = new;
             forest.remove(&other);
             return true;
         }
@@ -1207,7 +1250,7 @@ impl From<GeoAdjacencyMatrix> for NodePartition {
 impl From<&GeoAdjacencyMatrix> for NodePartition {
     fn from(value: &GeoAdjacencyMatrix) -> Self {
         Self {
-            inner: (0..value.0.len())
+            inner:    (0..value.0.len())
                 .map(|node| {
                     // Eventually, one of the disjoint sets is going to hold all
                     // vertices in the graph by virtue of composing a spanning
@@ -1218,17 +1261,13 @@ impl From<&GeoAdjacencyMatrix> for NodePartition {
                     (node, map)
                 })
                 .collect(),
-            len:   value.0.len(),
+            vertices: value.0.len(),
         }
     }
 }
 
 impl From<&mut GeoAdjacencyMatrix> for NodePartition {
     fn from(value: &mut GeoAdjacencyMatrix) -> Self { value.to_node_partition() }
-}
-
-impl Default for NodePartition {
-    fn default() -> Self { Self::new() }
 }
 
 pub trait TspNearestNeighbor {
@@ -1248,15 +1287,9 @@ pub trait TspClosestPair {
 /// it. Then we perform DFS on the resulting graph and record all arcs the
 /// second time we go through them.
 pub trait TspTriMstDfs {
-    type PointList<'a>
-    where
-        Self: 'a;
-    type Triangulation<'a>
-    where
-        Self: 'a;
-    type EdgeList<'a>
-    where
-        Self: 'a;
+    type PointList;
+    type Triangulation;
+    type ArcList;
 
     /// Computes the area of a triangle in terms of its determinant.
     ///
@@ -1355,15 +1388,15 @@ pub trait TspTriMstDfs {
                 #[expect(
                     clippy::float_cmp,
                     reason = "The sign is always one of `-0.`, `+0.` or `NaN`. I am sure it will \
-                             never be the latter."
+                              never be the latter."
                 )]
                 | Some(sign_state) => (sign_state == sign).ok_or(()).map(|()| Some(sign_state)),
             })
             .is_ok()
     }
-    fn triangulate(&self, points: Self::PointList<'_>) -> Self::Triangulation<'_>;
+    fn triangulate(&self, points: Self::PointList) -> Self::Triangulation;
 
-    fn mst(&self) -> Self::EdgeList<'_>;
+    fn mst(&self) -> Self::ArcList;
     fn dfs(&self);
 
     fn tsp(&self);
@@ -1448,18 +1481,9 @@ impl TspClosestPair for AdjacencyMatrix {
 }
 
 impl TspTriMstDfs for GeoAdjacencyMatrix {
-    type EdgeList<'a>
-        = Vec<&'a GeoEdge>
-    where
-        Self: 'a;
-    type PointList<'a>
-        = Vec<Point2d>
-    where
-        Self: 'a;
-    type Triangulation<'a>
-        = Self
-    where
-        Self: 'a;
+    type ArcList = Vec<(usize, usize)>;
+    type PointList = Vec<Point2d>;
+    type Triangulation = Self;
 
     /// Computes the Delauney trianguluation of a given point set.
     ///
@@ -1479,21 +1503,19 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
     ///
     /// [`build_hull()`]: Self::build_hull()
     /// [`optimize_triangulation()`]: Self::optimize_triangulation()
-    fn triangulate(&self, points: Self::PointList<'_>) -> Self::Triangulation<'_> {
+    fn triangulate(&self, points: Self::PointList) -> Self::Triangulation {
         let mut points: Vec<_> = points.into_iter().enumerate().collect();
         let (mut upper_hull, mut lower_hull, mut triangulation) = (
             Vec::with_capacity(points.len().div_ceil(2)),
             Vec::with_capacity(points.len().div_ceil(2)),
             Vec::with_capacity(points.len()),
         );
-
         triangulation.resize_with(points.len(), || {
             let mut output = Vec::with_capacity(points.len());
             output.resize(points.len(), GeoEdge::NonExistent);
 
             output
         });
-
         points.sort_unstable_by(|(_, Point2d { x: x1, y: y1 }), (_, Point2d { x: x2, y: y2 })| {
             match x1.total_cmp(x2) {
                 | Ordering::Equal => y1.total_cmp(y2),
@@ -1527,48 +1549,44 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
                 &points,
             );
         }
-
         let mut triangulate_bounds_of = |collection: Vec<(usize, Point2d)>| {
             collection.windows(2).map(|inner| (inner[0].0, inner[1].0)).for_each(|(src, dst)| {
                 triangulation[src][dst] = self.0[src][dst];
                 triangulation[dst][src] = self.0[dst][src];
             });
         };
-
         triangulate_bounds_of(upper_hull);
         triangulate_bounds_of(lower_hull);
-
         self.optimize_triangulation(&mut triangulation);
 
         Self(triangulation)
     }
 
     // TODO: finish implementing the LEDA MST.
-    fn mst(&self) -> Self::EdgeList<'_> {
+    fn mst(&self) -> Self::ArcList {
         let mut arc_list = self.to_arc_list();
-        // Can't implement `Ord` nor `PartialOrd` on `GeoEdge` because the
-        // following does not align with the `PartialEq` implementation of
-        // `GeoEdge`.
-        arc_list.sort_unstable_by(|(arc1_src, arc1_dst), (arc2_src, arc2_dst)| {
-            match (self.0[*arc1_src][*arc1_dst], self.0[*arc2_src][*arc2_dst]) {
-                | (GeoEdge::NonExistent, GeoEdge::NonExistent) => Ordering::Equal,
-                | (GeoEdge::NonExistent, GeoEdge::Weighted { .. }) => Ordering::Less,
-                | (GeoEdge::Weighted { .. }, GeoEdge::NonExistent) => Ordering::Greater,
-                | (
-                    GeoEdge::Weighted { weight: weight1, .. },
-                    GeoEdge::Weighted { weight: weight2, .. },
-                ) => weight1.cmp(&weight2),
-            }
-        });
-        let mut node_partition = self.to_node_partition();
-        let mut tree = Vec::with_capacity(self.0.iter);
-        for (src, dst) in arc_list {
-            if node_partition.union(src, dst) {
-                arc_list.push
-            }
-        }
+        // The algorithm attempts to solve through a heuristic if the graph is
+        // dense enough (`3n` edges, for `n` vertices.)
+        if arc_list.len() > 3 * self.0.len()
+            && let Some(cheapest_edges) = arc_list.get_mut(0..3 * self.0.len())
+        {
+            let tree = self.kruskal_on(cheapest_edges);
+            let remaining_edges = {
+                let (start, end) = {
+                    let range = arc_list.as_mut_ptr_range();
+                    (range.start, range.end)
+                };
+                // TODO: finish gathering the remaining edges through pointer
+                // arithmetic, or reach for a specific method that already
+                // handles returning two partitions of the slice/vector before
+                // entering the `if let` branch.
+                let start_remaining_edges = unsafe { start.add(3 * self.0.len()) };
+            };
 
-        todo!()
+            todo!()
+        } else {
+            self.kruskal()
+        }
     }
 
     fn dfs(&self) {
