@@ -23,12 +23,13 @@
 #![feature(bool_to_result, control_flow_into_value)]
 
 use std::{
+    assert_matches,
     cmp::Ordering,
     collections::{HashMap, HashSet},
-    debug_assert_matches,
     hash::{Hash, Hasher},
     iter,
-    ops::{ControlFlow, Not},
+    ops::{ControlFlow, Deref, Index, IndexMut, Not},
+    slice::SliceIndex,
     sync::LazyLock,
 };
 
@@ -135,8 +136,13 @@ pub struct NodePartition {
     pub inner:    HashMap<usize, HashSet<usize>>,
     // Note the following is not a measure of the current amount of trees in the
     // forest, but rather of the number of trees in the forest at the moment of
-    // creation; Namely, the total number of vertices at any time.
+    // creation; Namely, the total number of vertices at any given time.
     pub vertices: usize,
+}
+
+pub struct ArcList<'a> {
+    pub inner: Vec<(usize, usize)>,
+    pub graph: &'a GeoAdjacencyMatrix,
 }
 
 #[derive(Debug)]
@@ -315,6 +321,7 @@ impl From<PairsErrorType> for PairsError {
     clippy::must_use_candidate,
     reason = "It's not a bug not to use the result of this function."
 )]
+#[inline]
 pub fn seglen(Point2d { x: x1, y: y1 }: Point2d, Point2d { x: x2, y: y2 }: Point2d) -> f64 {
     ((x1 - x2).abs().powi(2) + (y1 - y2).abs().powi(2)).sqrt()
 }
@@ -920,7 +927,7 @@ impl GeoAdjacencyMatrix {
                 (
                     triangulation[prev][rm], triangulation[post][rm], triangulation[rm][prev],
                     triangulation[rm][post],
-                ) = (self.0[prev][rm], self.0[post][rm], self.0[rm][prev], self.0[rm][post]);
+                ) = (self[prev][rm], self[post][rm], self[rm][prev], self[rm][post]);
             }
 
             hull.push((vertex, point));
@@ -961,7 +968,7 @@ impl GeoAdjacencyMatrix {
             (
                 triangulation[src][dst], triangulation[dst][src], triangulation[p1][p2],
                 triangulation[p2][p1],
-            ) = (GeoEdge::NonExistent, GeoEdge::NonExistent, self.0[p1][p2], self.0[p2][p1]);
+            ) = (GeoEdge::NonExistent, GeoEdge::NonExistent, self[p1][p2], self[p2][p1]);
         }
     }
 
@@ -1017,8 +1024,8 @@ impl GeoAdjacencyMatrix {
                     return None;
                 };
 
-                // If we broke early, then we found (`p1`, `p2`); Otherwise, we may
-                // have found them at the end or not found them at all.
+                // If we broke early, then we found (`p1`, `p2`); Otherwise, we
+                // may have found them at the end or not found them at all.
                 if let ControlFlow::Continue((Some((p1, p1_idx)), Some((p2, p2_idx))))
                 | ControlFlow::Break((Some((p1, p1_idx)), Some((p2, p2_idx)))) = triangulation
                     [src]
@@ -1039,20 +1046,16 @@ impl GeoAdjacencyMatrix {
                                 ),
                                 p2,
                             )),
-                            (p1, None) => {
-                                let p2 = Self::validate_neighboring_point(
-                                    triangulation,
-                                    (idx, *coord),
-                                    (src, *p_src),
-                                    (dst, *p_dst),
-                                );
-
-                                if p2.is_some() {
-                                    ControlFlow::Break((p1, p2))
-                                } else {
-                                    ControlFlow::Continue((p1, p2))
-                                }
-                            }
+                            (p1, None) => if let p2 @ Some(_) = Self::validate_neighboring_point(
+                                triangulation,
+                                (idx, *coord),
+                                (src, *p_src),
+                                (dst, *p_dst)
+                            ) {
+                                ControlFlow::Break((p1, p2))
+                            } else {
+                                ControlFlow::Continue((p1, p2))
+                            },
                             // None of the points are `None` so we've found all
                             // we needed.
                             other => ControlFlow::Break(other),
@@ -1108,15 +1111,19 @@ impl GeoAdjacencyMatrix {
                             }};
                         }
 
-                        let output = perms!(p_src, p2, p_dst);
-                        if output.is_some() {
-                            debug_assert_matches!(
-                                (output, perms!(p_src, p1, p_dst)),
-                                (Some(_), Some(_))
-                            );
-                        }
+                        cfg_select! {
+                            debug_assertions => {
+                                let output = perms!(p_src, p2, p_dst);
+                                assert_matches!(
+                                    (output, perms!(p_src, p1, p_dst)), (Some(_), Some(_))
+                                );
 
-                        output
+                                output
+                            }
+                            _ => {
+                                perms!(p_src, p2, p_dst)
+                            }
+                        }
                     }
                     && {
                         // Even if it lies on the boundary or just near it, we
@@ -1141,47 +1148,36 @@ impl GeoAdjacencyMatrix {
         clippy::must_use_candidate,
         reason = "It's not a bug not to use the result of this function."
     )]
-    pub fn to_arc_list(&self) -> Vec<(usize, usize)> {
-        (0..self.0.len())
-            .zip(0..self.0.len())
-            .filter(|(src, dst)| {
-                // Filter out element indices coming before and at the main
-                // diagonal.
-                dst > src && matches!(self.0[*src][*dst], GeoEdge::Weighted { .. })
-            })
-            .collect()
-    }
-
-    pub fn sort_by_weight(&self) -> impl FnMut(&(usize, usize), &(usize, usize)) -> Ordering {
-        |&(src1, dst1), &(src2, dst2)| match (self.0[src1][dst1], self.0[src2][dst2]) {
-            | (GeoEdge::NonExistent, GeoEdge::NonExistent) => Ordering::Equal,
-            | (GeoEdge::NonExistent, _) => Ordering::Less,
-            | (_, GeoEdge::NonExistent) => Ordering::Greater,
-            | (
-                GeoEdge::Weighted { weight: weight1, .. },
-                GeoEdge::Weighted { weight: weight2, .. },
-            ) => weight1.cmp(&weight2),
-        }
-    }
+    pub fn to_arc_list(&self) -> ArcList { self.into() }
 
     #[expect(
         clippy::must_use_candidate,
         reason = "It's not a bug not to use the result of this function."
     )]
-    pub fn kruskal(&self) -> Vec<(usize, usize)> { self.kruskal_on(&mut self.to_arc_list()) }
+    pub fn kruskal(&self) -> Vec<(usize, usize)> { self.kruskal_on(&self.to_arc_list()) }
 
-    pub fn kruskal_on(&self, arc_list: &mut [(usize, usize)]) -> Vec<(usize, usize)> {
-        arc_list.sort_unstable_by(self.sort_by_weight());
-        let mut node_partition = self.to_node_partition();
-        let mut tree = Vec::with_capacity(arc_list.len());
+    #[expect(clippy::must_use_candidate, reason = "It's not a bug not to use this function.")]
+    pub fn kruskal_on(&self, arc_list: &ArcList) -> Vec<(usize, usize)> {
+        let (mut partition, mut forest) =
+            (self.to_node_partition(), Vec::with_capacity(arc_list.len()));
         for (src, dst) in arc_list.iter().copied() {
-            if node_partition.union(src, dst) {
-                tree.push((src, dst));
+            if partition.union(src, dst) {
+                forest.push((src, dst));
             }
         }
 
-        tree
+        forest
     }
+}
+
+impl Index<usize> for GeoAdjacencyMatrix {
+    type Output = Vec<GeoEdge>;
+
+    fn index(&self, index: usize) -> &Self::Output { self.0.index(index) }
+}
+
+impl IndexMut<usize> for GeoAdjacencyMatrix {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output { self.0.index_mut(index) }
 }
 
 impl PartialEq for GeoAdjacencyMatrix {
@@ -1209,15 +1205,10 @@ impl NodePartition {
         }
 
         // `O(n)` if the node ought be found in some tree of the forest.
-        // SAFETY: a given node should always be found within the node partition
-        // because no node is ever removed, only moved into a different
-        // partition.
-        unsafe {
-            forest
-                .iter()
-                .find_map(|(node, map)| map.contains(&one).then_some(*node))
-                .unwrap_unchecked()
-        }
+        forest.iter().find_map(|(node, map)| map.contains(&one).then_some(*node)).expect(
+            "a given node should always be found within the node partition because no node is ever \
+             removed, only moved into a different partition.",
+        )
     }
 
     /// Attempts to unite two node partitions if they don't already belong to
@@ -1225,21 +1216,25 @@ impl NodePartition {
     ///
     /// Returns [`true`] if the sets were disjoint and thus `other`'s block is
     /// now merged with `one`'s block. Returns [`false`] otherwise.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `one` or `other` do not denote an element index in the range
+    /// of elements with which the node partition was initially created.
     pub fn union(&mut self, one: usize, other: usize) -> bool {
         let (one, other) = (self.find_representative(one), self.find_representative(other));
-        if one != other {
-            let forest = &mut self.inner;
-            let new = forest[&one].union(&forest[&other]).copied().collect();
-            // SAFETY: `find_representative()` would've panicked if any one of
-            // the passed `one` or `other` did not denote vertices of the
-            // partition. Thus, locals `one` and `other` must, indeed, be the
-            // representatives of such blocks.
-            *unsafe { forest.get_mut(&one).unwrap_unchecked() } = new;
-            forest.remove(&other);
-            return true;
+        if one == other {
+            return false;
         }
+        let forest = &mut self.inner;
+        let new = forest[&one].union(&forest[&other]).copied().collect();
+        *forest.get_mut(&one).expect(
+            "`find_representative()` should've panicked if any one of the passed `one` or `other` \
+             did not denote vertices of the partition",
+        ) = new;
+        forest.remove(&other);
 
-        false
+        true
     }
 }
 
@@ -1268,6 +1263,69 @@ impl From<&GeoAdjacencyMatrix> for NodePartition {
 
 impl From<&mut GeoAdjacencyMatrix> for NodePartition {
     fn from(value: &mut GeoAdjacencyMatrix) -> Self { value.to_node_partition() }
+}
+
+impl<'a> ArcList<'a> {
+    pub fn new(list: &[(usize, usize)], graph: &'a GeoAdjacencyMatrix) -> Self {
+        Self { inner: list.to_owned(), graph }
+    }
+}
+
+impl ArcList<'_> {
+    pub fn len(&self) -> usize { self.inner.len() }
+
+    pub fn iter(&self) -> impl Iterator<Item = &(usize, usize)> { self.inner.iter() }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut (usize, usize)> {
+        self.inner.iter_mut()
+    }
+
+    pub fn sort_by_weight(&mut self) {
+        self.inner.sort_unstable_by(|&(src1, dst1), &(src2, dst2)| {
+            match (self.graph[src1][dst1], self.graph[src2][dst2]) {
+                | (GeoEdge::NonExistent, GeoEdge::NonExistent) => Ordering::Equal,
+                | (GeoEdge::NonExistent, GeoEdge::Weighted { .. }) => Ordering::Less,
+                | (GeoEdge::Weighted { .. }, GeoEdge::NonExistent) => Ordering::Greater,
+                | (
+                    GeoEdge::Weighted { weight: weight1, .. },
+                    GeoEdge::Weighted { weight: weight2, .. },
+                ) => weight1.cmp(&weight2),
+            }
+        });
+    }
+
+    pub fn as_vec(&self) -> &Vec<(usize, usize)> { &self.inner }
+
+    pub fn as_vec_mut(&mut self) -> &mut Vec<(usize, usize)> { &mut self.inner }
+
+    pub fn get(
+        &self,
+        index: impl SliceIndex<[(usize, usize)], Output = (usize, usize)>,
+    ) -> Option<&GeoEdge> {
+        self.inner.get(index).map(|&(src, dst)| &self.graph.0[src][dst])
+    }
+
+    pub fn split_at(&mut self, index: usize) -> (ArcList, ArcList) {
+        let (first, second) = self.inner.split_at(index);
+
+        (Self::new(first, self.graph), Self::new(second, self.graph))
+    }
+}
+
+impl<'a> From<&'a GeoAdjacencyMatrix> for ArcList<'a> {
+    fn from(value: &'a GeoAdjacencyMatrix) -> Self {
+        Self {
+            inner: (0..value.0.len())
+                .zip(0..value.0.len())
+                .filter(|(src, dst)| {
+                    // Filter out element indices coming before and at the main
+                    // diagonal.
+                    dst > src && matches!(value.0[*src][*dst], GeoEdge::Weighted { .. })
+                })
+                .collect(),
+            graph: value,
+        }
+    }
 }
 
 pub trait TspNearestNeighbor {
@@ -1310,6 +1368,7 @@ pub trait TspTriMstDfs {
     fn compute_triangle_area(t: (Point2d, Point2d, Point2d)) -> f64 {
         Self::compute_raw_triangle_area(t).abs() / 2.
     }
+
     #[expect(
         clippy::must_use_candidate,
         reason = "It's not a bug not to use the result of this associated function."
@@ -1317,6 +1376,7 @@ pub trait TspTriMstDfs {
     fn compute_raw_triangle_area((a, b, c): (Point2d, Point2d, Point2d)) -> f64 {
         (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)
     }
+
     /// Computes the center of a ring that crosses three points in 2-dimensional
     /// Euclidean space, if possible.
     ///
@@ -1347,6 +1407,7 @@ pub trait TspTriMstDfs {
                 Point2d { x, y }
             })
     }
+
     /// Checks if some point `p_to_check` lies within some triangle (`a`, `b`,
     /// `c`).
     ///
@@ -1394,9 +1455,11 @@ pub trait TspTriMstDfs {
             })
             .is_ok()
     }
+
     fn triangulate(&self, points: Self::PointList) -> Self::Triangulation;
 
     fn mst(&self) -> Self::ArcList;
+
     fn dfs(&self);
 
     fn tsp(&self);
@@ -1407,13 +1470,10 @@ impl TspNearestNeighbor for AdjacencyMatrix {
         let mut visited = vec![false; self.0.len()];
         let mut output = Vec::new();
         let mut current_idx = 0;
-
         while visited.iter().any(|visited| !visited) {
             let current = &self.0[current_idx];
-
             output.push(current_idx);
             visited[current_idx] = true;
-
             (current_idx, _) = current
                 .iter()
                 .enumerate()
@@ -1431,7 +1491,6 @@ impl TspNearestNeighbor for AdjacencyMatrix {
                 })
                 .unwrap_or((0, &Edge::NonExistent));
         }
-
         output.push(current_idx);
 
         output
@@ -1448,14 +1507,12 @@ impl TspClosestPair for AdjacencyMatrix {
                 "`node2` was just sourced through `min_fix()` so the operation should be \
                 infallible"
             });
-
             let (node1, node2) = pairs_iter.min_fix().expect(
                 "there should always be a minimum value given the loop runs for n - 1 \
                 iterations, where n is the number of nodes in the graph, and the underlying ufds \
                 decreases its number of disjoint trees by a factor of 1 on each iteration (i.e. on \
                 each call to `unite()` with the nodes yielded by `min_fix()`)",
             );
-
             // If the node to be `unite()`d is not a root node, then make it a
             // root node by reversing the parent node of its ancestors.
             if pairs_iter.find(node2).expect(&ERROR_MSG) != node2 {
@@ -1470,7 +1527,6 @@ impl TspClosestPair for AdjacencyMatrix {
                 "the node indices are sourced directly from the iterator itself so the operation \
                 should be infallible",
             );
-
             // Resets the state of the iterator to force cycling with updated
             // state on the next iteration of the overarching loop.
             pairs_iter.current_node = None;
@@ -1551,8 +1607,8 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
         }
         let mut triangulate_bounds_of = |collection: Vec<(usize, Point2d)>| {
             collection.windows(2).map(|inner| (inner[0].0, inner[1].0)).for_each(|(src, dst)| {
-                triangulation[src][dst] = self.0[src][dst];
-                triangulation[dst][src] = self.0[dst][src];
+                triangulation[src][dst] = self[src][dst];
+                triangulation[dst][src] = self[dst][src];
             });
         };
         triangulate_bounds_of(upper_hull);
@@ -1565,23 +1621,13 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
     // TODO: finish implementing the LEDA MST.
     fn mst(&self) -> Self::ArcList {
         let mut arc_list = self.to_arc_list();
+        arc_list.sort_by_weight();
         // The algorithm attempts to solve through a heuristic if the graph is
-        // dense enough (`3n` edges, for `n` vertices.)
+        // dense enough (`3n` arcs, for `|V| = n, G = (V, E)`.)
         if arc_list.len() > 3 * self.0.len()
-            && let Some(cheapest_edges) = arc_list.get_mut(0..3 * self.0.len())
+            && let (cheapest, rest) = arc_list.split_at(3 * self.0.len())
         {
-            let tree = self.kruskal_on(cheapest_edges);
-            let remaining_edges = {
-                let (start, end) = {
-                    let range = arc_list.as_mut_ptr_range();
-                    (range.start, range.end)
-                };
-                // TODO: finish gathering the remaining edges through pointer
-                // arithmetic, or reach for a specific method that already
-                // handles returning two partitions of the slice/vector before
-                // entering the `if let` branch.
-                let start_remaining_edges = unsafe { start.add(3 * self.0.len()) };
-            };
+            let forest = self.kruskal_on(cheapest);
 
             todo!()
         } else {
@@ -2018,7 +2064,7 @@ mod tests {
     // and yet doesn't satisfy the optimality requirements of the generated
     // output from a prior (satisfying) run (pipelined through the Typst
     // plugin,) then both the plugin must be rerun, and manual testing on the
-    // optimality of the new triangulation must be performed again.
+    // optimality of the new triangulation must be performed.
 
     #[test]
     #[expect(
