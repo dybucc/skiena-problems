@@ -28,7 +28,7 @@ use std::{
     collections::{HashMap, HashSet},
     hash::{Hash, Hasher},
     iter,
-    ops::{ControlFlow, Deref, Index, IndexMut, Not},
+    ops::{ControlFlow, Index, IndexMut, Not},
     slice::SliceIndex,
     sync::LazyLock,
 };
@@ -1086,7 +1086,7 @@ impl GeoAdjacencyMatrix {
                         // the same tuple elements.
                         macro_rules! perms {
                             ($p_src:expr, $p:expr, $p_dst:expr) => {{
-                                [*$p_src, $p, *$p_dst]
+                                [$p_src.clone(), $p.clone(), $p_dst.clone()]
                                     .iter()
                                     .permutations(3)
                                     .try_fold(
@@ -1148,16 +1148,16 @@ impl GeoAdjacencyMatrix {
         clippy::must_use_candidate,
         reason = "It's not a bug not to use the result of this function."
     )]
-    pub fn to_arc_list(&self) -> ArcList { self.into() }
+    pub fn to_arc_list(&self) -> ArcList<'_> { self.into() }
 
     #[expect(
         clippy::must_use_candidate,
         reason = "It's not a bug not to use the result of this function."
     )]
-    pub fn kruskal(&self) -> Vec<(usize, usize)> { self.kruskal_on(&self.to_arc_list()) }
+    pub fn kruskal(&self) -> Vec<(usize, usize)> { self.kruskal_on(&self.to_arc_list()).1 }
 
     #[expect(clippy::must_use_candidate, reason = "It's not a bug not to use this function.")]
-    pub fn kruskal_on(&self, arc_list: &ArcList) -> Vec<(usize, usize)> {
+    pub fn kruskal_on(&self, arc_list: &ArcList) -> (NodePartition, Vec<(usize, usize)>) {
         let (mut partition, mut forest) =
             (self.to_node_partition(), Vec::with_capacity(arc_list.len()));
         for (src, dst) in arc_list.iter().copied() {
@@ -1166,7 +1166,7 @@ impl GeoAdjacencyMatrix {
             }
         }
 
-        forest
+        (partition, forest)
     }
 }
 
@@ -1222,8 +1222,7 @@ impl NodePartition {
     /// Panics if `one` or `other` do not denote an element index in the range
     /// of elements with which the node partition was initially created.
     pub fn union(&mut self, one: usize, other: usize) -> bool {
-        let (one, other) = (self.find_representative(one), self.find_representative(other));
-        if one == other {
+        if self.same_block(one, other) {
             return false;
         }
         let forest = &mut self.inner;
@@ -1235,6 +1234,19 @@ impl NodePartition {
         forest.remove(&other);
 
         true
+    }
+
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the result of this function."
+    )]
+    pub fn same_block(&self, one: usize, other: usize) -> bool {
+        let (one, other) = (self.find_representative(one), self.find_representative(other));
+        if one == other {
+            return true;
+        }
+
+        false
     }
 }
 
@@ -1266,18 +1278,68 @@ impl From<&mut GeoAdjacencyMatrix> for NodePartition {
 }
 
 impl<'a> ArcList<'a> {
-    pub fn new(list: &[(usize, usize)], graph: &'a GeoAdjacencyMatrix) -> Self {
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the result of this function."
+    )]
+    pub fn from_list(list: &[(usize, usize)], graph: &'a GeoAdjacencyMatrix) -> Self {
         Self { inner: list.to_owned(), graph }
+    }
+
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the result of this function."
+    )]
+    pub fn with_capacity(cap: usize, graph: &'a GeoAdjacencyMatrix) -> Self {
+        Self { inner: Vec::with_capacity(cap), graph }
     }
 }
 
 impl ArcList<'_> {
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the result of this function."
+    )]
+    pub fn into_inner(self) -> Vec<(usize, usize)> { self.inner }
+
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the result of this function."
+    )]
     pub fn len(&self) -> usize { self.inner.len() }
+
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the result of this function."
+    )]
+    pub fn is_empty(&self) -> bool { self.inner.is_empty() }
 
     pub fn iter(&self) -> impl Iterator<Item = &(usize, usize)> { self.inner.iter() }
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut (usize, usize)> {
         self.inner.iter_mut()
+    }
+
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the result of this function."
+    )]
+    pub fn select_cheapest(&self, cheapest: usize) -> (Self, Self) {
+        let src = (&raw const *self).cast_mut();
+        let (first, _, second) = (unsafe { &mut (*src).inner }).select_nth_unstable_by(
+            cheapest,
+            |&(src1, dst1), &(src2, dst2)| match (self.graph[src1][dst1], self.graph[src2][dst2]) {
+                | (GeoEdge::NonExistent, GeoEdge::NonExistent) => Ordering::Equal,
+                | (GeoEdge::NonExistent, GeoEdge::Weighted { .. }) => Ordering::Less,
+                | (GeoEdge::Weighted { .. }, GeoEdge::NonExistent) => Ordering::Greater,
+                | (
+                    GeoEdge::Weighted { weight: weight1, .. },
+                    GeoEdge::Weighted { weight: weight2, .. },
+                ) => weight1.cmp(&weight2),
+            },
+        );
+
+        (Self::from_list(first, self.graph), Self::from_list(second, self.graph))
     }
 
     pub fn sort_by_weight(&mut self) {
@@ -1294,6 +1356,10 @@ impl ArcList<'_> {
         });
     }
 
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the result of this function."
+    )]
     pub fn as_vec(&self) -> &Vec<(usize, usize)> { &self.inner }
 
     pub fn as_vec_mut(&mut self) -> &mut Vec<(usize, usize)> { &mut self.inner }
@@ -1305,11 +1371,7 @@ impl ArcList<'_> {
         self.inner.get(index).map(|&(src, dst)| &self.graph.0[src][dst])
     }
 
-    pub fn split_at(&mut self, index: usize) -> (ArcList, ArcList) {
-        let (first, second) = self.inner.split_at(index);
-
-        (Self::new(first, self.graph), Self::new(second, self.graph))
-    }
+    pub fn push(&mut self, new: (usize, usize)) { self.inner.push(new); }
 }
 
 impl<'a> From<&'a GeoAdjacencyMatrix> for ArcList<'a> {
@@ -1618,21 +1680,28 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
         Self(triangulation)
     }
 
-    // TODO: finish implementing the LEDA MST.
     fn mst(&self) -> Self::ArcList {
-        let mut arc_list = self.to_arc_list();
-        arc_list.sort_by_weight();
         // The algorithm attempts to solve through a heuristic if the graph is
         // dense enough (`3n` arcs, for `|V| = n, G = (V, E)`.)
-        if arc_list.len() > 3 * self.0.len()
-            && let (cheapest, rest) = arc_list.split_at(3 * self.0.len())
-        {
-            let forest = self.kruskal_on(cheapest);
 
-            todo!()
-        } else {
-            self.kruskal()
+        let arc_list = self.to_arc_list();
+        if arc_list.len() <= 3 * self.0.len() {
+            return self.kruskal();
         }
+        let (cheapest, rest) = arc_list.select_cheapest(3 * self.0.len());
+        let (partition, mut forest) = self.kruskal_on(&cheapest);
+        let mut potential_edges = ArcList::with_capacity(arc_list.len() - 3 * self.0.len(), self);
+        for (src, dst) in rest.iter() {
+            if !partition.same_block(*src, *dst) {
+                potential_edges.push((*src, *dst));
+            }
+        }
+        potential_edges.sort_by_weight();
+        for (src, dst) in potential_edges.iter() {
+            forest.push((*src, *dst));
+        }
+
+        forest
     }
 
     fn dfs(&self) {
@@ -2222,7 +2291,6 @@ mod tests {
           ]
         ]};
         let input = GeoAdjacencyMatrix::try_from(file).unwrap();
-
         assert_eq!(matrix.triangulate(points), input);
     }
 
@@ -2688,7 +2756,6 @@ mod tests {
           ]
         ]};
         let input = GeoAdjacencyMatrix::try_from(file).unwrap();
-
         assert_eq!(matrix.triangulate(points), input);
     }
 
@@ -3146,8 +3213,28 @@ mod tests {
           ]
         ]};
         let input = GeoAdjacencyMatrix::try_from(file).unwrap();
-
         assert_eq!(matrix.triangulate(points), input);
+    }
+
+    #[test]
+    #[should_panic]
+    fn mst1() {
+        let (_, matrix) = points! {
+            (x: 1.25, y: 2),
+            (x: 1.3, y: 5),
+            (x: 1.5, y: 3.5),
+            (x: 2, y: 3.6),
+            (x: 3, y: 0.75),
+            (x: 3.75, y: 3.7),
+            (x: 4.25, y: 3),
+            (x: 4.3, y: 1.7),
+            (x: 4.5, y: 5),
+            (x: 5.8, y: 3.45),
+            (x: 6, y: 1),
+            (x: 6.2, y: 4.7),
+            (x: 7, y: 3.45),
+        };
+        assert_eq!(matrix.mst(), vec![]);
     }
 
     #[test]
