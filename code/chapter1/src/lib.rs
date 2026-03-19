@@ -20,7 +20,7 @@
 //!
 //! [Skiena, 2020]: https://doi.org/10.1007/978-3-030-54256-6
 
-#![feature(bool_to_result, control_flow_into_value)]
+#![feature(bool_to_result, control_flow_into_value, impl_trait_in_assoc_type)]
 
 use std::{
   cmp::Ordering,
@@ -138,15 +138,26 @@ impl Eq for Point2d {}
 #[derive(Debug)]
 pub struct NodePartition {
   pub inner:    HashMap<usize, HashSet<usize>>,
-  // Note the following is not a measure of the current amount of trees in the
+  // Note the following is not a measure of the current number of trees in the
   // forest, but rather of the number of trees in the forest at the moment of
   // creation; Namely, the total number of vertices at any given time.
   pub vertices: usize,
 }
 
+#[derive(Debug)]
 pub struct ArcList<'a> {
   pub inner: Vec<(usize, usize)>,
   pub graph: &'a GeoAdjacencyMatrix,
+}
+
+#[derive(Debug)]
+// The purpose of this arc list is to get past the impossibility for associated
+// types with structural references to reference the (owning) `Self` type in the
+// impl block, as is the case with the ipml trait block of `TspTriMstDfs` for
+// `GeoAdjacencyMatrix`.
+pub struct TrickyArcList {
+  pub inner: Vec<(usize, usize)>,
+  pub graph: *const GeoAdjacencyMatrix,
 }
 
 #[derive(Debug)]
@@ -177,7 +188,8 @@ pub struct AdjacencyMatrixError(
     not(test),
     expect(
       dead_code,
-      reason = "This works alongside the `build_error!` macro, so it's actually used."
+      reason = "This works alongside the `build_error!` macro, so it's \
+                actually used."
     )
   )]
   AdjacencyMatrixErrorType,
@@ -341,9 +353,8 @@ impl AdjacencyMatrix {
   /// 2. the input matrix denotes a non-simple graph (specifically, containing
   ///    self loops,) or
   /// 3. the input matrix denotes an incomplete graph, or
-  /// 4. the input matrix denotes a directed graph (with elements below the
-  ///    main diagonal that do not map 1:1 to the elements above the main
-  ///    diagonal.)
+  /// 4. the input matrix denotes a directed graph (with elements below the main
+  ///    diagonal that do not map 1:1 to the elements above the main diagonal.)
   pub fn new(input: &[Vec<Edge>]) -> Result<Self, AdjacencyMatrixError> {
     ensure_or!(input.len() > 1, NonSquareMatrix)?;
     for (idx, vertex) in input.iter().enumerate() {
@@ -383,7 +394,8 @@ impl AdjacencyMatrix {
 impl<'a> Pairs<'a> {
   #[expect(
     clippy::must_use_candidate,
-    reason = "It's not a bug not to use the result of this associated function."
+    reason = "It's not a bug not to use the result of this associated \
+              function."
   )]
   pub fn new(src: &'a AdjacencyMatrix) -> Self {
     Self {
@@ -471,19 +483,20 @@ impl Pairs<'_> {
   pub fn build_tree_from(&mut self, this: usize) -> Result<(), PairsError> {
     ensure_or!(this < self.forest.len(), IndexOutOfBounds)?;
     self.current_tree = Some(
-            iter::repeat_n(this, self.forest.len())
-                .zip(0..self.forest.len())
-                .filter_map(|(this, other)| {
-                    self.same(this, other)
-                        .expect(
-                            "both `this` and `other` should be within-bounds, as `this` was \
-                            checked at the start of the function and `other` is sourced from a \
-                            range over `self.chains`",
-                        )
-                        .then_some(other)
-                })
-                .collect(),
-        );
+      iter::repeat_n(this, self.forest.len())
+        .zip(0..self.forest.len())
+        .filter_map(|(this, other)| {
+          self
+            .same(this, other)
+            .expect(
+              "both `this` and `other` should be within-bounds, as `this` was \
+               checked at the start of the function and `other` is sourced \
+               from a range over `self.chains`",
+            )
+            .then_some(other)
+        })
+        .collect(),
+    );
 
     Ok(())
   }
@@ -493,9 +506,9 @@ impl Pairs<'_> {
   /// Panics if `self.current_tree` is not `Some(_)`. This happens most
   /// naturaly as a consequence of calling this outside iterator chains.
   pub fn cartesian_product(&mut self) {
-    static ERROR_MSG: LazyLock<&str> = LazyLock::new(
-      || "this method should not be called outside iterator chains",
-    );
+    static ERROR_MSG: LazyLock<&str> = LazyLock::new(|| {
+      "this method should not be called outside iterator chains"
+    });
 
     let current_tree = self.current_tree.as_ref().expect(&ERROR_MSG);
     let others: Vec<_> = (0..self.forest.len())
@@ -513,14 +526,15 @@ impl Pairs<'_> {
   //       implementation when used in `tsp()` of `TspClosestPair`.
   pub fn min_fix(&mut self) -> Option<<Self as Iterator>::Item> {
     self.min_by_key(|&(node1, node2)| {
-            let Edge::Weighted(weight) = self.src.0[node1][node2] else {
-                unreachable!(
-                    "no node considered in the `Pairs` iterator should be `Edge::NonExistent`",
-                )
-            };
+      let Edge::Weighted(weight) = self.src.0[node1][node2] else {
+        unreachable!(
+          "no node considered in the `Pairs` iterator should be \
+           `Edge::NonExistent`",
+        )
+      };
 
-            weight
-        })
+      weight
+    })
   }
 
   /// # Panics
@@ -541,7 +555,8 @@ impl Pairs<'_> {
     debug_assert_eq!(
       root.clone().count(),
       1,
-      "this method should be called only once there's a single tree left in the forest"
+      "this method should be called only once there's a single tree left in \
+       the forest"
     );
 
     Dfs {
@@ -576,7 +591,7 @@ impl Iterator for Pairs<'_> {
         self.current_node = Some(0);
         self.build_tree_from(0).expect(
           "the operation should be infallible because the index is a constant \
-                    that's always within bounds",
+           that's always within bounds",
         );
         self.cartesian_product();
         self.current_iter = Some(0);
@@ -588,8 +603,8 @@ impl Iterator for Pairs<'_> {
             | Ordering::Equal => {
               static ERROR_MSG: LazyLock<&str> = LazyLock::new(|| {
                 "this operation should be infallible if the iteration indices \
-                                (`self.current_node` and `self.current_iter`) have been correctly \
-                                handled"
+                 (`self.current_node` and `self.current_iter`) have been \
+                 correctly handled"
               });
 
               current_node = (current_node < self.forest.len() - 1)
@@ -602,13 +617,14 @@ impl Iterator for Pairs<'_> {
               self.current_iter = Some(0);
             },
             | Ordering::Greater => unreachable!(
-              "the collection index should have been reset in the `Ordering::Equal` \
-                            branch"
+              "the collection index should have been reset in the \
+               `Ordering::Equal` branch"
             ),
           }
         } else {
           unreachable!(
-            "iteration should have already started if `self.current_node` != `None`"
+            "iteration should have already started if `self.current_node` != \
+             `None`"
           )
         },
     }
@@ -633,14 +649,15 @@ impl Iterator for Pairs<'_> {
   {
     let matrix = &self.src.0;
     self.min_by_key(|&(node1, node2)| {
-            let Edge::Weighted(weight) = matrix[node1][node2] else {
-                unreachable!(
-                    "no node considered in the `Pairs` iterator should be `Edge::NonExistent`",
-                )
-            };
+      let Edge::Weighted(weight) = matrix[node1][node2] else {
+        unreachable!(
+          "no node considered in the `Pairs` iterator should be \
+           `Edge::NonExistent`",
+        )
+      };
 
-            weight
-        })
+      weight
+    })
   }
 }
 
@@ -677,9 +694,9 @@ impl GeoAdjacencyMatrix {
   /// 2. the input matrix denotes a non-simple graph (specifically, containing
   ///    self loops,) or
   /// 3. the input matrix denotes an incomplete graph, or
-  /// 4. the input matrix denotes a directed graph (with elements below the
-  ///    main diagonal that do not map 1:1 to the elements above the main
-  ///    diagonal,) or
+  /// 4. the input matrix denotes a directed graph (with elements below the main
+  ///    diagonal that do not map 1:1 to the elements above the main diagonal,)
+  ///    or
   /// 5. the input matrix contains some row (denoting the edges of the vertex
   ///    represented by that row's index) with the same points, which is not
   ///    possible as all columns must represent the same point and thus every
@@ -692,84 +709,89 @@ impl GeoAdjacencyMatrix {
     ensure_or!(inner.len() > 1, NonSquareMatrix)?;
 
     inner.iter().enumerate().try_for_each(|(vertex, edges)| {
-            ensure_or!(edges.len() == inner.len(), NonSquareMatrix)?;
+      ensure_or!(edges.len() == inner.len(), NonSquareMatrix)?;
 
-            let row_vec: Vec<_> = edges
+      let row_vec: Vec<_> = edges
+        .iter()
+        .enumerate()
+        .filter_map(|(vertex, edge)| {
+          if let GeoEdge::Weighted { weight, coord } = edge {
+            Some((vertex, (weight, coord)))
+          } else {
+            None
+          }
+        })
+        .collect();
+
+      ensure_or!(
+        row_vec.iter().all(|&(inner_idx, _)| inner_idx != vertex),
+        SelfLoops,
+      )?;
+      ensure_or!(row_vec.len() == edges.len() - 1, IncompleteGraph)?;
+
+      ensure_or!(
+        row_vec.iter().all(|&(inner_idx, (&weight, _))| {
+          let GeoEdge::Weighted { weight: symmetric_weight, .. } =
+            inner[inner_idx][vertex]
+          else {
+            unimplemented!(
+              "This should be caught when traversing the next row as the \
+               symmetric node is always forward in the input array, but the \
+               graph checking logic relies on traversing each row serially so \
+               at this point it is not yet knonw that the next row would've \
+               thrown an `AdjacencyErrorType::IncompleteGraph`.",
+            );
+          };
+
+          weight == symmetric_weight
+        }),
+        DirectedGraph,
+      )?;
+
+      ensure_or!(
+        row_vec
+          .iter()
+          .fold(HashSet::new(), |mut accum, &(_, (_, point))| {
+            accum.contains(&point).not().then(|| accum.insert(point));
+
+            accum
+          })
+          .len()
+          == row_vec.len(),
+        MultipleEqualPoints,
+      )?;
+
+      // Square matrices with dimensionality 2 don't have any other
+      // elements in the same column that are not `GeoEdge::NonExistent`.
+      (vertex == 0 && inner.len() > 2).then_some(()).into_iter().try_for_each(
+        |()| {
+          ensure_or!(
+            row_vec.iter().all(|&(vertex, (_, &point))| {
+              inner
                 .iter()
-                .enumerate()
-                .filter_map(|(vertex, edge)| {
-                    if let GeoEdge::Weighted { weight, coord } = edge {
-                        Some((vertex, (weight, coord)))
+                .skip(1)
+                .filter_map(|elem| {
+                  elem.iter().enumerate().find_map(|(idx, elem)| {
+                    if let GeoEdge::Weighted { coord, .. } = elem
+                      && idx == vertex
+                    {
+                      Some(*coord)
                     } else {
-                        None
+                      None
                     }
+                  })
                 })
-                .collect();
+                .eq(iter::repeat_n(point, inner.len() - 2))
+            }),
+            UnequalSamePoints,
+          )?;
 
-            ensure_or!(row_vec.iter().all(|&(inner_idx, _)| inner_idx != vertex), SelfLoops,)?;
-            ensure_or!(row_vec.len() == edges.len() - 1, IncompleteGraph)?;
+          Ok::<_, AdjacencyMatrixError>(())
+        },
+      )?;
 
-            ensure_or!(
-                row_vec.iter().all(|&(inner_idx, (&weight, _))| {
-                    let GeoEdge::Weighted { weight: symmetric_weight, .. } =
-                        inner[inner_idx][vertex]
-                    else {
-                        unimplemented!(
-                            "This should be caught when traversing the next row as the symmetric \
-                            node is always forward in the input array, but the graph checking \
-                            logic relies on traversing each row serially so at this point it is \
-                            not yet knonw that the next row would've thrown an \
-                            `AdjacencyErrorType::IncompleteGraph`.",
-                        );
-                    };
-
-                    weight == symmetric_weight
-                }),
-                DirectedGraph,
-            )?;
-
-            ensure_or!(
-                row_vec
-                    .iter()
-                    .fold(HashSet::new(), |mut accum, &(_, (_, point))| {
-                        accum.contains(&point).not().then(|| accum.insert(point));
-
-                        accum
-                    })
-                    .len()
-                    == row_vec.len(),
-                MultipleEqualPoints,
-            )?;
-
-            // Square matrices with dimensionality 2 don't have any other
-            // elements in the same column that are not `GeoEdge::NonExistent`.
-            (vertex == 0 && inner.len() > 2).then_some(()).into_iter().try_for_each(|()| {
-                ensure_or!(
-                    row_vec.iter().all(|&(vertex, (_, &point))| {
-                        inner
-                            .iter()
-                            .skip(1)
-                            .filter_map(|elem| {
-                                elem.iter().enumerate().find_map(|(idx, elem)| {
-                                    if let GeoEdge::Weighted { coord, .. } = elem
-                                        && idx == vertex
-                                    {
-                                        Some(*coord)
-                                    } else {
-                                        None
-                                    }
-                                })
-                            })
-                            .eq(iter::repeat_n(point, inner.len() - 2))
-                    }),
-                    UnequalSamePoints,
-                )?;
-
-                Ok::<_, AdjacencyMatrixError>(())
-            })?;
-
-            Ok::<_, AdjacencyMatrixError>(())
-        })?;
+      Ok::<_, AdjacencyMatrixError>(())
+    })?;
 
     Ok(Self(inner.into()))
   }
@@ -803,50 +825,51 @@ impl GeoAdjacencyMatrix {
     // This finds the largest distance between any one point and any other,
     // different point, in the input set.
     let largest_distance = points
+      .iter()
+      .enumerate()
+      .filter_map(|(idx, &point)| {
+        points
+          .iter()
+          .skip(idx + 1)
+          .map(|&other_point| seglen(point, other_point))
+          .max_by(f64::total_cmp)
+      })
+      .max_by(f64::total_cmp)
+      .expect(
+        "The point set should have at least four points to make things \
+         interesting, though two is the bare minimum to make for a \
+         non-singleton set.",
+      );
+    let output = Self(
+      output
+        .iter()
+        .enumerate()
+        .map(|(row, row_vector)| {
+          row_vector
             .iter()
             .enumerate()
-            .filter_map(|(idx, &point)| {
-                points
-                    .iter()
-                    .skip(idx + 1)
-                    .map(|&other_point| seglen(point, other_point))
-                    .max_by(f64::total_cmp)
+            .map(|(col, vertex)| match vertex {
+              | IRGeoEdge::NonExistent => GeoEdge::NonExistent,
+              | IRGeoEdge::Weighted(coord) => GeoEdge::Weighted {
+                // The weight is computed as a ratio of the
+                // largest distance found above.
+                #[expect(
+                  clippy::cast_possible_truncation,
+                  clippy::cast_sign_loss,
+                  reason = "`seglen()` always produces positive numbers, and \
+                            the problem space doesn't allow for arbitrary \
+                            `f64` values."
+                )]
+                weight: ((seglen(points[row], points[col]) * 100.)
+                  / largest_distance)
+                  .trunc() as usize,
+                coord:  *coord,
+              },
             })
-            .max_by(f64::total_cmp)
-            .expect(
-                "The point set should have at least four points to make things interesting, though \
-                two is the bare minimum to make for a non-singleton set.",
-            );
-    let output = Self(
-            output
-                .iter()
-                .enumerate()
-                .map(|(row, row_vector)| {
-                    row_vector
-                        .iter()
-                        .enumerate()
-                        .map(|(col, vertex)| match vertex {
-                            | IRGeoEdge::NonExistent => GeoEdge::NonExistent,
-                            | IRGeoEdge::Weighted(coord) => GeoEdge::Weighted {
-                                // The weight is computed as a ratio of the
-                                // largest distance found above.
-                                #[expect(
-                                    clippy::cast_possible_truncation,
-                                    clippy::cast_sign_loss,
-                                    reason = "`seglen()` always produces positive numbers, and the \
-                                             problem space doesn't allow for arbitrary `f64` \
-                                             values."
-                                )]
-                                weight: ((seglen(points[row], points[col]) * 100.)
-                                    / largest_distance)
-                                    .trunc() as usize,
-                                coord:  *coord,
-                            },
-                        })
-                        .collect()
-                })
-                .collect(),
-        );
+            .collect()
+        })
+        .collect(),
+    );
 
     (points, output)
   }
@@ -1018,9 +1041,8 @@ impl GeoAdjacencyMatrix {
   ///   triangulation is a reflex vertex (i.e. you can find it lying within the
   ///   area of the triangle formed by the other three vertices.)
   /// + Check then if there's a possibly better, angle-wise, triangulation by
-  ///   checking for a consequence of Thales' theorem (see Sec. 9.1,
-  ///   [de Berg et. al., 2008]) and perform edge flipping if the check
-  ///   evaluates true.
+  ///   checking for a consequence of Thales' theorem (see Sec. 9.1, [de Berg
+  ///   et. al., 2008]) and perform edge flipping if the check evaluates true.
   ///
   /// The return value consists of an ordered pair of ordered pairs, where the
   /// first inner tuple denotes the points with the edge that can be flipped,
@@ -1172,7 +1194,7 @@ impl GeoAdjacencyMatrix {
     clippy::must_use_candidate,
     reason = "It's not a bug not to use the result of this function."
   )]
-  pub fn kruskal(&self) -> Vec<(usize, usize)> {
+  pub fn kruskal(&self) -> ArcList<'_> {
     self.kruskal_on(&self.to_arc_list()).1
   }
 
@@ -1180,12 +1202,9 @@ impl GeoAdjacencyMatrix {
     clippy::must_use_candidate,
     reason = "It's not a bug not to use this function."
   )]
-  pub fn kruskal_on(
-    &self,
-    arc_list: &ArcList,
-  ) -> (NodePartition, Vec<(usize, usize)>) {
+  pub fn kruskal_on(&self, arc_list: &ArcList) -> (NodePartition, ArcList<'_>) {
     let (mut partition, mut forest) =
-      (self.to_node_partition(), Vec::with_capacity(arc_list.len()));
+      (self.to_node_partition(), ArcList::with_capacity(arc_list.len(), self));
     for (src, dst) in arc_list.iter().copied() {
       if partition.union(src, dst) {
         forest.push((src, dst));
@@ -1194,6 +1213,14 @@ impl GeoAdjacencyMatrix {
 
     (partition, forest)
   }
+
+  #[expect(
+    clippy::must_use_candidate,
+    reason = "It's not a bug not to use this function."
+  )]
+  // This routine only serves the purpose of managing the tricky implementation
+  // of `TspTriMstDfs::ArcList`, so as to make it more ergonomic.
+  pub fn mst(&self) -> ArcList<'_> { <Self as TspTriMstDfs>::mst(self).into() }
 }
 
 impl Index<usize> for GeoAdjacencyMatrix {
@@ -1218,25 +1245,32 @@ impl PartialEq for GeoAdjacencyMatrix {
 impl NodePartition {
   /// # Panics
   ///
-  /// Panics if `one` does not denote an element index in the range of
-  /// elements with which the node partition was initially created.
+  /// Panics if `one` does not denote an element index in the range of elements
+  /// with which the node partition was initially created.
   #[expect(
     clippy::must_use_candidate,
     reason = "It's not a bug not to use the result of this function."
   )]
   pub fn find_representative(&self, one: usize) -> usize {
-    assert!((0..self.vertices).contains(&one));
-    let forest = &self.inner;
+    assert!(
+      (0..self.vertices).contains(&one),
+      "{one} is not among the element indices contained in the node partition"
+    );
     // `O(1)` if the node is already the representative node of the block.
-    if forest.contains_key(&one) {
+    if self.inner.contains_key(&one) {
       return one;
     }
 
     // `O(n)` if the node ought be found in some tree of the forest.
-    forest.iter().find_map(|(node, map)| map.contains(&one).then_some(*node)).expect(
-            "a given node should always be found within the node partition because no node is ever \
-             removed, only moved into a different partition.",
-        )
+    self
+      .inner
+      .iter()
+      .find_map(|(node, map)| map.contains(&one).then_some(*node))
+      .expect(
+        "a given node should always be found within the node partition \
+         because no node is ever removed, only moved into a different \
+         partition",
+      )
   }
 
   /// Attempts to unite two node partitions if they don't already belong to
@@ -1253,13 +1287,12 @@ impl NodePartition {
     if self.same_block(one, other) {
       return false;
     }
-    let forest = &mut self.inner;
-    let new = forest[&one].union(&forest[&other]).copied().collect();
-    *forest.get_mut(&one).expect(
-            "`find_representative()` should've panicked if any one of the passed `one` or `other` \
-             did not denote vertices of the partition",
-        ) = new;
-    forest.remove(&other);
+    let new = self.inner[&one].union(&self.inner[&other]).copied().collect();
+    *self.inner.get_mut(&one).expect(
+      "`find_representative()` should've panicked if any one of the passed \
+       `one` or `other` did not denote partition vertices",
+    ) = new;
+    self.inner.remove(&other);
 
     true
   }
@@ -1269,13 +1302,7 @@ impl NodePartition {
     reason = "It's not a bug not to use the result of this function."
   )]
   pub fn same_block(&self, one: usize, other: usize) -> bool {
-    let (one, other) =
-      (self.find_representative(one), self.find_representative(other));
-    if one == other {
-      return true;
-    }
-
-    false
+    self.find_representative(one) == self.find_representative(other)
   }
 }
 
@@ -1354,40 +1381,30 @@ impl ArcList<'_> {
     self.inner.iter_mut()
   }
 
-  #[expect(
-    clippy::must_use_candidate,
-    reason = "It's not a bug not to use the result of this function."
-  )]
-  pub fn select_cheapest(&self, cheapest: usize) -> (Self, Self) {
-    let src = (&raw const *self).cast_mut();
-    let (first, _, second) = (unsafe { &mut (*src).inner })
-      .select_nth_unstable_by(cheapest, |&(src1, dst1), &(src2, dst2)| match (
-        self.graph[src1][dst1], self.graph[src2][dst2],
-      ) {
-        | (GeoEdge::NonExistent, GeoEdge::NonExistent) => Ordering::Equal,
-        | (GeoEdge::NonExistent, GeoEdge::Weighted { .. }) => Ordering::Less,
-        | (GeoEdge::Weighted { .. }, GeoEdge::NonExistent) => Ordering::Greater,
-        | (
-          GeoEdge::Weighted { weight: weight1, .. },
-          GeoEdge::Weighted { weight: weight2, .. },
-        ) => weight1.cmp(&weight2),
-      });
+  pub fn weight_fn(
+    graph: &GeoAdjacencyMatrix,
+  ) -> impl Fn(&(usize, usize), &(usize, usize)) -> Ordering {
+    |&(src1, dst1), &(src2, dst2)| match (graph[src1][dst1], graph[src2][dst2])
+    {
+      | (GeoEdge::NonExistent, GeoEdge::NonExistent) => Ordering::Equal,
+      | (GeoEdge::NonExistent, GeoEdge::Weighted { .. }) => Ordering::Less,
+      | (GeoEdge::Weighted { .. }, GeoEdge::NonExistent) => Ordering::Greater,
+      | (
+        GeoEdge::Weighted { weight: weight1, .. },
+        GeoEdge::Weighted { weight: weight2, .. },
+      ) => weight1.cmp(&weight2),
+    }
+  }
+
+  pub fn select_cheapest(&mut self, cheapest: usize) -> (Self, Self) {
+    let (first, _, second) =
+      self.inner.select_nth_unstable_by(cheapest, Self::weight_fn(self.graph));
 
     (Self::from_list(first, self.graph), Self::from_list(second, self.graph))
   }
 
   pub fn sort_by_weight(&mut self) {
-    self.inner.sort_unstable_by(|&(src1, dst1), &(src2, dst2)| {
-      match (self.graph[src1][dst1], self.graph[src2][dst2]) {
-        | (GeoEdge::NonExistent, GeoEdge::NonExistent) => Ordering::Equal,
-        | (GeoEdge::NonExistent, GeoEdge::Weighted { .. }) => Ordering::Less,
-        | (GeoEdge::Weighted { .. }, GeoEdge::NonExistent) => Ordering::Greater,
-        | (
-          GeoEdge::Weighted { weight: weight1, .. },
-          GeoEdge::Weighted { weight: weight2, .. },
-        ) => weight1.cmp(&weight2),
-      }
-    });
+    self.inner.sort_unstable_by(Self::weight_fn(self.graph));
   }
 
   #[expect(
@@ -1410,17 +1427,54 @@ impl ArcList<'_> {
 
 impl<'a> From<&'a GeoAdjacencyMatrix> for ArcList<'a> {
   fn from(value: &'a GeoAdjacencyMatrix) -> Self {
+    // Filters out element indices coming before and at the main diagonal to
+    // fetch a list of unique indices.
     Self {
       inner: (0..value.0.len())
-        .zip(0..value.0.len())
+        .flat_map(|src| {
+          iter::repeat_n(src, value.0.len()).zip(0..value.0.len())
+        })
         .filter(|(src, dst)| {
-          // Filter out element indices coming before and at the main
-          // diagonal.
           dst > src && matches!(value.0[*src][*dst], GeoEdge::Weighted { .. })
         })
         .collect(),
       graph: value,
     }
+  }
+}
+
+impl<'a> IntoIterator for &'a ArcList<'_> {
+  type Item = &'a (usize, usize);
+
+  type IntoIter = impl Iterator<Item = <Self as IntoIterator>::Item>;
+
+  fn into_iter(self) -> Self::IntoIter { self.iter() }
+}
+
+impl<'a> IntoIterator for &'a mut ArcList<'_> {
+  type Item = &'a mut (usize, usize);
+
+  type IntoIter = impl Iterator<Item = <Self as IntoIterator>::Item>;
+
+  fn into_iter(self) -> Self::IntoIter { self.iter_mut() }
+}
+
+impl PartialEq<Vec<(usize, usize)>> for ArcList<'_> {
+  fn eq(&self, other: &Vec<(usize, usize)>) -> bool { self.iter().eq(other) }
+}
+
+impl From<ArcList<'_>> for TrickyArcList {
+  fn from(value: ArcList<'_>) -> Self {
+    TrickyArcList { inner: value.inner, graph: value.graph }
+  }
+}
+
+impl<'a> From<TrickyArcList> for ArcList<'a> {
+  fn from(value: TrickyArcList) -> Self {
+    let TrickyArcList { inner, graph } = value;
+    let graph: &'a _ = unsafe { graph.as_ref_unchecked() };
+
+    Self::from_list(&inner, graph)
   }
 }
 
@@ -1459,7 +1513,8 @@ pub trait TspTriMstDfs {
   /// [Skiena, 2020]: https://doi.org/10.1007/978-3-030-54256-6
   #[expect(
     clippy::must_use_candidate,
-    reason = "It's not a bug not to use the result of this associated function."
+    reason = "It's not a bug not to use the result of this associated \
+              function."
   )]
   fn compute_triangle_area(t: (Point2d, Point2d, Point2d)) -> f64 {
     Self::compute_raw_triangle_area(t).abs() / 2.
@@ -1467,7 +1522,8 @@ pub trait TspTriMstDfs {
 
   #[expect(
     clippy::must_use_candidate,
-    reason = "It's not a bug not to use the result of this associated function."
+    reason = "It's not a bug not to use the result of this associated \
+              function."
   )]
   fn compute_raw_triangle_area((a, b, c): (Point2d, Point2d, Point2d)) -> f64 {
     (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)
@@ -1484,7 +1540,8 @@ pub trait TspTriMstDfs {
   /// the other endpoint for all three.
   #[expect(
     clippy::must_use_candidate,
-    reason = "It's not a bug not to use the result of this associated function."
+    reason = "It's not a bug not to use the result of this associated \
+              function."
   )]
   fn find_ring((a, b, c): (Point2d, Point2d, Point2d)) -> Option<Point2d> {
     (-b.x + a.x != 0.
@@ -1528,33 +1585,35 @@ pub trait TspTriMstDfs {
   /// [O'Rourke, 2001]: https://doi.org/10.1017/CBO9780511804120
   #[expect(
     clippy::must_use_candidate,
-    reason = "It's not a bug not to use the result of this associated function."
+    reason = "It's not a bug not to use the result of this associated \
+              function."
   )]
   fn check_point_ownership(
     (a, b, c): (Point2d, Point2d, Point2d),
     p_to_check: Point2d,
   ) -> bool {
     [(a, b, p_to_check), (b, c, p_to_check), (c, a, p_to_check)]
-            .iter()
-            .map(|t| {
-                let output = Self::compute_raw_triangle_area(*t);
-                // Handle `-0.` by producing the same result as `(0.).signum()`.
-                if output == -0. {
-                    return 1.;
-                }
+      .iter()
+      .map(|t| {
+        let output = Self::compute_raw_triangle_area(*t);
+        // Handle `-0.` by producing the same result as `(0.).signum()`.
+        if output == -0. {
+          return 1.;
+        }
 
-                output.signum()
-            })
-            .try_fold(None, |sign_state, sign| match sign_state {
-                | None => Ok(Some(sign)),
-                #[expect(
-                    clippy::float_cmp,
-                    reason = "The sign is always one of `-0.`, `+0.` or `NaN`. I am sure it will \
-                              never be the latter."
-                )]
-                | Some(sign_state) => (sign_state == sign).ok_or(()).map(|()| Some(sign_state)),
-            })
-            .is_ok()
+        output.signum()
+      })
+      .try_fold(None, |sign_state, sign| match sign_state {
+        | None => Ok(Some(sign)),
+        #[expect(
+          clippy::float_cmp,
+          reason = "The sign is always one of `-0.`, `+0.` or `NaN`. I am \
+                    sure it will never be the latter."
+        )]
+        | Some(sign_state) =>
+          (sign_state == sign).ok_or(()).map(|()| Some(sign_state)),
+      })
+      .is_ok()
   }
 
   fn triangulate(&self, points: Self::PointList) -> Self::Triangulation;
@@ -1583,9 +1642,9 @@ impl TspNearestNeighbor for AdjacencyMatrix {
             .then_some((idx, edge))
         })
         .min_by(|(_, elem1), (_, elem2)| {
-          static ERROR_MSG: LazyLock<&str> = LazyLock::new(
-            || "matrix elements yielded here should have a weight",
-          );
+          static ERROR_MSG: LazyLock<&str> = LazyLock::new(|| {
+            "matrix elements yielded here should have a weight"
+          });
 
           let Edge::Weighted(weight1) = elem1 else {
             unreachable!("{:#?}", &ERROR_MSG)
@@ -1611,15 +1670,16 @@ impl TspClosestPair for AdjacencyMatrix {
     let mut pairs_iter = self.pairs();
     for _ in 1..self.0.len() {
       static ERROR_MSG: LazyLock<&str> = LazyLock::new(|| {
-        "`node2` was just sourced through `min_fix()` so the operation should be \
-                infallible"
+        "`node2` was just sourced through `min_fix()` so the operation should \
+         be infallible"
       });
       let (node1, node2) = pairs_iter.min_fix().expect(
-                "there should always be a minimum value given the loop runs for n - 1 \
-                iterations, where n is the number of nodes in the graph, and the underlying ufds \
-                decreases its number of disjoint trees by a factor of 1 on each iteration (i.e. on \
-                each call to `unite()` with the nodes yielded by `min_fix()`)",
-            );
+        "there should always be a minimum value given the loop runs for n - 1 \
+         iterations, where n is the number of nodes in the graph, and the \
+         underlying ufds decreases its number of disjoint trees by a factor \
+         of 1 on each iteration (i.e. on each call to `unite()` with the \
+         nodes yielded by `min_fix()`)",
+      );
       // If the node to be `unite()`d is not a root node, then make it a
       // root node by reversing the parent node of its ancestors.
       if pairs_iter.find(node2).expect(&ERROR_MSG) != node2 {
@@ -1631,9 +1691,9 @@ impl TspClosestPair for AdjacencyMatrix {
         pairs_iter.forest[node2] = node2;
       }
       pairs_iter.unite(node1, node2).expect(
-                "the node indices are sourced directly from the iterator itself so the operation \
-                should be infallible",
-            );
+        "the node indices are sourced directly from the iterator itself so \
+         the operation should be infallible",
+      );
       // Resets the state of the iterator to force cycling with updated
       // state on the next iteration of the overarching loop.
       pairs_iter.current_node = None;
@@ -1644,7 +1704,7 @@ impl TspClosestPair for AdjacencyMatrix {
 }
 
 impl TspTriMstDfs for GeoAdjacencyMatrix {
-  type ArcList = Vec<(usize, usize)>;
+  type ArcList = TrickyArcList;
   type PointList = Vec<Point2d>;
   type Triangulation = Self;
 
@@ -1690,7 +1750,8 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
     {
       #![expect(
         clippy::float_cmp,
-        reason = "`signum()` always returns -1., 1. or NaN; I am sure it will never be NaN."
+        reason = "`signum()` always returns -1., 1. or NaN; I am sure it will \
+                  never be NaN."
       )]
 
       self.build_hull(
@@ -1734,16 +1795,15 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
   fn mst(&self) -> Self::ArcList {
     // The algorithm attempts to solve through a heuristic if the graph is
     // dense enough (`3n` arcs, for `|V| = n, G = (V, E)`.)
-
-    let arc_list = self.to_arc_list();
+    let mut arc_list = self.to_arc_list();
     if arc_list.len() <= 3 * self.0.len() {
-      return self.kruskal();
+      return self.kruskal().into();
     }
     let (cheapest, rest) = arc_list.select_cheapest(3 * self.0.len());
     let (partition, mut forest) = self.kruskal_on(&cheapest);
     let mut potential_edges =
       ArcList::with_capacity(arc_list.len() - 3 * self.0.len(), self);
-    for (src, dst) in rest.iter() {
+    for (src, dst) in &rest {
       if !partition.same_block(*src, *dst) {
         potential_edges.push((*src, *dst));
       }
@@ -1753,7 +1813,7 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
       forest.push((*src, *dst));
     }
 
-    forest
+    forest.into()
   }
 
   fn dfs(&self) {
@@ -1793,50 +1853,52 @@ mod tests {
       let mut output = Vec::with_capacity(row.len());
       for value in row {
         match value {
-                    | Value::Null => output.push(GeoEdge::NonExistent),
-                    | Value::Object(coords) => output.push(GeoEdge::Weighted {
-                        #[expect(
-                            clippy::cast_possible_truncation,
-                            reason = "This only ever runs on my machine."
-                        )]
-                        weight: coords
-                            .get("weight")
-                            .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
-                                "expected every coordinate point to have a `weight` key",
-                            )))?
-                            .as_u64()
-                            .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
-                                "expected every coordinate point to have a numeric `weight` key",
-                            )))? as usize,
-                        coord:  Point2d {
-                            x: coords
-                                .get("x")
-                                .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
-                                    "expected every coordinate point to have an `x` key",
-                                )))?
-                                .as_f64()
-                                .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
-                                    "expected every coordinate point to have a numeric `x` key",
-                                )))?,
-                            y: coords
-                                .get("y")
-                                .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
-                                    "expected every coordinate point to have an `y` key",
-                                )))?
-                                .as_f64()
-                                .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
-                                    "expected every coordinate point to have a numeric `y` key",
-                                )))?,
-                        },
-                    }),
-                    | _ => {
-                        return Err(AdjacencyMatrixError(AdjacencyMatrixErrorType::InvalidJson(
-                            String::from(
-                                "expected each row of the matrix to be `null` or a map to an edge",
-                            ),
-                        )));
-                    },
-                }
+          | Value::Null => output.push(GeoEdge::NonExistent),
+          | Value::Object(coords) => output.push(GeoEdge::Weighted {
+            #[expect(
+              clippy::cast_possible_truncation,
+              reason = "This only ever runs on my machine."
+            )]
+            weight: coords
+              .get("weight")
+              .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                "expected every coordinate point to have a `weight` key",
+              )))?
+              .as_u64()
+              .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                "expected every coordinate point to have a numeric `weight` \
+                 key",
+              )))? as usize,
+            coord:  Point2d {
+              x: coords
+                .get("x")
+                .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                  "expected every coordinate point to have an `x` key",
+                )))?
+                .as_f64()
+                .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                  "expected every coordinate point to have a numeric `x` key",
+                )))?,
+              y: coords
+                .get("y")
+                .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                  "expected every coordinate point to have an `y` key",
+                )))?
+                .as_f64()
+                .ok_or(AdjacencyMatrixErrorType::InvalidJson(String::from(
+                  "expected every coordinate point to have a numeric `y` key",
+                )))?,
+            },
+          }),
+          | _ => {
+            return Err(AdjacencyMatrixError(
+              AdjacencyMatrixErrorType::InvalidJson(String::from(
+                "expected each row of the matrix to be `null` or a map to an \
+                 edge",
+              )),
+            ));
+          },
+        }
       }
       outer_output.push(output);
     }
@@ -1878,7 +1940,8 @@ mod tests {
           2, 0;
       }
       .is_ok(),
-      "should've been an ok graph with two vertices and one weight 2 edge between them",
+      "should've been an ok graph with two vertices and one weight 2 edge \
+       between them",
     );
   }
 
@@ -1890,8 +1953,8 @@ mod tests {
           (0., 0., 2), (0., 0., 0);
       }
       .is_ok(),
-      "should've been an ok graph with 2 nodes layed out like the defining vertices of a \
-            quadrilateral",
+      "should've been an ok graph with 2 nodes layed out like the defining \
+       vertices of a quadrilateral",
     );
   }
 
@@ -1936,8 +1999,8 @@ mod tests {
         err,
         AdjacencyMatrixErrorType::NonSquareMatrix(_)
       )),
-      "should've thrown an error about the matrix not being square, or a matrix for that \
-            matter",
+      "should've thrown an error about the matrix not being square, or a \
+       matrix for that matter",
     );
   }
 
@@ -1952,8 +2015,8 @@ mod tests {
         err,
         AdjacencyMatrixErrorType::NonSquareMatrix(_)
       )),
-      "should've thrown an error about the matrix not being square, or a matrix for that \
-            matter",
+      "should've thrown an error about the matrix not being square, or a \
+       matrix for that matter",
     );
   }
 
@@ -1968,8 +2031,8 @@ mod tests {
         err,
         AdjacencyMatrixErrorType::SelfLoops(_)
       )),
-      "should've thrown an error about the graph having self-loops (i.e. the main diagonal \
-            is not made out of zeroes)",
+      "should've thrown an error about the graph having self-loops (i.e. the \
+       main diagonal is not made out of zeroes)",
     );
   }
 
@@ -1984,8 +2047,8 @@ mod tests {
         err,
         AdjacencyMatrixErrorType::SelfLoops(_)
       )),
-      "should've thrown an error about the graph having self-loops (i.e. the main diagonal \
-            is not made out of zeroes)",
+      "should've thrown an error about the graph having self-loops (i.e. the \
+       main diagonal is not made out of zeroes)",
     );
   }
 
@@ -2000,9 +2063,9 @@ mod tests {
         err,
         AdjacencyMatrixErrorType::IncompleteGraph(_)
       )),
-      "should've thrown an error about the graph not having as many edges as a complete, \
-            simple graph is expected to have (i.e. the matrix has zeroes outside the main \
-            diagonal)",
+      "should've thrown an error about the graph not having as many edges as \
+       a complete, simple graph is expected to have (i.e. the matrix has \
+       zeroes outside the main diagonal)",
     );
   }
 
@@ -2017,9 +2080,9 @@ mod tests {
         err,
         AdjacencyMatrixErrorType::IncompleteGraph(_)
       )),
-      "should've thrown an error about the graph not having as many edges as a complete, \
-            simple graph is expected to have (i.e. the matrix has zeroes outside the main \
-            diagonal)",
+      "should've thrown an error about the graph not having as many edges as \
+       a complete, simple graph is expected to have (i.e. the matrix has \
+       zeroes outside the main diagonal)",
     );
   }
 
@@ -2035,8 +2098,8 @@ mod tests {
         err,
         AdjacencyMatrixErrorType::MultipleEqualPoints(_)
       )),
-      "should've thrown an error about the graph having multiple vertices in the same row \
-            with the same coordinates in euclidean space",
+      "should've thrown an error about the graph having multiple vertices in \
+       the same row with the same coordinates in euclidean space",
     );
   }
 
@@ -2052,8 +2115,8 @@ mod tests {
         err,
         AdjacencyMatrixErrorType::UnequalSamePoints(_)
       )),
-      "should've thrown an error about the graph having multiple vertices in the same column \
-            that are not equal",
+      "should've thrown an error about the graph having multiple vertices in \
+       the same column that are not equal",
     );
   }
 
@@ -2199,8 +2262,8 @@ mod tests {
   #[test]
   #[expect(
     clippy::too_many_lines,
-    reason = "Embedding the json takes space, and this is a unit test so no additional \
-                 complexity is added."
+    reason = "Embedding the json takes space, and this is a unit test so no \
+              additional complexity is added."
   )]
   fn triangulation1() {
     let (points, matrix) = points! {
@@ -2358,8 +2421,8 @@ mod tests {
   #[test]
   #[expect(
     clippy::too_many_lines,
-    reason = "Embedding the json takes space, and this is a unit test so no additional \
-                 complexity is added."
+    reason = "Embedding the json takes space, and this is a unit test so no \
+              additional complexity is added."
   )]
   fn triangulation2() {
     let (points, matrix) = points! {
@@ -2823,8 +2886,8 @@ mod tests {
   #[test]
   #[expect(
     clippy::too_many_lines,
-    reason = "Embedding the json takes space, and this is a unit test so no additional \
-                 complexity is added."
+    reason = "Embedding the json takes space, and this is a unit test so no \
+              additional complexity is added."
   )]
   fn triangulation3() {
     let (points, matrix) = points! {
@@ -3299,7 +3362,8 @@ mod tests {
   }
 
   #[test]
-  #[ignore = "The algorithm is a WIP, and the test sample case is not ready yet."]
+  #[ignore = "The algorithm is a WIP, and the test sample case is not ready \
+              yet."]
   #[expect(unreachable_code, clippy::unnecessary_wraps, reason = "WIP.")]
   fn tsp_tri_mst_dfs1() -> Result<(), AdjacencyMatrixError> {
     todo!();
@@ -3308,7 +3372,8 @@ mod tests {
   }
 
   #[test]
-  #[ignore = "The algorithm is a WIP, and the test sample case is not ready yet."]
+  #[ignore = "The algorithm is a WIP, and the test sample case is not ready \
+              yet."]
   #[expect(unreachable_code, clippy::unnecessary_wraps, reason = "WIP.")]
   fn tsp_tri_mst_dfs2() -> Result<(), AdjacencyMatrixError> {
     todo!();

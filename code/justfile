@@ -1,15 +1,16 @@
 set quiet := true
-set shell := ["fish", "-c"]
 
-alias bw := build-wasm
+alias b := build
 
 cargo := require("cargo")
+visualizer-build := cargo + " b -p visualizer --release --target wasm32-unknown-unknown"
 
 [default]
 [private]
 default:
     {{ just_executable() }} -u --list --justfile {{ justfile() }}
 
-build-wasm:
+# builds a project of choice among those with preset build configurations
+build project:
     cd {{ justfile_directory() }}
-    {{ cargo }} b -p visualizer --release --target wasm32-unknown-unknown
+    {{ if project == "visualizer" { visualizer-build } else { error("no project in the current directory matches " + project) } }}
