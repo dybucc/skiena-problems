@@ -150,12 +150,12 @@ pub struct ArcList<'a> {
   pub graph: &'a GeoAdjacencyMatrix,
 }
 
-#[derive(Debug)]
 // The purpose of this arc list is to get past the impossibility for associated
-// types with structural references to reference the (owning) `Self` type in the
+// types with structural references to refer to the (owning) `Self` type in the
 // impl block, as is the case with the ipml trait block of `TspTriMstDfs` for
 // `GeoAdjacencyMatrix`.
-pub struct TrickyArcList {
+#[derive(Debug)]
+pub struct IrArcList {
   pub inner: Vec<(usize, usize)>,
   pub graph: *const GeoAdjacencyMatrix,
 }
@@ -1137,21 +1137,16 @@ impl GeoAdjacencyMatrix {
                 [$p_src.clone(), $p.clone(), $p_dst.clone()]
                   .iter()
                   .permutations(3)
-                  .try_fold(
-                    Point2d::default(),
-                    |find_ring_result, points_vector| {
-                      let p_a = points_vector[0];
-                      let p_b = points_vector[1];
-                      let p_c = points_vector[2];
+                  .try_for_each(|points_vector| {
+                    let (p_a, p_b, p_c) =
+                      (points_vector[0], points_vector[1], points_vector[2]);
 
-                      if let Some(result) = Self::find_ring((*p_a, *p_b, *p_c))
-                      {
-                        ControlFlow::Break(result)
-                      } else {
-                        ControlFlow::Continue(find_ring_result)
-                      }
-                    },
-                  )
+                    if let Some(result) = Self::find_ring((*p_a, *p_b, *p_c)) {
+                      ControlFlow::Break(result)
+                    } else {
+                      ControlFlow::Continue(())
+                    }
+                  })
                   .map_break(Some)
                   .map_continue(|_| None)
                   .into_value()
@@ -1160,7 +1155,9 @@ impl GeoAdjacencyMatrix {
             let output = perms!(p_src, p2, p_dst);
             debug_assert_matches!(
               (output, perms!(p_src, p1, p_dst)),
-              (Some(_), Some(_))
+              (Some(_), Some(_)),
+              "failed with p1: `(idx: {p1_idx}, val: {p1:?})`, and p2: `(idx: \
+               {p2_idx}, val: {p2:?})`"
             );
 
             output
@@ -1195,7 +1192,10 @@ impl GeoAdjacencyMatrix {
     reason = "It's not a bug not to use the result of this function."
   )]
   pub fn kruskal(&self) -> ArcList<'_> {
-    self.kruskal_on(&self.to_arc_list()).1
+    let mut arc_list = self.to_arc_list();
+    arc_list.sort_by_weight();
+
+    self.kruskal_on(&arc_list).1
   }
 
   #[expect(
@@ -1218,8 +1218,10 @@ impl GeoAdjacencyMatrix {
     clippy::must_use_candidate,
     reason = "It's not a bug not to use this function."
   )]
-  // This routine only serves the purpose of managing the tricky implementation
-  // of `TspTriMstDfs::ArcList`, so as to make it more ergonomic.
+  // This routine only serves as a middle man between the return result of
+  // `TspTriMstDfs`::mst(), which uses a pointer-based approach to bypass trait
+  // impl limitations, and the actual `ArcList<'a>` type, referencing the
+  // roundtrip inner `graph` (`self`) coming from the `IrArcList` type.
   pub fn mst(&self) -> ArcList<'_> { <Self as TspTriMstDfs>::mst(self).into() }
 }
 
@@ -1273,26 +1275,21 @@ impl NodePartition {
       )
   }
 
-  /// Attempts to unite two node partitions if they don't already belong to
-  /// the same block.
-  ///
-  /// Returns [`true`] if the sets were disjoint and thus `other`'s block is
-  /// now merged with `one`'s block. Returns [`false`] otherwise.
-  ///
   /// # Panics
   ///
   /// Panics if `one` or `other` do not denote an element index in the range
   /// of elements with which the node partition was initially created.
   pub fn union(&mut self, one: usize, other: usize) -> bool {
-    if self.same_block(one, other) {
+    let ((one, other), check) = self.same_block(one, other);
+    if check {
       return false;
     }
-    let new = self.inner[&one].union(&self.inner[&other]).copied().collect();
     *self.inner.get_mut(&one).expect(
       "`find_representative()` should've panicked if any one of the passed \
        `one` or `other` did not denote partition vertices",
-    ) = new;
-    self.inner.remove(&other);
+    ) = self.inner[&one].union(&self.inner[&other]).copied().collect();
+    let check = self.inner.remove(&other);
+    debug_assert_matches!(check, Some(_));
 
     true
   }
@@ -1301,8 +1298,11 @@ impl NodePartition {
     clippy::must_use_candidate,
     reason = "It's not a bug not to use the result of this function."
   )]
-  pub fn same_block(&self, one: usize, other: usize) -> bool {
-    self.find_representative(one) == self.find_representative(other)
+  pub fn same_block(&self, one: usize, other: usize) -> ((usize, usize), bool) {
+    let (one, other) =
+      (self.find_representative(one), self.find_representative(other));
+
+    ((one, other), one == other)
   }
 }
 
@@ -1381,7 +1381,7 @@ impl ArcList<'_> {
     self.inner.iter_mut()
   }
 
-  pub fn weight_fn(
+  pub fn weighter(
     graph: &GeoAdjacencyMatrix,
   ) -> impl Fn(&(usize, usize), &(usize, usize)) -> Ordering {
     |&(src1, dst1), &(src2, dst2)| match (graph[src1][dst1], graph[src2][dst2])
@@ -1398,13 +1398,13 @@ impl ArcList<'_> {
 
   pub fn select_cheapest(&mut self, cheapest: usize) -> (Self, Self) {
     let (first, _, second) =
-      self.inner.select_nth_unstable_by(cheapest, Self::weight_fn(self.graph));
+      self.inner.select_nth_unstable_by(cheapest, Self::weighter(self.graph));
 
     (Self::from_list(first, self.graph), Self::from_list(second, self.graph))
   }
 
   pub fn sort_by_weight(&mut self) {
-    self.inner.sort_unstable_by(Self::weight_fn(self.graph));
+    self.inner.sort_unstable_by(Self::weighter(self.graph));
   }
 
   #[expect(
@@ -1463,15 +1463,15 @@ impl PartialEq<Vec<(usize, usize)>> for ArcList<'_> {
   fn eq(&self, other: &Vec<(usize, usize)>) -> bool { self.iter().eq(other) }
 }
 
-impl From<ArcList<'_>> for TrickyArcList {
+impl From<ArcList<'_>> for IrArcList {
   fn from(value: ArcList<'_>) -> Self {
-    TrickyArcList { inner: value.inner, graph: value.graph }
+    IrArcList { inner: value.inner, graph: value.graph }
   }
 }
 
-impl<'a> From<TrickyArcList> for ArcList<'a> {
-  fn from(value: TrickyArcList) -> Self {
-    let TrickyArcList { inner, graph } = value;
+impl<'a> From<IrArcList> for ArcList<'a> {
+  fn from(value: IrArcList) -> Self {
+    let IrArcList { inner, graph } = value;
     let graph: &'a _ = unsafe { graph.as_ref_unchecked() };
 
     Self::from_list(&inner, graph)
@@ -1535,52 +1535,47 @@ pub trait TspTriMstDfs {
   /// This follows that for some three points to lie on the boundary of a
   /// circumference, such three points will all have to share the same segment
   /// lengths towards the center of such ring. Thus, this can be modeled as a
-  /// problem to find the segment length of any of three equal segments
-  /// knowing one of the endpoints for all three and having the unknown be the
-  /// the other endpoint for all three.
+  /// problem to find the segment length of any of three equal segments knowing
+  /// one of the endpoints for all three and having the unknown be the the other
+  /// endpoint for all three.
   #[expect(
     clippy::must_use_candidate,
     reason = "It's not a bug not to use the result of this associated \
               function."
   )]
   fn find_ring((a, b, c): (Point2d, Point2d, Point2d)) -> Option<Point2d> {
-    (-b.x + a.x != 0.
-      && -b.y + c.y != 0.
-      && 1. - ((b.y - a.y) / (-b.x + a.x)) * ((b.x - c.x) / (-b.y + c.y)) != 0.)
-      .then(|| {
-        let (c0, c1, c2, c3) = (
-          (a.x.powi(2) + a.y.powi(2) - b.x.powi(2) - b.y.powi(2))
-            / (2. * (-b.x + a.x)),
-          (b.x - c.x) / (-b.y + c.y),
-          (c.x.powi(2) + c.y.powi(2) - b.x.powi(2) - b.y.powi(2))
-            / (2. * (-b.y + c.y)),
-          (b.y - a.y) / (-b.x + a.x),
-        );
-        let y = (c0 * c1 + c2) / (1. - c3 * c1);
-        let x = y * c3 + c0;
+    // The system of equations to solve is as follows:
+    // [
+    //   [ 2a_x, 2a_y 1 ]
+    //   [ 2b_x, 2b_y 1 ]
+    //   [ 2c_x, 2c_y 1 ]
+    // ] * [ a, b, c ] =
+    // [
+    //   [ -(a_x^2 a_y^2) ]
+    //   [ -(b_x^2 b_y^2) ]
+    //   [ -(c_x^2 c_y^2) ]
+    // ]
 
-        Point2d { x, y }
-      })
+    todo!()
   }
 
   /// Checks if some point `p_to_check` lies within some triangle (`a`, `b`,
   /// `c`).
   ///
-  /// This follows Sec. 1.5.3, [O'Rourke, 2001]. A point is said to lie within
-  /// a convex polgyon if such point always lies to the left or right of each
+  /// This follows Sec. 1.5.3, [O'Rourke, 2001]. A point is said to lie within a
+  /// convex polgyon if such point always lies to the left or right of each
   /// directed segment of such polygon.
   ///
   /// Irrespective of the "clockwiseness" of the directed segments (the
   /// determinant for whether we check for left-ness or right-ness,) it holds
   /// that the ultimate condition checked for is always that of same sign for
-  /// all left or right turns; Thus we perform the check (computing the area
-  /// of the triangle formed form the directed segment and the query point in
-  /// terms of the determinant of the simplicial complex,) and make sure the
-  /// same sign holds for all results.
+  /// all left or right turns; Thus we perform the check (computing the area of
+  /// the triangle formed form the directed segment and the query point in terms
+  /// of the determinant of the simplicial complex,) and make sure the same sign
+  /// holds for all results.
   ///
-  /// It also handles cases where some floating point number is one of `-0.`
-  /// or `+0.` (i.e. when the query point lies in the boundary of the
-  /// triangle.)
+  /// It also handles cases where some floating point number is one of `-0.` or
+  /// `+0.` (i.e. when the query point lies in the boundary of the triangle.)
   ///
   /// [O'Rourke, 2001]: https://doi.org/10.1017/CBO9780511804120
   #[expect(
@@ -1704,7 +1699,7 @@ impl TspClosestPair for AdjacencyMatrix {
 }
 
 impl TspTriMstDfs for GeoAdjacencyMatrix {
-  type ArcList = TrickyArcList;
+  type ArcList = IrArcList;
   type PointList = Vec<Point2d>;
   type Triangulation = Self;
 
@@ -1799,12 +1794,15 @@ impl TspTriMstDfs for GeoAdjacencyMatrix {
     if arc_list.len() <= 3 * self.0.len() {
       return self.kruskal().into();
     }
-    let (cheapest, rest) = arc_list.select_cheapest(3 * self.0.len());
+    let (mut cheapest, rest) = arc_list.select_cheapest(3 * self.0.len());
+    cheapest.sort_by_weight();
     let (partition, mut forest) = self.kruskal_on(&cheapest);
     let mut potential_edges =
       ArcList::with_capacity(arc_list.len() - 3 * self.0.len(), self);
     for (src, dst) in &rest {
-      if !partition.same_block(*src, *dst) {
+      if let (_, check) = partition.same_block(*src, *dst)
+        && !check
+      {
         potential_edges.push((*src, *dst));
       }
     }
@@ -2880,6 +2878,8 @@ mod tests {
       ]
     ]};
     let input = GeoAdjacencyMatrix::try_from(file).unwrap();
+    #[cfg(debug_assertions)]
+    eprintln!("{input:?}");
     assert_eq!(matrix.triangulate(points), input);
   }
 
@@ -3341,7 +3341,7 @@ mod tests {
   }
 
   #[test]
-  #[should_panic]
+  #[should_panic = "wip"]
   fn mst1() {
     let (_, matrix) = points! {
         (x: 1.25, y: 2),
@@ -3358,7 +3358,7 @@ mod tests {
         (x: 6.2, y: 4.7),
         (x: 7, y: 3.45),
     };
-    assert_eq!(matrix.mst(), vec![]);
+    assert_eq!(matrix.mst(), vec![], "wip");
   }
 
   #[test]
