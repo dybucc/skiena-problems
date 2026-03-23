@@ -1544,7 +1544,9 @@ pub trait TspTriMstDfs {
               function."
   )]
   fn find_ring((a, b, c): (Point2d, Point2d, Point2d)) -> Option<Point2d> {
-    // The system of equations to solve is as follows:
+    // TODO: it may be worth it to implement the same set of primitves as
+    // presented in "Matrix Computations" prior to starting work on an algorithm
+    // implemtnation. The system of equations to solve is as follows:
     // [
     //   [ 2a_x, 2a_y 1 ]
     //   [ 2b_x, 2b_y 1 ]
