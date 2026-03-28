@@ -879,25 +879,25 @@ impl GeoAdjacencyMatrix {
 ///
 /// [`TspTriMstDfs`]: crate::TspTriMstDfs
 impl GeoAdjacencyMatrix {
-  /// Validates some neighboring point to edge (`src`, `dst`) in
-  /// `triangulation` by checking if it's one of the points forming the
-  /// triangles incident to such edge.
+  /// Validates some neighboring point to edge (`src`, `dst`) in `triangulation`
+  /// by checking if it's one of the points forming the triangles incident to
+  /// such edge.
   ///
-  /// For some quadrilateral of whose two conforming triangles the edge
-  /// incident to both is known, namely (`src`, `dst`), it follows that the
-  /// function will check if the neighboring point denoted in `triangulation`
-  /// by index `neighbor_idx`, and coordinates `neighbor_coord`, is, indeed,
-  /// any one of the two points that form such triangles.
+  /// For some quadrilateral of whose two conforming triangles the edge incident
+  /// to both is known, namely (`src`, `dst`), it follows that the function will
+  /// check if the neighboring point denoted in `triangulation` by index
+  /// `neighbor_idx`, and coordinates `neighbor_coord`, is, indeed, any one of
+  /// the two points that form such triangles.
   fn validate_neighboring_point(
     triangulation: &[Vec<GeoEdge>],
     (neighbor_idx, neighbor_coord): (usize, Point2d),
     (src, p_src): (usize, Point2d),
     (dst, p_dst): (usize, Point2d),
   ) -> Option<(Point2d, usize)> {
-    // Checks if there's any neighbor to the current neighbor of `src` that
-    // is equivalent to `dst`, while also making sure we are not choosing a
-    // point that stems from `src` but can contain an actually valid point
-    // (because there's a different, concave quadrilateral nearby.)
+    // Checks if there's any neighbor to the current neighbor of `src` that is
+    // equivalent to `dst`, while also making sure we are not choosing a point
+    // that stems from `src` but can contain an actually valid point (because
+    // there's a different, concave quadrilateral nearby.)
     triangulation[neighbor_idx].iter().enumerate().find_map(
       |(inner_idx, inner_edge)| {
         (inner_idx == dst
@@ -1071,8 +1071,8 @@ impl GeoAdjacencyMatrix {
           return None;
         };
 
-        // If we broke early, then we found (`p1`, `p2`); Otherwise, we may
-        // have found them at the end or not found them at all.
+        // If we broke early, then we found (`p1`, `p2`); Otherwise, we may have
+        // found them at the end or not found them at all.
         if let ControlFlow::Continue((Some((p1, p1_idx)), Some((p2, p2_idx))))
         | ControlFlow::Break((Some((p1, p1_idx)), Some((p2, p2_idx)))) =
           triangulation[src].iter().enumerate().try_fold(
@@ -1530,7 +1530,7 @@ pub trait TspTriMstDfs {
   }
 
   /// Computes the center of a ring that crosses three points in 2-dimensional
-  /// Euclidean space, if possible.
+  /// Euclidean space, if such points are not colinear.
   ///
   /// This follows that for some three points to lie on the boundary of a
   /// circumference, such three points will all have to share the same segment
@@ -1540,23 +1540,24 @@ pub trait TspTriMstDfs {
   /// endpoint for all three.
   #[expect(
     clippy::must_use_candidate,
-    reason = "It's not a bug not to use the result of this associated \
-              function."
+    reason = "It's not a bug not to use the result of this routine."
   )]
   fn find_ring((a, b, c): (Point2d, Point2d, Point2d)) -> Option<Point2d> {
-    // TODO: it may be worth it to implement the same set of primitves as
-    // presented in "Matrix Computations" prior to starting work on an algorithm
-    // implementation.
     // The system of equations to solve is as follows:
     // [
     //   [ 2a_x, 2a_y 1 ]
     //   [ 2b_x, 2b_y 1 ]
     //   [ 2c_x, 2c_y 1 ]
-    // ] * [ a, b, c ] =
+    // ] *
     // [
-    //   [ -(a_x^2 a_y^2) ]
-    //   [ -(b_x^2 b_y^2) ]
-    //   [ -(c_x^2 c_y^2) ]
+    //   a,
+    //   b,
+    //   c
+    // ] =
+    // [
+    //   -(a_x^2 a_y^2),
+    //   -(b_x^2 b_y^2),
+    //   -(c_x^2 c_y^2)
     // ]
 
     todo!()
