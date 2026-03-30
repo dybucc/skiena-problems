@@ -20,7 +20,10 @@
 //!
 //! [Skiena, 2020]: https://doi.org/10.1007/978-3-030-54256-6
 
-#![feature(bool_to_result, control_flow_into_value, impl_trait_in_assoc_type)]
+#![feature(
+  bool_to_result, control_flow_into_value, impl_trait_in_assoc_type,
+  iter_order_by
+)]
 
 use std::{
   cmp::Ordering,
@@ -1488,6 +1491,8 @@ pub trait TspClosestPair {
   fn tsp(&self) -> Vec<usize>;
 }
 
+mod matrix;
+
 /// Solves a symmetric instance of the TSP by computing the MST and performing
 /// a DFS on the resulting tree.
 ///
@@ -1543,22 +1548,24 @@ pub trait TspTriMstDfs {
     reason = "It's not a bug not to use the result of this routine."
   )]
   fn find_ring((a, b, c): (Point2d, Point2d, Point2d)) -> Option<Point2d> {
-    // The system of equations to solve is as follows:
-    // [
-    //   [ 2a_x, 2a_y 1 ]
-    //   [ 2b_x, 2b_y 1 ]
+    // The system of equations to solve is as follows, where the unknown is
+    // denoted by coordinate tuple `(c_0, c_1, c_2)`: [
+    //   [ 2a_x, 2a_y 1 ],
+    //   [ 2b_x, 2b_y 1 ],
     //   [ 2c_x, 2c_y 1 ]
     // ] *
     // [
-    //   a,
-    //   b,
-    //   c
+    //   c_0,
+    //   c_1,
+    //   c_2
     // ] =
     // [
     //   -(a_x^2 a_y^2),
     //   -(b_x^2 b_y^2),
     //   -(c_x^2 c_y^2)
     // ]
+    // The center of the ring should then be given by coordinate tuple `(-c_0,
+    // -c_1)`.
 
     todo!()
   }
