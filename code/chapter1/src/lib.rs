@@ -1491,7 +1491,7 @@ pub trait TspClosestPair {
   fn tsp(&self) -> Vec<usize>;
 }
 
-mod matrix;
+pub mod matrix;
 
 /// Solves a symmetric instance of the TSP by computing the MST and performing
 /// a DFS on the resulting tree.

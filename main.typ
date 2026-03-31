@@ -3158,6 +3158,22 @@ module than the one in which the rest of the algorithms are developed, as other
 algorithms for more basic manipulation of matrices should likely also be
 implemented.
 
+The implementation of in-place matrix transposition (i.e. one that does not
+allocate further resources) is likely to require some unsafe pointer fiddling.
+This is due to the fact there's a chance the receiver is a rectangular matrix
+and not a square matrix. This forces some careful inter-vector manipulation to
+reuse the allocation of one of the vectors, as for some matrix $A$ with
+$dim(A) = m times n$, the current memory layout of the matrix describes a vector
+of vectors, where each of the inner vectors denote rows of the matrix. For
+$A^T$, where $dim(A^T) = n times m$, this can force the extension of the inner
+row vectors. This would require both extending the overarching allocation, and
+creating a new allocation for the "new" row.
+
+The problem is that the routine is meant to be in-place, which means no extra
+allocations are allowed. That can be conceptually achieved by reusing the space
+of the unused positions in the existing vectors, while creating a new vector
+that uses the whole of that space to build itself.
+
 #pagebreak()
 
 === LeetCode problems

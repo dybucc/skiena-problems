@@ -1,10 +1,13 @@
 use std::{
   borrow::Borrow,
+  mem,
   ops::{Index, IndexMut},
 };
 
 use itertools::Itertools;
 use num_traits::Num;
+
+pub mod errors;
 
 #[derive(Debug, Default, Clone)]
 pub struct Matrix<T = f64>(Vec<Vec<T>>);
@@ -46,22 +49,48 @@ impl<T> Matrix<T> {
 
 /// Basic matrix operations on matrices of `R^(m times n)`.
 impl<T: Num> Matrix<T> {
+  /// Returns another matrix allocation that has `self`'s elements transposed.
   pub fn transpose(&self) -> Self
   where
     T: Clone,
   {
-    let Self(reference) = self;
-    let mut out = Vec::with_capacity(reference.len());
-    out.resize(self.0.len(), Vec::new());
+    let (rows, cols) =
+      (self.0.len(), self.0.first().map(Vec::len).unwrap_or_default());
+    let (Self(reference), mut out) = (self, Vec::new());
+    out.reserve_exact(cols);
+    out.resize_with(cols, || {
+      let mut out = Vec::new();
+
+      (out.reserve_exact(rows), out).1
+    });
     for (i, (t_row, row)) in out.iter_mut().zip(reference).enumerate() {
-      t_row.reserve_exact(row.len());
       (0..row.len()).for_each(|j| t_row.push(reference[j][i].clone()));
     }
 
     Self(out)
   }
 
-  pub fn transpose_in_place(&mut self) { let Self(matrix) = self; }
+  /// Tranposes `self` without any extra memory allocations.
+  pub fn transpose_in_place(&mut self) {
+    // 3 4 4
+    // 3 4 2
+    // -----
+    // 3 3
+    // 4 4
+    // 4 2
+    // r: 2, c: 3
+    // mem layout: 3 4 4 3 4 2
+    // transpose mem layout: 3 3 4 4 4 2
+    let (rows, cols) =
+      (self.0.len(), self.0.first().map(Vec::len).unwrap_or_default());
+    let Self(matrix) = self;
+    (0..cols).map(|i| (i, 0..rows)).for_each(|(col, row_range)| {
+      row_range.for_each(|row| {
+        mem::swap(&mut matrix[col][row], &mut matrix[row][col])
+      });
+    });
+    todo!();
+  }
 }
 
 #[cfg(test)]
