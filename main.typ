@@ -3174,6 +3174,34 @@ allocations are allowed. That can be conceptually achieved by reusing the space
 of the unused positions in the existing vectors, while creating a new vector
 that uses the whole of that space to build itself.
 
+This may be simpler than it seems. The buffer backing the matrix is made out of
+two vectors, namely `Vec<Vec<T>>` for some matrix element `T`. We can see the
+outer vector as holding the matrix's rows, for which there are a fixed 4- or
+8-byte triplet (i.e. #(4 * 3) bytes or #(8 * 3) bytes) per element in the
+vector, owing to the inner representation outlined in the standard library.
+
+It's not simple. Mathematically, the inner containers can be seen as having the
+size requirements to reorder their "nestedness," but such reordering is bound to
+force the elements (more specifically, the allocations) of the (now new) inner
+vectors to have both the size and alignment of the elements of the matrix, which
+does not hold true in the general case (as each element would otherwise have to
+be #(4 * 3) or #(8 * 3) bytes wide, depending on machine word size.)
+
+The initial scheme is likely the simplest one capable of solving the problem. If
+the vector allocations are consumed to their inner raw triplets, these
+contiguous allocations can be manipulated such that the limits on the owned
+elements of each vector are reordered, while also reordering the matrix elements
+themselves.
+
+Such strategy is not valid. The reason is that the underlying buffer backing the
+`Vec` allocation (`RawVec`) holds contiguous allocations, which is incompatible
+with the idea of allocations where the provenance of each allocation differs for
+a single given `Vec`. The solution goes through designing a different memory
+container based on raw allocations that makes guarantees about the inner layout
+fo allocations. This container would fundamentally serve as a 2-dimensional
+dynamic array of elelments, where the value allocations for each inner row is
+always bound to be contiguous in memory.
+
 #pagebreak()
 
 === LeetCode problems
