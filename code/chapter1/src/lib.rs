@@ -22,7 +22,7 @@
 
 #![feature(
   bool_to_result, control_flow_into_value, impl_trait_in_assoc_type,
-  iter_order_by
+  iter_order_by, try_with_capacity
 )]
 
 use std::{

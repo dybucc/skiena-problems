@@ -1,6 +1,8 @@
 use std::{
   borrow::Borrow,
+  iter,
   ops::{Index, IndexMut},
+  str::FromStr,
 };
 
 use itertools::Itertools;
@@ -8,6 +10,8 @@ use num_traits::Num;
 
 pub mod buffer;
 pub mod errors;
+
+pub use errors::BuildError;
 
 #[derive(Debug, Default, Clone)]
 pub struct Matrix<T = f64>(Vec<Vec<T>>);
@@ -59,16 +63,26 @@ impl<T: Num> Matrix<T> {
     clippy::return_self_not_must_use,
     reason = "It's not a bug not to use the output of this routine."
   )]
-  pub fn transpose(&self) -> Self
+  pub fn transpose(&self) -> Result<Self, BuildError>
   where
     T: Clone,
   {
-    let (Self(reference), mut out) = (self, transpose_buf::<_, T>(self));
-    out.iter_mut().enumerate().for_each(|(i, t_row)| {
-      (0..reference.len()).for_each(|j| t_row.push(reference[j][i].clone()));
-    });
-
-    Self(out)
+    Ok(Self(
+      iter::once((transpose_buf::<_, T>(self)?, self))
+        .map(|(mut out, Matrix(reference))| {
+          (
+            out.iter_mut().enumerate().for_each(|(i, t_row)| {
+              (0..reference.len()).for_each(|j| {
+                t_row.push(reference[j][i].clone());
+              });
+            }),
+            out,
+          )
+            .1
+        })
+        .next()
+        .unwrap(),
+    ))
   }
 
   /// Returns another matrix allocation with `self`'s elements borrowed and
@@ -77,30 +91,52 @@ impl<T: Num> Matrix<T> {
     clippy::must_use_candidate,
     reason = "It's not a bug not to use the output of this routine."
   )]
-  pub fn transpose_ref(&self) -> Matrix<&T> {
-    let (Self(reference), mut out) = (self, transpose_buf::<_, &T>(self));
-    out.iter_mut().enumerate().for_each(|(i, t_row)| {
-      (0..reference.len()).for_each(|j| t_row.push(&reference[j][i]));
-    });
-
-    Matrix(out)
+  pub fn transpose_ref(&self) -> Result<Matrix<&T>, BuildError> {
+    Ok(Matrix(
+      iter::once((transpose_buf::<_, &T>(self)?, self))
+        .map(|(mut out, Matrix(reference))| {
+          (
+            out.iter_mut().enumerate().for_each(|(i, t_row)| {
+              (0..reference.len()).for_each(|j| {
+                t_row.push(unsafe {
+                  (&raw const reference[j][i]).as_ref_unchecked()
+                });
+              });
+            }),
+            out,
+          )
+            .1
+        })
+        .next()
+        .unwrap(),
+    ))
   }
 
   /// Returns another matrix allocation with `self`'s elements exclusively
   /// borrowed and transposed.
   pub fn transpose_mut(&mut self) -> Matrix<&mut T> {
-    let (mut out, Self(reference)) = (transpose_buf::<_, &mut T>(self), self);
     // SAFETY: the borrow checker considers that `self` is already borrowed
     // after calling `transpose_buf`, so taking another mutable reference to it
     // is invalid. `out` is actually empty and only allocates a buffer with the
     // right bit-width for the elements.
-    out.iter_mut().enumerate().for_each(|(i, t_row)| {
-      (0..reference.len()).for_each(|j| {
-        t_row.push(unsafe { (&raw mut reference[j][i]).as_mut_unchecked() });
-      });
-    });
-
-    Matrix(out)
+    Matrix(
+      iter::once((transpose_buf::<_, &mut T>(self)?, self))
+        .map(|(mut out, Matrix(reference))| {
+          (
+            out.iter_mut().enumerate().for_each(|(i, t_row)| {
+              (0..reference.len()).for_each(|j| {
+                t_row.push(unsafe {
+                  (&raw mut reference[j][i]).as_mut_unchecked()
+                });
+              });
+            }),
+            out,
+          )
+            .1
+        })
+        .next()
+        .unwrap(),
+    )
   }
 
   /// Tranposes `self` without any extra memory allocations.
@@ -117,7 +153,6 @@ impl<T: Num> Matrix<T> {
     // mem layout: | 3 4 4 | len | cap | | 3 4 2 | len | cap |
     //                 ^      ^     ^   ^
     //                 8      8     8   0                      byte(s)
-    //                                  ^
     //                                  |
     // ----------------------------------
     // |
@@ -137,17 +172,15 @@ impl<T: Num> Matrix<T> {
   }
 }
 
-pub fn transpose_buf<T, R>(matrix: &Matrix<T>) -> Vec<Vec<R>> {
-  let (rows, cols) =
-    (matrix.0.len(), matrix.0.first().map(Vec::len).unwrap_or_default());
-  let mut out = Vec::with_capacity(cols);
-  out.resize_with(cols, || {
-    let mut out = Vec::new();
-
-    (out.reserve(rows), out).1
-  });
-
-  out
+pub fn transpose_buf<T, R>(Matrix(matrix): &Matrix<T>) -> Vec<Vec<R>> {
+  iter::once((matrix.len(), matrix.first().map(Vec::len).unwrap_or_default()))
+    .map(|(rows, cols)| {
+      Vec::with_capacity(cols).map(|mut out| {
+        (out.resize_with(cols, || Vec::with_capacity(rows)), out).1
+      })
+    })
+    .next()
+    .unwrap()
 }
 
 #[cfg(test)]
