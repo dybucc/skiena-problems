@@ -1,8 +1,9 @@
+#![expect(clippy::missing_panics_doc, reason = "WIP.")]
+
 use std::{
   borrow::Borrow,
   iter,
   ops::{Index, IndexMut},
-  str::FromStr,
 };
 
 use itertools::Itertools;
@@ -11,8 +12,11 @@ use num_traits::Num;
 pub mod buffer;
 pub mod errors;
 
-pub use errors::BuildError;
+pub use self::{buffer::Buffer, errors::BuildError};
 
+// FIXME: the `Matrix` type is likely going to get its inner field replaced by a
+// container union that allows switching between a `Vec<Vec<T>>`-based storage
+// to a `Buffer`-based storage.
 #[derive(Debug, Default, Clone)]
 pub struct Matrix<T = f64>(Vec<Vec<T>>);
 
@@ -55,80 +59,46 @@ impl<T> Matrix<T> {
   pub fn new() -> Self { Self(Vec::new()) }
 }
 
-/// Basic matrix operations on matrices of `R^(m times n)`.
-impl<T: Num> Matrix<T> {
-  /// Returns another matrix allocation that has `self`'s elements transposed.
-  #[expect(
-    clippy::must_use_candidate,
-    clippy::return_self_not_must_use,
-    reason = "It's not a bug not to use the output of this routine."
-  )]
-  pub fn transpose(&self) -> Result<Self, BuildError>
-  where
-    T: Clone,
-  {
-    Ok(Self(
-      iter::once((transpose_buf::<_, T>(self)?, self))
-        .map(|(mut out, Matrix(reference))| {
-          (
-            out.iter_mut().enumerate().for_each(|(i, t_row)| {
-              (0..reference.len()).for_each(|j| {
-                t_row.push(reference[j][i].clone());
-              });
-            }),
-            out,
-          )
-            .1
-        })
-        .next()
-        .unwrap(),
-    ))
-  }
+macro_rules! transpose {
+  ($spec:tt $self:expr => $self_ty:expr) => {{
+    // SAFETY: the borrow checker considers `self` to already be borrowed after
+    // calling `transpose_buf`, so taking another exclusive reference to it is
+    // "invalid". `out` is actually empty and only allocates a buffer with the
+    // right (pointer) bit-width for the elements. The solution to avoid using
+    // `unsafe` is made obvious from this, but I choose not to implement it that
+    // way.
+    macro_rules! spec {
+      (own; $reference:expr,($i:expr, $j:expr)) => {
+        $reference[$j][$i].clone()
+      };
+      (ref; $reference:expr,($i:expr, $j:expr)) => {
+        &$reference[$j][$i]
+      };
+      (mut; $reference:expr,($i:expr, $j:expr)) => {
+        unsafe { (&raw mut $reference[$j][$i]).as_mut_unchecked() }
+      };
+    }
 
-  /// Returns another matrix allocation with `self`'s elements borrowed and
-  /// transposed.
-  #[expect(
-    clippy::must_use_candidate,
-    reason = "It's not a bug not to use the output of this routine."
-  )]
-  pub fn transpose_ref(&self) -> Result<Matrix<&T>, BuildError> {
-    Ok(Matrix(
-      iter::once((transpose_buf::<_, &T>(self)?, self))
-        .map(|(mut out, Matrix(reference))| {
-          (
-            out.iter_mut().enumerate().for_each(|(i, t_row)| {
-              (0..reference.len()).for_each(|j| {
-                t_row.push(unsafe {
-                  (&raw const reference[j][i]).as_ref_unchecked()
-                });
-              });
-            }),
-            out,
-          )
-            .1
-        })
-        .next()
-        .unwrap(),
-    ))
-  }
+    macro_rules! spec_ty {
+      (own) => {
+        T
+      };
+      (ref) => {
+        &T
+      };
+      (mut) => {
+        &mut T
+      };
+    }
 
-  /// Returns another matrix allocation with `self`'s elements exclusively
-  /// borrowed and transposed.
-  pub fn transpose_mut(&mut self) -> Matrix<&mut T> {
-    // SAFETY: the borrow checker considers that `self` is already borrowed
-    // after calling `transpose_buf`, so taking another mutable reference to it
-    // is invalid. `out` is actually empty and only allocates a buffer with the
-    // right bit-width for the elements.
-    Matrix(
-      iter::once((transpose_buf::<_, &mut T>(self)?, self))
+    $self_ty(
+      iter::once((transpose_buf::<_, spec_ty!($spec)>($self), $self))
         .map(|(mut out, Matrix(reference))| {
           (
             out.iter_mut().enumerate().for_each(|(i, t_row)| {
-              (0..reference.len()).for_each(|j| {
-                t_row.push(unsafe {
-                  (&raw mut reference[j][i]).as_mut_unchecked()
-                });
-              });
+              (0..reference.len()).for_each(|j| t_row.push(
+                spec!($spec; reference, (i, j))
+              ));
             }),
             out,
           )
@@ -137,6 +107,36 @@ impl<T: Num> Matrix<T> {
         .next()
         .unwrap(),
     )
+  }};
+}
+
+/// Basic matrix operations on matrices of `R^(m times n)`.
+impl<T: Num> Matrix<T> {
+  /// Returns another matrix allocation that has `self`'s elements transposed.
+  #[expect(
+    clippy::must_use_candidate,
+    clippy::return_self_not_must_use,
+    reason = "It's not a bug not to use the output of this routine."
+  )]
+  pub fn transpose(&self) -> Self
+  where
+    T: Clone,
+  {
+    transpose!(own self => Self)
+  }
+
+  /// Returns another matrix allocation with `self`'s elements borrowed and
+  /// transposed.
+  #[expect(
+    clippy::must_use_candidate,
+    reason = "It's not a bug not to use the output of this routine."
+  )]
+  pub fn transpose_ref(&self) -> Matrix<&T> { transpose!(ref self => Matrix) }
+
+  /// Returns another matrix allocation with `self`'s elements exclusively
+  /// borrowed and transposed.
+  pub fn transpose_mut(&mut self) -> Matrix<&mut T> {
+    transpose!(mut self => Matrix)
   }
 
   /// Tranposes `self` without any extra memory allocations.
@@ -175,9 +175,12 @@ impl<T: Num> Matrix<T> {
 pub fn transpose_buf<T, R>(Matrix(matrix): &Matrix<T>) -> Vec<Vec<R>> {
   iter::once((matrix.len(), matrix.first().map(Vec::len).unwrap_or_default()))
     .map(|(rows, cols)| {
-      Vec::with_capacity(cols).map(|mut out| {
-        (out.resize_with(cols, || Vec::with_capacity(rows)), out).1
-      })
+      iter::once(Vec::with_capacity(cols))
+        .map(|mut out| {
+          (out.resize_with(cols, || Vec::with_capacity(rows)), out).1
+        })
+        .next()
+        .unwrap()
     })
     .next()
     .unwrap()

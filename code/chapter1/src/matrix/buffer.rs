@@ -1,13 +1,11 @@
 use std::ptr::NonNull;
 
 #[derive(Debug)]
-struct Buffer {
+pub struct Buffer {
   buf: NonNull<[u8]>,
   cap: usize,
 }
 
 impl Buffer {
-    fn new() -> Self {
-        Self { buf: , len: (), cap: () }
-    }
+  fn new() -> Self { todo!() }
 }
