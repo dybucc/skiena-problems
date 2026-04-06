@@ -14,9 +14,8 @@ pub mod errors;
 
 pub use self::{buffer::Buffer, errors::BuildError};
 
-// FIXME: the `Matrix` type is likely going to get its inner field replaced by a
-// container union that allows switching between a `Vec<Vec<T>>`-based storage
-// to a `Buffer`-based storage.
+// FIXME: replace the inner storage strategy to whatever type ends up being
+// exposed through the `buffer` module.
 #[derive(Debug, Default, Clone)]
 pub struct Matrix<T = f64>(Vec<Vec<T>>);
 
