@@ -31,10 +31,19 @@ impl<T> RawMatrix<T> {
         Ok(out)
     }
 
-    pub fn into_type_array(self) -> Matrix<T> {
-        let buf = self.buf;
-        let len = buf.cap;
-        let buf = buf.buf;
+    pub fn into_matrix(self) -> Matrix<T> {
+        let Buffer { mut buf, elem_size } = self.buf;
+        let type_size = size_of::<T>();
+        let padding = elem_size - type_size;
+        let mut idx = 0;
+        loop {
+            let elem = {
+                let offset = type_size * idx;
+                let next_ptr = unsafe { buf.byte_add(offset) };
+                let elem = next_ptr.cast::<T>();
+            };
+            buf = unsafe { buf.byte_add(type_size * idx + padding * idx) };
+        }
         todo!()
     }
 }
