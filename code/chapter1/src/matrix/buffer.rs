@@ -1,26 +1,26 @@
 use std::{
-  alloc::{AllocError, Allocator, Global, Layout},
-  ptr::NonNull,
+    alloc::{AllocError, Allocator, Global, Layout},
+    ptr::NonNull,
 };
 
 #[derive(Debug)]
 pub struct Buffer {
-  buf: NonNull<[u8]>,
-  cap: usize,
+    pub buf: NonNull<[u8]>,
+    pub cap: usize,
 }
 
 impl Buffer {
-  fn new(layout: Layout) -> Result<Self, AllocError> {
-    Global.allocate(layout).map(|buf| Self { buf, cap: buf.len() })
-  }
-}
-
-#[derive(Debug)]
-pub struct RawMatrix {
-  buf:  Buffer,
-  dims: (usize, usize),
-}
-
-impl RawMatrix {
-  fn new() -> Result<Self, AllocError> {}
+    pub fn new(layout: Layout, len: usize) -> Result<Self, AllocError> {
+        let layout = {
+            let res = layout.repeat(len);
+            let container_layout = res.unwrap();
+            container_layout.0
+        };
+        let res = Global.allocate(layout);
+        let map_res = |buf: NonNull<[u8]>| {
+            let cap = buf.len();
+            Self { buf, cap }
+        };
+        res.map(map_res)
+    }
 }

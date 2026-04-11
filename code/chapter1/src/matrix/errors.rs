@@ -9,17 +9,17 @@ use thiserror::Error;
 pub struct BuildError(BuildErrorKind);
 
 impl FromStr for BuildError {
-  type Err = Infallible;
+    type Err = Infallible;
 
-  fn from_str(s: &str) -> Result<Self, Self::Err> {
-    match s {
-      | "alloc" => Ok(Self(BuildErrorKind::AuxiliaryAlloc)),
-      | _ => panic!("you got the error wrong"),
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "alloc" => Ok(Self(BuildErrorKind::AuxiliaryAlloc)),
+            _ => panic!("you got the error wrong"),
+        }
     }
-  }
 }
 
 #[derive(Debug)]
 pub(crate) enum BuildErrorKind {
-  AuxiliaryAlloc,
+    AuxiliaryAlloc,
 }
