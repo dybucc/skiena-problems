@@ -24,8 +24,11 @@
     bool_to_result,
     control_flow_into_value,
     impl_trait_in_assoc_type,
-    iter_order_by,
-    allocator_api
+    allocator_api,
+)]
+#![expect(
+    clippy::missing_panics_doc, clippy::missing_errors_doc,
+    reason = "This is not meant to be used beyond demonstration purposes."
 )]
 
 use std::{
@@ -42,7 +45,7 @@ use std::{
 use itertools::Itertools;
 
 #[derive(Debug)]
-pub struct AdjacencyMatrix(Vec<Vec<Edge>>);
+pub struct AdjacencyMatrix(pub Vec<Vec<Edge>>);
 
 #[derive(Debug)]
 pub struct Pairs<'a> {

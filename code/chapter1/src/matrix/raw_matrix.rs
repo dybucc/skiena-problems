@@ -3,47 +3,45 @@ use std::{
     marker::PhantomData,
 };
 
-use crate::matrix::{Buffer, Matrix};
+use crate::matrix::Buffer;
 
 #[derive(Debug)]
 pub struct RawMatrix<T> {
     pub buf: Buffer,
-    pub rows: usize,
-    pub cols: usize,
+    pub dims: (usize, usize),
     pub _marker: PhantomData<T>,
 }
 
 impl<T> RawMatrix<T> {
     pub fn new(rows: usize, cols: usize) -> Result<Self, AllocError> {
-        let layout = Layout::new::<T>();
-        let dims = rows * cols;
-        let buf = {
-            let res = Buffer::new(layout, dims);
-            res?
-        };
-        let marker = PhantomData;
-        let out = Self {
+        Buffer::new(Layout::new::<T>(), rows * cols).map(|buf| Self {
             buf,
-            rows,
-            cols,
-            _marker: marker,
-        };
-        Ok(out)
+            dims: (rows, cols),
+            _marker: PhantomData,
+        })
     }
 
-    pub fn into_matrix(self) -> Matrix<T> {
-        let Buffer { mut buf, elem_size } = self.buf;
+    /// # Safety
+    ///
+    /// The provided indices into the matrix should be valid in that they should
+    /// both denote a valid position in memory (corresponding to the current
+    /// matrix allocation,) and should already be initialized.
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the result of this routine."
+    )]
+    pub unsafe fn get(&self, row: usize, col: usize) -> &T {
+        // E.g. rows: 3, cols: 3
+        // mem layout: 0 0 0 | 0 0 0 | 0 0 0 |
+        //             ^
+        //             |
+        //             +-- buf (the data part of the slice pointer)
+        let (_, cols) = self.dims;
+        let Buffer(buf) = &self.buf;
         let type_size = size_of::<T>();
-        let padding = elem_size - type_size;
-        let mut idx = 0;
-        loop {
-            let elem = {
-                let offset = type_size * idx;
-                let next_ptr = unsafe { buf.byte_add(offset) };
-                let elem = next_ptr.cast::<T>();
-            };
-            buf = unsafe { buf.byte_add(type_size * idx + padding * idx) };
-        }
+        let row_offset = row * cols * type_size;
+        let col_offset = col * type_size;
+        let elem_ptr = unsafe { buf.byte_add(row_offset + col_offset) };
         todo!()
     }
 }

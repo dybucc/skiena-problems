@@ -1,22 +1,19 @@
 use std::{
     alloc::{AllocError, Allocator, Global, Layout},
+    iter,
     ptr::NonNull,
 };
 
 #[derive(Debug)]
-pub struct Buffer {
-    pub buf: NonNull<[u8]>,
-    pub elem_size: usize,
-}
+pub struct Buffer(pub NonNull<[u8]>);
 
 impl Buffer {
     pub fn new(layout: Layout, len: usize) -> Result<Self, AllocError> {
-        let (layout, elem_size) = {
-            let res = layout.repeat(len);
-            res.unwrap()
-        };
-        let res = Global.allocate(layout);
-        let map_res = |buf: NonNull<[u8]>| Self { buf, elem_size };
-        res.map(map_res)
+        unsafe {
+            iter::once(layout.repeat(len).unwrap())
+                .map(|(layout, _)| Global.allocate(layout).map(|buf| Self(buf)))
+                .next()
+                .unwrap_unchecked()
+        }
     }
 }
