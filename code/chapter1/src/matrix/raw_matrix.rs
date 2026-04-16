@@ -4,7 +4,7 @@ use std::{
     mem::MaybeUninit,
 };
 
-use crate::matrix::Buffer;
+use crate::matrix::buffer::Buffer;
 
 #[derive(Debug)]
 pub struct RawMatrix<T> {
@@ -21,9 +21,11 @@ pub struct RawMatrix<T> {
 impl<T> Drop for RawMatrix<T> {
     fn drop(&mut self) {
         let Buffer(buf) = self.buf;
+
         for i in 0..self.rows {
             for j in 0..self.cols {
                 let ptr = unsafe { buf.byte_add(self.offset(i, j)).cast::<T>() };
+
                 todo!(
                     "drop each element that `ptr` takes on, and then let `Buffer`'s `drop` run to \
                      deallocate the slice of bytes (which implies another TODO for `Buffer`'s \
