@@ -1,5 +1,3 @@
-use std::borrow::Borrow;
-
 use num_traits::Num;
 
 pub mod borrowed;
@@ -49,11 +47,11 @@ impl<T, II: IntoIterator<Item = T>> FromIterator<II> for Matrix<T> {
     }
 }
 
-impl<T: PartialEq, I: IntoIterator<Item: IntoIterator<Item = T>>> PartialEq<I> for Matrix<T> {
-    fn eq(&self, other: &I) -> bool {
-        self.inner.iter().eq(other
-            .into_iter()
-            .flat_map(|inner_iter| inner_iter.into_iter()))
+impl<T: PartialEq, const N: usize, const M: usize> PartialEq<[[T; M]; N]> for Matrix<T> {
+    fn eq(&self, other: &[[T; M]; N]) -> bool {
+        self.inner
+            .iter()
+            .eq(other.iter().flat_map(IntoIterator::into_iter))
     }
 }
 
@@ -110,10 +108,18 @@ macro_rules! transpose {
 
         let mut inner = Vec::with_capacity(*cols * *rows);
 
+        #[cfg(debug_assertions)]
+        let mut stderr = ::std::io::stderr().lock();
+
         for i in 0..*cols {
             for j in 0..*rows {
-                eprintln!("row: {j}, col: {i}");
-                eprintln!("rows: {rows}, cols: {cols}");
+                #[cfg(debug_assertions)]
+                {
+                    use std::io::Write;
+
+                    writeln!(stderr, "row: {j}, col: {i}").unwrap();
+                    writeln!(stderr, "rows: {rows}, cols: {cols}").unwrap();
+                }
 
                 macro_rules! spec {
                     (own) => {
@@ -194,32 +200,25 @@ impl<T: Num> Matrix<T> {
         transpose!(self, mut)
     }
 
+    pub fn offset(&self, row: usize, col: usize) -> usize {
+        let Self { cols, .. } = self;
+
+        row * cols + col
+    }
+
     pub fn transpose_in_place(&mut self) {
-        // 3 4 4
-        // 3 4 2
-        // r: 2, c: 3
-        // -----
-        // 3 3
-        // 4 4
-        // 4 2
-        // r: 3, c: 2
-        //             |       Row 1       | |       Row 2       |
-        // mem layout: | 3 4 4 | len | cap | | 3 4 2 | len | cap |
-        //                 ^      ^     ^   ^
-        //                 8      8     8   0                      byte(s)
-        //                                  |
-        // ----------------------------------
-        // |
-        // v
-        // padding bytes shouldn't be required, as all elements are 8 bytes, and
-        // thus the alignment requirement of `Vec` is 8 bytes, so any contiguous
-        // `Vec` can be stored immediately after the previous `Vec`.
-        // transpose mem layout:
-        // |      Row 1      | |      Row 2      | |      Row 3      |
-        // | 3 3 | len | cap | | 4 4 | len | cap | | 4 2 | len | cap |
-        //    ^     ^     ^   ^
-        //    8     8     8   0                                        byte(s)
-        todo!()
+        let Self { rows, cols, .. } = *self;
+        let Self { inner, .. } = self;
+
+        // mem layout: 1 2 | 3 4 | 5 6
+        // transposed mem layout: 1 3 5 | 2 4 6
+        // 1a 2a 3b 4b 5c 6c
+        // 1a 3b 5c 2a 4b 6c
+        for i in 0..rows {
+            for j in 0..cols {
+                todo!()
+            }
+        }
     }
 }
 

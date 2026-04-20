@@ -10,8 +10,12 @@ fn transpose() {
 #[cfg(miri)]
 #[test]
 fn transpose_mut() {
-    #![expect(unused, reason = "It's meant for Miri to check if things are right.")]
+    #![expect(
+        unused,
+        reason = "It's meant for Miri to check if no funky memory manipulations are taking place."
+    )]
 
     let mut matrix = Matrix::from_iter([[1, 2, 3], [3, 2, 1]]);
-    let mut transpose = matrix.transpose_mut();
+
+    assert_eq!(matrix.transpose(), [[1, 3], [2, 2], [3, 1]]);
 }
