@@ -214,12 +214,42 @@ impl<T: Num> Matrix<T> {
         // transposed mem layout: 1 3 5 | 2 4 6
         // 1a 2a 3b 4b 5c 6c
         // 1a 3b 5c 2a 4b 6c
-        for i in 0..rows {
-            for j in 0..cols {
-                todo!()
-            }
+        //
+        // mem layout: 1 3 5 | 2 4 6
+        // transposed mem layout: 1 2 | 3 4 | 5 6
+        // 1a 3a 5a 2b 4b 6b
+        // 1a 5a 3a 2b 4b 6b
+        // 1a 2b 3a 4b 5a 6b
+        let mut current = (0, 1);
+        let mut iter_counter = inner.len() / rows;
+        while iter_counter != 0 {
+            // TODO: obtain the buffer offset from the abstract ordered pair.
+            let (elem, idx) = {
+                let (row, col) = current;
+                let next_idx = col * rows + row;
+                let next_elem = {
+                    let nrow = rows - (rows * cols - next_idx) / cols - 1;
+                    (nrow, next_idx - cols * nrow)
+                };
+
+                (next_elem, next_idx)
+            };
+            // inner.swap(a, b);
+            current = elem;
+            iter_counter -= 1;
         }
+        #[allow(clippy::never_loop)]
+        loop {
+            break;
+        }
+
+        self.rows = cols;
+        self.cols = rows;
     }
+}
+
+pub fn solver(rows: usize, cols: usize, elem: (usize, usize)) -> (usize, usize) {
+    todo!()
 }
 
 #[cfg(test)]

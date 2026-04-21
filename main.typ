@@ -2894,10 +2894,10 @@ $
 $
 
 We find then that this sequence already presents the row-alternating pattern seen in $A_s_T$. In a
-similar way, a second shifting operation would be required to from the back of the sequence. This
-operation, though, would have to be applied onto the sequence with an offset corresponding to its
-order. We must thus account for a second sequence $Beta$ of length $m$, where each of its elements
-denote the order of the operation, and elements defined in terms of the series $0, 1, dots, m - 1$.
+similar way, a second shifting operation would be required from the back of the sequence. This time,
+though, it would have to be applied onto the sequence with an offset corresponding to its order. We
+must thus account for a second sequence $Beta$ of length $m$, where each of its elements denote the
+order of the operation, with elements defined in terms of the series $0, 1, dots, m - 1$.
 
 The relevant element of that sequence would currently be $1$ for our running example. This order
 could then be considered to be an auxiliary, stepwise value to determine the next element of $A_s_1$
@@ -2912,7 +2912,38 @@ within the sequence's bounds.
 This method seems to make use of the graph nature of matrix transposition when seen as a contiguous
 collection. Irrespective of the use of repeated elements in the example, it is clear that the
 sequence $A_s_T$ could be described in terms of an augmented path in a graph, according to Berge's
-lemma.
+lemma. This, though, is only observed with matrices with $m = 2$. This "alternating" nature to the
+elements of the matrix disappears when we consider matrices with $m > 2$.
+
+The algorithm could then consist of a cursor-based procedure. The procedure would have to keep track
+of a _current element_ consisting of two indices into the matrix, denoting the row and column in
+which the element is found at. Then, we perform exactly $l / 2$ operations.
+
+These operations ought consist of (1) determining the index in which the current element ought be
+positioned at, (2) swapping the elements at those positions, and (3) updating the ordered pair
+keeping track of the _current element_ to the index of the element that was just swapped into our
+current position (so if our current position is $(0, 1)$, the index ought be that of the element
+that got moved into this position _prior_ to performing the swapping operation.)
+
+The first of the above steps would require an auxiliary operation to solve the constraint on which
+element of the transposed matrix is to lie a given ordered pair (denoting row and column in the
+original matrix.) This would exploit the fact that for any given matrix $A$ of some dimensions
+$dim(A) = m times n$, there is always a known element layout for its transposed, regardless of the
+matrix elements themselves. This routine should thus return two values; Namely, another ordered pair
+corresponding to the row/column position of the element in the orginal matrix that will be getting
+swapped out, and an offset into the contiguous buffer backing the matrix indicating the index in
+memory of the element to be swapped out with the current ordered pair.
+
+Obtaining both pieces of information is trivial, though obtaining the abstract ordered pair into the
+original matrix from the offset into the buffer seems tricky. For some such offset $d$, we can
+obtain the offset into the row by subtracting from the given offset the number of prior rows times
+the number of columns per row. This requires knowing the number of prior rows, which in and of
+ifself is indicative of the row of the offset, itself an unknown. Obtaining the row may be
+accomplished by subtracting from the length of the buffer the offset itself. This should yield a
+number that is to be compared with the known number of rows, such that the total number of rows may
+be subtracted from the floored division between the result of the prior subtraction and the number
+of columns per row. To then transition between a 1-indexed offset and a 0-indexed offset into the
+row index, single unit subtraction should do.
 
 #pagebreak()
 
