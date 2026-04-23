@@ -25,7 +25,6 @@
     control_flow_into_value,
     impl_trait_in_assoc_type,
     allocator_api,
-    iter_order_by
 )]
 #![expect(
     clippy::missing_panics_doc, clippy::missing_errors_doc,

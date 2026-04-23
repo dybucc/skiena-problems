@@ -200,56 +200,75 @@ impl<T: Num> Matrix<T> {
         transpose!(self, mut)
     }
 
-    pub fn offset(&self, row: usize, col: usize) -> usize {
-        let Self { cols, .. } = self;
+    #[expect(
+        clippy::must_use_candidate,
+        reason = "It's not a bug not to use the output of this routine."
+    )]
+    pub fn row_from_offset(rows: isize, input: usize) -> usize {
+        let mut counter = 0;
+        let mut input = input.cast_signed();
 
-        row * cols + col
+        loop {
+            if (input - rows).is_negative() {
+                break;
+            }
+            input -= rows;
+            counter += 1;
+        }
+
+        counter
     }
 
     pub fn transpose_in_place(&mut self) {
         let Self { rows, cols, .. } = *self;
-        let Self { inner, .. } = self;
+        let Self { inner: buf, .. } = self;
 
         // mem layout: 1 2 | 3 4 | 5 6
         // transposed mem layout: 1 3 5 | 2 4 6
         // 1a 2a 3b 4b 5c 6c
         // 1a 3b 5c 2a 4b 6c
         //
+        // mem layout: 1 2 | 3 4
+        // transposed mem layout: 1 3 | 2 4
+        // 1a 2a 3b 4b
+        // 1a 3b 2a 4b
+        // 1a 3b 2a 4b
+        //
         // mem layout: 1 3 5 | 2 4 6
         // transposed mem layout: 1 2 | 3 4 | 5 6
-        // 1a 3a 5a 2b 4b 6b
-        // 1a 5a 3a 2b 4b 6b
+        // 1a 3a 5a 2b 4b 6b: current_elem: (0, 2)
+        // 1a 5a 3a 2b 4b 6b: current_elem: (1, 1)
+        // 1a 4b 3a 2b 5a 6b: current_elem: (1, )
         // 1a 2b 3a 4b 5a 6b
-        let mut current = (0, 1);
-        let mut iter_counter = inner.len() / rows;
+        let mut current_elem = (0, 1);
+        let mut iter_counter = buf.len() - 2 - 1;
+
+        // TODO: it's mostly done, just have to check whether the next_col computation
+        // is correct for 0-indexed based traversal, and get a trace of the algorithm
+        // for the other test samples.
         while iter_counter != 0 {
-            // TODO: obtain the buffer offset from the abstract ordered pair.
-            let (elem, idx) = {
-                let (row, col) = current;
+            let (next_elem, next_idx) = {
+                let (row, col) = current_elem;
                 let next_idx = col * rows + row;
                 let next_elem = {
-                    let nrow = rows - (rows * cols - next_idx) / cols - 1;
-                    (nrow, next_idx - cols * nrow)
+                    let next_row = Self::row_from_offset(rows.cast_signed(), next_idx);
+                    let next_col = next_idx % cols;
+
+                    (next_row, next_col)
                 };
 
                 (next_elem, next_idx)
             };
-            // inner.swap(a, b);
-            current = elem;
+
+            buf.swap(1, next_idx);
+
+            current_elem = next_elem;
             iter_counter -= 1;
-        }
-        #[allow(clippy::never_loop)]
-        loop {
-            break;
         }
 
         self.rows = cols;
         self.cols = rows;
     }
-}
-
-pub fn solver(rows: usize, cols: usize, elem: (usize, usize)) -> (usize, usize) {
-    todo!()
 }
 
 #[cfg(test)]

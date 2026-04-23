@@ -2925,25 +2925,61 @@ keeping track of the _current element_ to the index of the element that was just
 current position (so if our current position is $(0, 1)$, the index ought be that of the element
 that got moved into this position _prior_ to performing the swapping operation.)
 
-The first of the above steps would require an auxiliary operation to solve the constraint on which
-element of the transposed matrix is to lie a given ordered pair (denoting row and column in the
-original matrix.) This would exploit the fact that for any given matrix $A$ of some dimensions
-$dim(A) = m times n$, there is always a known element layout for its transposed, regardless of the
-matrix elements themselves. This routine should thus return two values; Namely, another ordered pair
-corresponding to the row/column position of the element in the orginal matrix that will be getting
-swapped out, and an offset into the contiguous buffer backing the matrix indicating the index in
-memory of the element to be swapped out with the current ordered pair.
+The first of the above steps would require an auxiliary operation to solve the constraint on in
+which element of the transposed matrix is to lie a given ordered pair (the elements of which denote
+row and column information from the original matrix.) This would exploit the fact that for any given
+matrix $A$ of some dimensions $dim(A) = m times n$, there is always a known element layout for its
+transposed, regardless of the matrix elements themselves. This routine should thus return two
+values; Namely, another ordered pair corresponding to the row/column position of the element in the
+orginal matrix that will be getting swapped out, and an offset into the contiguous buffer backing
+the matrix indicating the index in memory of the element to be swapped out with the current ordered
+pair.
 
 Obtaining both pieces of information is trivial, though obtaining the abstract ordered pair into the
 original matrix from the offset into the buffer seems tricky. For some such offset $d$, we can
-obtain the offset into the row by subtracting from the given offset the number of prior rows times
-the number of columns per row. This requires knowing the number of prior rows, which in and of
-ifself is indicative of the row of the offset, itself an unknown. Obtaining the row may be
-accomplished by subtracting from the length of the buffer the offset itself. This should yield a
-number that is to be compared with the known number of rows, such that the total number of rows may
-be subtracted from the floored division between the result of the prior subtraction and the number
-of columns per row. To then transition between a 1-indexed offset and a 0-indexed offset into the
-row index, single unit subtraction should do.
+obtain the _offset into the row_ (i.e. the column offset) by subtracting from the given offset the
+number of prior rows times the number of columns per row (i.e. the number of elements in contiguous
+memory coming right before the row under consideration.) This requires knowing the number of prior
+rows, which in and of ifself is indicative of the row of the offset. This is still an unknown.
+Obtaining the row may be accomplished by subtracting from the length of the buffer the offset
+itself. The number yield here may be floored-divided by the total number of columns to yield an
+offset into the row number abstraction over memory. Then this may be subtracted to the total number
+of rows, as at this point we are working in the domain of row units (i.e. the abstraction over
+memory we spoke of in the prior sentence.) Finally, the result of this operation should produce the
+_1-indexed_ offset into the abstraction over memeroy for matrix rows, to which we furhter subtract a
+unit's worth of rows to make it 0-indexed.
+
+This method seems to base itself off of two main components. One denotes the abstract ordered pair
+over the matrix denoting the index of the element in the original matrix (prior to any transposition
+transformations, which in this algorithm are element swapping operations.) The other one is the
+computation that yields the offsets into those elements in memory. This is then used to compute both
+the offset of the element we keep track of across iterations, and to compute the offset of the next
+element that is to be swapped with the current one. This last computation is futher helped by a
+pattern in the way matrix elements "move" when swapped into their correct (transposed) positions.
+For any given element at index $(i, j)$, where the dimensions of the matrix are given by
+$dim = m times n$, the following computation will yield the row number (recall we consider an
+abstraction over memory when it comes to rows) in which the element to be swapped lies at in the
+original matrix:
+
+$
+  m - (m times n - (j - m + i) + 1) / n - 1
+$
+
+The reason why we can trust the ordered pair that we obtain after computing the column index is
+correct even after prior swapping operations (transposition operations) is becausse an invariant
+holds when it comes to the position of elements in the matrix; Irrespective of matrix elements, the
+indices on which elements ought lie is always the same for a given matrix $A$ with
+$dim(A) = m times n$. To compute the column index into the matrix we go for a modulo operation
+between the memory offset into the buffer and the total number of columns per row.
+
+The above method for computing the row index into the matrix provided the offset in memory for an
+element is incorrect. Maybe a better approach would be for the row to be computed in terms of the
+multiple of the number of times one can subtract the number of columns per row to the given offset
+into memory. This method would proceed as follows.
++ Initialize to 0 a running counter for the row output number.
++ Subtract the number of columns per row to the input offset.
++ If this number is negative, halt. Return the running counter.
++ Repeat from step 2.
 
 #pagebreak()
 
